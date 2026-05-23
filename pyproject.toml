@@ -1,5 +1,110 @@
 [project]
-name = "pquantlib"
-version = "0.1.0"
+name = "pquantlib-workspace"
+version = "1.0.0"
+description = "Repo-root workspace root for PQuantLib — Python port of QuantLib v1.42.1"
 requires-python = ">=3.14"
-dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "pquantlib",
+    "pquantlib-contrib",
+    "pquantlib-helpers",
+    "pquantlib-samples",
+]
+
+[tool.uv.sources]
+pquantlib = { workspace = true }
+pquantlib-contrib = { workspace = true }
+pquantlib-helpers = { workspace = true }
+pquantlib-samples = { workspace = true }
+
+# === pyright (strict type-checking — analogue to javac compile-time enforcement) ===
+[tool.pyright]
+include = [
+    "pquantlib/src",
+    "pquantlib-contrib/src",
+    "pquantlib-helpers/src",
+    "pquantlib-samples/src",
+    "pquantlib/tests",
+    "pquantlib-contrib/tests",
+    "pquantlib-helpers/tests",
+    "pquantlib-samples/tests",
+]
+exclude = ["**/__pycache__", "**/.venv", "**/node_modules"]
+strict = ["pquantlib/src", "pquantlib-contrib/src", "pquantlib-helpers/src"]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+reportMissingImports = "error"
+reportMissingTypeStubs = "warning"
+
+# === ruff (lint + format — analogue to checkstyle + spotless) ===
+[tool.ruff]
+target-version = "py314"
+line-length = 110
+src = [
+    "pquantlib/src",
+    "pquantlib-contrib/src",
+    "pquantlib-helpers/src",
+    "pquantlib-samples/src",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle + pyflakes
+    "I",              # isort
+    "N",              # pep8-naming
+    "UP",             # pyupgrade
+    "B",              # flake8-bugbear
+    "C4",             # flake8-comprehensions
+    "SIM",            # flake8-simplify
+    "RUF",            # ruff-specific
+    "PL",             # pylint subset
+    "PT",             # pytest style
+]
+ignore = [
+    "E501",   # line length (handled by formatter)
+    "PLR0913", # too-many-args (financial APIs have many params)
+    "PLR2004", # magic-value (constants in financial formulae)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["PLR2004", "S101"]
+"**/migration-harness/**" = ["ALL"]
+
+# === pytest (analogue to JUnit 4) ===
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "pquantlib/tests",
+    "pquantlib-contrib/tests",
+    "pquantlib-helpers/tests",
+    "pquantlib-samples/tests",
+]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+]
+markers = [
+    "slow: tests marked slow (skipped unless --run-slow)",
+    "integration: integration tests requiring external resources",
+    "exact: bit-exact tolerance tier",
+    "tight: TIGHT tolerance tier (1e-14 abs, 1e-12 rel)",
+    "loose: LOOSE tolerance tier (1e-8 abs, 1e-8 rel)",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pquantlib.*",
+]
+
+# === dev dependencies ===
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "pyright>=1.1.380",
+    "ruff>=0.7",
+    "mpmath>=1.3",     # for arbitrary-precision reference values
+    "numpy>=2.1",       # for vectorized math
+]

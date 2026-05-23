@@ -375,3 +375,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea
 
+
+# === PQuantLib-specific additions ===
+.DS_Store
+.ruff_cache/
+.pyright/
+migration-harness/cpp/build/
+uv.lock.tmp

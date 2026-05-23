@@ -1,0 +1,20 @@
+[project]
+name = "pquantlib"
+version = "1.0.0"
+description = "PQuantLib core — Python port of QuantLib v1.42.1"
+authors = [{ name = "Jose Moya", email = "jlmoya@gmail.com" }]
+license = { text = "BSD" }
+requires-python = ">=3.14"
+readme = "../README.md"
+dependencies = [
+    "numpy>=2.1",
+    "mpmath>=1.3",
+]
+keywords = ["quantitative-finance", "derivatives", "quantlib", "options", "fixed-income"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pquantlib"]
