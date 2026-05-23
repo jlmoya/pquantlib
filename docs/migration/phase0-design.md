@@ -1,7 +1,7 @@
 # Phase 0 — Project bootstrap (design)
 
 **Date:** 2026-05-23
-**Status:** in progress (about to be closed)
+**Status:** closed (tag `pquantlib-phase0-bootstrap`, 2026-05-23)
 **Predecessor:** none (greenfield)
 **Sister-project anchor:** [jquantlib-final](https://github.com/jlmoya/jquantlib/releases/tag/jquantlib-final)
 
@@ -117,12 +117,12 @@ Carried over from JQuantLib design §7.3:
 - [x] migration-harness/ scaffolded (README, build script, probe CMakeLists with placeholder, references/ empty dir)
 - [x] Smoke test that asserts `pquantlib.__version__`
 - [x] `.python-version` pinning 3.14
-- [ ] `uv sync` succeeds (run after committing — needs Python 3.14 on the machine)
-- [ ] `uv run pytest` passes the smoke test
-- [ ] `uv run pyright` clean
-- [ ] `uv run ruff check` clean
-- [ ] Tag `pquantlib-phase0-bootstrap` pushed
-- [ ] Initial commit + push
+- [x] `uv sync` succeeds (Python 3.14.5 on the host; root project now declares workspace members as deps so plain `uv sync` installs them editable)
+- [x] `uv run pytest` passes the smoke test (2/0/0)
+- [x] `uv run pyright` clean (0 errors; required `extraPaths` + `venvPath`/`venv` so imports resolve to the src layout, not the namespace dirs)
+- [x] `uv run ruff check` clean (9 files already formatted; lint passes)
+- [x] Tag `pquantlib-phase0-bootstrap` pushed (commit `85018e5`)
+- [x] Initial commit + push (`b9569d2` bootstrap + `85018e5` verification-glue fix)
 
 ## Next phase preview
 
