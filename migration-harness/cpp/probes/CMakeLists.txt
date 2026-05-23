@@ -12,7 +12,12 @@ if(NOT DEFINED QUANTLIB_BUILD_DIR)
     message(FATAL_ERROR "QUANTLIB_BUILD_DIR must be passed via -D")
 endif()
 
-include_directories(${QUANTLIB_SRC_DIR})
+# QuantLib transitively #include's <boost/config.hpp> via ql/qldefines.hpp,
+# so probe TUs need Boost on the include path even though we don't link
+# against any Boost libraries directly.
+find_package(Boost REQUIRED)
+
+include_directories(${QUANTLIB_SRC_DIR} ${Boost_INCLUDE_DIRS})
 link_directories(${QUANTLIB_BUILD_DIR}/ql)
 
 # Find dynamic library (handles .dylib on macOS, .so on Linux)
@@ -26,12 +31,10 @@ endif()
 
 # Add one add_executable + target_link_libraries per probe.
 # Convention: probe at probes/<topic>/<class>_probe.cpp → executable name <topic>_<class>_probe
-#
-# Example (uncomment + adapt when adding the first real probe):
-#
-# add_executable(math_copulas_clayton_probe math/copulas/clayton_probe.cpp)
-# target_link_libraries(math_copulas_clayton_probe PRIVATE ${QUANTLIB_LIBRARY})
+# The harness/generate-references.sh script turns the executable name into the
+# JSON output path by translating underscores to slashes:
+#   harness_sentinel_probe → references/harness/sentinel.json
 
-# Placeholder so cmake doesn't fail on an empty project
-add_custom_target(noop_placeholder ALL
-    COMMAND ${CMAKE_COMMAND} -E echo "No probes registered yet. See README.")
+# === harness self-check ===
+add_executable(harness_sentinel_probe harness/sentinel_probe.cpp)
+target_link_libraries(harness_sentinel_probe PRIVATE ${QUANTLIB_LIBRARY})
