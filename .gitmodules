@@ -1,0 +1,3 @@
+[submodule "migration-harness/cpp/quantlib"]
+	path = migration-harness/cpp/quantlib
+	url = https://github.com/lballabio/QuantLib.git
