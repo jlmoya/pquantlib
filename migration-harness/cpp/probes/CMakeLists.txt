@@ -42,3 +42,7 @@ target_link_libraries(harness_sentinel_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === time / enums ===
 add_executable(time_enums_probe time/enums_probe.cpp)
 target_link_libraries(time_enums_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === time / period ===
+add_executable(time_period_probe time/period_probe.cpp)
+target_link_libraries(time_period_probe PRIVATE ${QUANTLIB_LIBRARY})

@@ -1,0 +1,90 @@
+{
+  "frequency_to_period": [
+    {"frequency": "NoFrequency", "length": 0, "units": "Days"},
+    {"frequency": "Once", "length": 0, "units": "Years"},
+    {"frequency": "Annual", "length": 1, "units": "Years"},
+    {"frequency": "Semiannual", "length": 6, "units": "Months"},
+    {"frequency": "EveryFourthMonth", "length": 4, "units": "Months"},
+    {"frequency": "Quarterly", "length": 3, "units": "Months"},
+    {"frequency": "Bimonthly", "length": 2, "units": "Months"},
+    {"frequency": "Monthly", "length": 1, "units": "Months"},
+    {"frequency": "EveryFourthWeek", "length": 4, "units": "Weeks"},
+    {"frequency": "Biweekly", "length": 2, "units": "Weeks"},
+    {"frequency": "Weekly", "length": 1, "units": "Weeks"},
+    {"frequency": "Daily", "length": 1, "units": "Days"}
+  ],
+  "period_to_frequency": [
+    {"length": 0, "units": "Years", "frequency": "Once"},
+    {"length": 0, "units": "Days", "frequency": "NoFrequency"},
+    {"length": 1, "units": "Years", "frequency": "Annual"},
+    {"length": 3, "units": "Years", "frequency": "OtherFrequency"},
+    {"length": 1, "units": "Months", "frequency": "Monthly"},
+    {"length": 2, "units": "Months", "frequency": "Bimonthly"},
+    {"length": 3, "units": "Months", "frequency": "Quarterly"},
+    {"length": 4, "units": "Months", "frequency": "EveryFourthMonth"},
+    {"length": 6, "units": "Months", "frequency": "Semiannual"},
+    {"length": 12, "units": "Months", "frequency": "Annual"},
+    {"length": 5, "units": "Months", "frequency": "OtherFrequency"},
+    {"length": 1, "units": "Weeks", "frequency": "Weekly"},
+    {"length": 2, "units": "Weeks", "frequency": "Biweekly"},
+    {"length": 4, "units": "Weeks", "frequency": "EveryFourthWeek"},
+    {"length": 3, "units": "Weeks", "frequency": "OtherFrequency"},
+    {"length": 1, "units": "Days", "frequency": "Daily"},
+    {"length": 2, "units": "Days", "frequency": "OtherFrequency"}
+  ],
+  "normalize": [
+    {"in": [0, "Months"], "out": [0, "Days"]},
+    {"in": [12, "Months"], "out": [1, "Years"]},
+    {"in": [24, "Months"], "out": [2, "Years"]},
+    {"in": [6, "Months"], "out": [6, "Months"]},
+    {"in": [18, "Months"], "out": [18, "Months"]},
+    {"in": [7, "Days"], "out": [1, "Weeks"]},
+    {"in": [14, "Days"], "out": [2, "Weeks"]},
+    {"in": [3, "Days"], "out": [3, "Days"]},
+    {"in": [1, "Years"], "out": [1, "Years"]},
+    {"in": [1, "Weeks"], "out": [1, "Weeks"]}
+  ],
+  "addition": [
+    {"a": [1, "Years"], "b": [1, "Years"], "result": [2, "Years"]},
+    {"a": [1, "Years"], "b": [6, "Months"], "result": [18, "Months"]},
+    {"a": [6, "Months"], "b": [6, "Months"], "result": [12, "Months"]},
+    {"a": [6, "Months"], "b": [1, "Years"], "result": [18, "Months"]},
+    {"a": [3, "Weeks"], "b": [7, "Days"], "result": [28, "Days"]},
+    {"a": [7, "Days"], "b": [1, "Weeks"], "result": [14, "Days"]},
+    {"a": [0, "Years"], "b": [5, "Days"], "result": [5, "Days"]},
+    {"a": [5, "Days"], "b": [0, "Years"], "result": [5, "Days"]}
+  ],
+  "mul": [
+    {"a": [2, "Months"], "k": 3, "result": [6, "Months"]},
+    {"a": [1, "Years"], "k": 2, "result": [2, "Years"]},
+    {"a": [7, "Days"], "k": -1, "result": [-7, "Days"]}
+  ],
+  "years_of": [
+    {"in": [0, "Days"], "out": 0},
+    {"in": [12, "Months"], "out": 1},
+    {"in": [3, "Years"], "out": 3}
+  ],
+  "months_of": [
+    {"in": [0, "Days"], "out": 0},
+    {"in": [6, "Months"], "out": 6},
+    {"in": [1, "Years"], "out": 12}
+  ],
+  "weeks_of": [
+    {"in": [0, "Days"], "out": 0},
+    {"in": [14, "Days"], "out": 2},
+    {"in": [3, "Weeks"], "out": 3}
+  ],
+  "days_of": [
+    {"in": [0, "Days"], "out": 0},
+    {"in": [5, "Days"], "out": 5},
+    {"in": [2, "Weeks"], "out": 14}
+  ],
+  "compare": [
+    {"a": [1, "Years"], "b": [12, "Months"], "a_lt_b": false, "b_lt_a": false},
+    {"a": [1, "Years"], "b": [13, "Months"], "a_lt_b": true, "b_lt_a": false},
+    {"a": [7, "Days"], "b": [1, "Weeks"], "a_lt_b": false, "b_lt_a": false},
+    {"a": [6, "Days"], "b": [1, "Weeks"], "a_lt_b": true, "b_lt_a": false},
+    {"a": [2, "Years"], "b": [1, "Years"], "a_lt_b": false, "b_lt_a": true},
+    {"a": [0, "Days"], "b": [1, "Days"], "a_lt_b": true, "b_lt_a": false}
+  ]
+}
