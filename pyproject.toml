@@ -62,6 +62,9 @@ src = [
     "pquantlib-helpers/src",
     "pquantlib-samples/src",
 ]
+# Exclude the C++ ground-truth submodule from lint+format (per-file-ignores
+# below excludes from lint; extend-exclude excludes from format too).
+extend-exclude = ["migration-harness/cpp/quantlib"]
 
 [tool.ruff.lint]
 select = [
