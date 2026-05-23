@@ -38,3 +38,7 @@ endif()
 # === harness self-check ===
 add_executable(harness_sentinel_probe harness/sentinel_probe.cpp)
 target_link_libraries(harness_sentinel_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === time / enums ===
+add_executable(time_enums_probe time/enums_probe.cpp)
+target_link_libraries(time_enums_probe PRIVATE ${QUANTLIB_LIBRARY})
