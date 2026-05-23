@@ -3,6 +3,12 @@ name = "pquantlib-workspace"
 version = "1.0.0"
 description = "Repo-root workspace root for PQuantLib — Python port of QuantLib v1.42.1"
 requires-python = ">=3.14"
+dependencies = [
+    "pquantlib",
+    "pquantlib-contrib",
+    "pquantlib-helpers",
+    "pquantlib-samples",
+]
 
 [tool.uv.workspace]
 members = [
@@ -31,9 +37,18 @@ include = [
     "pquantlib-samples/tests",
 ]
 exclude = ["**/__pycache__", "**/.venv", "**/node_modules"]
+extraPaths = [
+    "pquantlib/src",
+    "pquantlib-contrib/src",
+    "pquantlib-helpers/src",
+    "pquantlib-samples/src",
+]
 strict = ["pquantlib/src", "pquantlib-contrib/src", "pquantlib-helpers/src"]
 pythonVersion = "3.14"
+pythonPlatform = "All"
 typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
 reportMissingImports = "error"
 reportMissingTypeStubs = "warning"
 
