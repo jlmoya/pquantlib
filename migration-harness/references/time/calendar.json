@@ -1,0 +1,67 @@
+{
+  "names": {
+    "Null": "Null",
+    "WeekendsOnly": "weekends only",
+    "JoinHolidays_Null_WeekendsOnly": "JoinHolidays(Null, weekends only)",
+    "JoinBusinessDays_Null_WeekendsOnly": "JoinBusinessDays(Null, weekends only)",
+    "Bespoke_named": "MyBespoke",
+    "Bespoke_anon": ""
+  },
+  "null_week": [
+    {"d": 11, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 12, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 13, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 14, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 15, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 16, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 17, "is_bd": true, "is_hol": false, "is_we": false}
+  ],
+  "weekends_only_week": [
+    {"d": 11, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 12, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 13, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 14, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 15, "is_bd": true, "is_hol": false, "is_we": false},
+    {"d": 16, "is_bd": false, "is_hol": true, "is_we": true},
+    {"d": 17, "is_bd": false, "is_hol": true, "is_we": true}
+  ],
+  "joint_calendar": {
+    "sat_join_holidays_is_bd": false,
+    "sat_join_business_days_is_bd": true,
+    "mon_join_holidays_is_bd": true,
+    "mon_join_business_days_is_bd": true
+  },
+  "bespoke": {
+    "fri_is_bd": false,
+    "sat_is_bd": true,
+    "sun_is_bd": false
+  },
+  "adjust": [
+    {"input": "2024-03-16", "convention": "Following", "out_y": 2024, "out_m": 3, "out_d": 18},
+    {"input": "2024-03-16", "convention": "ModifiedFollowing", "out_y": 2024, "out_m": 3, "out_d": 18},
+    {"input": "2024-03-16", "convention": "Preceding", "out_y": 2024, "out_m": 3, "out_d": 15},
+    {"input": "2024-03-16", "convention": "ModifiedPreceding", "out_y": 2024, "out_m": 3, "out_d": 15},
+    {"input": "2024-03-16", "convention": "Unadjusted", "out_y": 2024, "out_m": 3, "out_d": 16},
+    {"input": "2024-03-16", "convention": "HalfMonthModifiedFollowing", "out_y": 2024, "out_m": 3, "out_d": 18},
+    {"input": "2024-03-16", "convention": "Nearest", "out_y": 2024, "out_m": 3, "out_d": 15}
+  ],
+  "adjust_mod_following_month_cross": {
+    "out_y": 2024, "out_m": 3, "out_d": 29
+  },
+  "advance": [
+    {"y": 2024, "m": 3, "d": 15, "n": 5, "units": "Days", "convention": "Following", "end_of_month": false, "out_y": 2024, "out_m": 3, "out_d": 22},
+    {"y": 2024, "m": 3, "d": 15, "n": -3, "units": "Days", "convention": "Following", "end_of_month": false, "out_y": 2024, "out_m": 3, "out_d": 12},
+    {"y": 2024, "m": 3, "d": 11, "n": 1, "units": "Weeks", "convention": "Following", "end_of_month": false, "out_y": 2024, "out_m": 3, "out_d": 18},
+    {"y": 2024, "m": 3, "d": 15, "n": 1, "units": "Months", "convention": "Following", "end_of_month": false, "out_y": 2024, "out_m": 4, "out_d": 15},
+    {"y": 2024, "m": 3, "d": 29, "n": 1, "units": "Months", "convention": "Following", "end_of_month": true, "out_y": 2024, "out_m": 4, "out_d": 30},
+    {"y": 2024, "m": 1, "d": 31, "n": 1, "units": "Months", "convention": "ModifiedFollowing", "end_of_month": false, "out_y": 2024, "out_m": 2, "out_d": 29},
+    {"y": 2024, "m": 2, "d": 29, "n": 1, "units": "Years", "convention": "Following", "end_of_month": false, "out_y": 2025, "out_m": 2, "out_d": 28}
+  ],
+  "business_days_between": {
+    "mon_to_next_mon_incl_first_excl_last": 5,
+    "mon_to_next_mon_incl_first_incl_last": 6,
+    "mon_to_next_mon_excl_first_excl_last": 4,
+    "reversed_direction": -5
+  },
+  "holiday_list_weo": [16, 17, 23, 24]
+}

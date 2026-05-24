@@ -54,3 +54,7 @@ target_link_libraries(time_date_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === time / parsers ===
 add_executable(time_parsers_probe time/parsers_probe.cpp)
 target_link_libraries(time_parsers_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === time / calendar ===
+add_executable(time_calendar_probe time/calendar_probe.cpp)
+target_link_libraries(time_calendar_probe PRIVATE ${QUANTLIB_LIBRARY})
