@@ -1,0 +1,47 @@
+{
+  "is_imm_date": [
+    {"y": 2013, "m": 3, "d": 20, "main_cycle": true, "result": true},
+    {"y": 2013, "m": 6, "d": 19, "main_cycle": true, "result": true},
+    {"y": 2013, "m": 9, "d": 18, "main_cycle": true, "result": true},
+    {"y": 2013, "m": 12, "d": 18, "main_cycle": true, "result": true},
+    {"y": 2013, "m": 1, "d": 16, "main_cycle": true, "result": false},
+    {"y": 2013, "m": 1, "d": 16, "main_cycle": false, "result": true},
+    {"y": 2013, "m": 3, "d": 21, "main_cycle": true, "result": false},
+    {"y": 2013, "m": 3, "d": 13, "main_cycle": true, "result": false},
+    {"y": 2013, "m": 3, "d": 27, "main_cycle": true, "result": false}
+  ],
+  "is_imm_code": [
+    {"code": "H3", "main_cycle": true, "result": true},
+    {"code": "M3", "main_cycle": true, "result": true},
+    {"code": "U3", "main_cycle": true, "result": true},
+    {"code": "Z3", "main_cycle": true, "result": true},
+    {"code": "H3", "main_cycle": false, "result": true},
+    {"code": "F3", "main_cycle": false, "result": true},
+    {"code": "K3", "main_cycle": false, "result": true},
+    {"code": "F3", "main_cycle": true, "result": false},
+    {"code": "AB", "main_cycle": false, "result": false},
+    {"code": "H", "main_cycle": true, "result": false},
+    {"code": "3H", "main_cycle": true, "result": false}
+  ],
+  "code": [
+    {"y": 2013, "m": 1, "d": 16, "code": "F3"},
+    {"y": 2013, "m": 3, "d": 20, "code": "H3"},
+    {"y": 2013, "m": 6, "d": 19, "code": "M3"},
+    {"y": 2013, "m": 9, "d": 18, "code": "U3"},
+    {"y": 2013, "m": 12, "d": 18, "code": "Z3"},
+    {"y": 2024, "m": 3, "d": 20, "code": "H4"}
+  ],
+  "date": [
+    {"code": "H3", "ref_y": 2013, "out_y": 2013, "out_m": 3, "out_d": 20},
+    {"code": "M3", "ref_y": 2013, "out_y": 2013, "out_m": 6, "out_d": 19},
+    {"code": "Z3", "ref_y": 2013, "out_y": 2013, "out_m": 12, "out_d": 18},
+    {"code": "H4", "ref_y": 2024, "out_y": 2024, "out_m": 3, "out_d": 20}
+  ],
+  "next_date": [
+    {"y": 2024, "m": 1, "d": 15, "main_cycle": true, "out_y": 2024, "out_m": 3, "out_d": 20},
+    {"y": 2024, "m": 3, "d": 19, "main_cycle": true, "out_y": 2024, "out_m": 3, "out_d": 20},
+    {"y": 2024, "m": 3, "d": 20, "main_cycle": true, "out_y": 2024, "out_m": 6, "out_d": 19},
+    {"y": 2024, "m": 3, "d": 21, "main_cycle": true, "out_y": 2024, "out_m": 6, "out_d": 19},
+    {"y": 2024, "m": 1, "d": 15, "main_cycle": false, "out_y": 2024, "out_m": 1, "out_d": 17}
+  ]
+}
