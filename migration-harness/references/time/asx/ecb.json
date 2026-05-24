@@ -1,0 +1,70 @@
+{
+  "asx": {
+    "is_asx_date": [
+      {"y": 2024, "m": 3, "d": 8, "main_cycle": true, "result": true},
+      {"y": 2024, "m": 6, "d": 14, "main_cycle": true, "result": true},
+      {"y": 2024, "m": 9, "d": 13, "main_cycle": true, "result": true},
+      {"y": 2024, "m": 12, "d": 13, "main_cycle": true, "result": true},
+      {"y": 2024, "m": 1, "d": 12, "main_cycle": true, "result": false},
+      {"y": 2024, "m": 1, "d": 12, "main_cycle": false, "result": true},
+      {"y": 2024, "m": 3, "d": 9, "main_cycle": true, "result": false},
+      {"y": 2024, "m": 3, "d": 15, "main_cycle": true, "result": false},
+      {"y": 2024, "m": 3, "d": 1, "main_cycle": true, "result": false}
+    ],
+    "is_asx_code": [
+      {"code": "H4", "main_cycle": true, "result": true},
+      {"code": "M4", "main_cycle": true, "result": true},
+      {"code": "U4", "main_cycle": true, "result": true},
+      {"code": "Z4", "main_cycle": true, "result": true},
+      {"code": "H4", "main_cycle": false, "result": true},
+      {"code": "F4", "main_cycle": false, "result": true},
+      {"code": "K4", "main_cycle": false, "result": true},
+      {"code": "F4", "main_cycle": true, "result": false},
+      {"code": "AB", "main_cycle": false, "result": false}
+    ],
+    "code": [
+      {"y": 2024, "m": 1, "d": 12, "code": "F4"},
+      {"y": 2024, "m": 3, "d": 8, "code": "H4"},
+      {"y": 2024, "m": 6, "d": 14, "code": "M4"},
+      {"y": 2024, "m": 9, "d": 13, "code": "U4"},
+      {"y": 2024, "m": 12, "d": 13, "code": "Z4"}
+    ],
+    "date": [
+      {"code": "H4", "ref_y": 2024, "out_y": 2024, "out_m": 3, "out_d": 8},
+      {"code": "M4", "ref_y": 2024, "out_y": 2024, "out_m": 6, "out_d": 14},
+      {"code": "Z4", "ref_y": 2024, "out_y": 2024, "out_m": 12, "out_d": 13}
+    ],
+    "next_date": [
+      {"y": 2024, "m": 1, "d": 1, "main_cycle": true, "out_y": 2024, "out_m": 3, "out_d": 8},
+      {"y": 2024, "m": 3, "d": 7, "main_cycle": true, "out_y": 2024, "out_m": 3, "out_d": 8},
+      {"y": 2024, "m": 3, "d": 8, "main_cycle": true, "out_y": 2024, "out_m": 6, "out_d": 14},
+      {"y": 2024, "m": 1, "d": 1, "main_cycle": false, "out_y": 2024, "out_m": 1, "out_d": 12}
+    ]
+  },
+  "ecb": {
+    "is_ecb_code": [
+      {"code": "MAR10", "result": true},
+      {"code": "DEC23", "result": true},
+      {"code": "JUN15", "result": true},
+      {"code": "XYZ10", "result": false},
+      {"code": "MAR1", "result": false},
+      {"code": "MARAB", "result": false}
+    ],
+    "known_dates_count": 200,
+    "known_dates_first_serial": 38371,
+    "known_dates_last_serial": 45644,
+    "next_date": [
+      {"input_serial": 38370, "out_serial": 38371},
+      {"input_serial": 38371, "out_serial": 38391},
+      {"input_serial": 43859, "out_serial": 43908},
+      {"input_serial": 45000, "out_serial": 45007}
+    ],
+    "first_known_code": "JAN05",
+    "first_known_serial": 38371,
+    "next_code": [
+      {"in": "MAR10", "out": "APR10"},
+      {"in": "DEC09", "out": "JAN10"},
+      {"in": "DEC19", "out": "JAN20"}
+    ]
+  }
+}
