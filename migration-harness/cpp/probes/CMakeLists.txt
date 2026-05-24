@@ -62,3 +62,7 @@ target_link_libraries(time_calendar_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === time / imm ===
 add_executable(time_imm_probe time/imm_probe.cpp)
 target_link_libraries(time_imm_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === time / schedule ===
+add_executable(time_schedule_probe time/schedule_probe.cpp)
+target_link_libraries(time_schedule_probe PRIVATE ${QUANTLIB_LIBRARY})

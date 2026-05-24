@@ -1,0 +1,44 @@
+{
+  "zero": {
+    "dates": [45366, 46097],
+    "is_regular": [true]
+  },
+  "backward": {
+    "dates": [45366, 45551, 45733, 45915, 46097],
+    "is_regular": [true, true, true, true]
+  },
+  "forward": {
+    "dates": [45366, 45551, 45733, 45915, 46097],
+    "is_regular": [true, true, true, true]
+  },
+  "third_wednesday": {
+    "dates": [45371, 45462, 45553, 45644, 45735, 45826, 45917, 46008],
+    "is_regular": [true, true, true, true, true, true, false]
+  },
+  "twentieth": {
+    "dates": [45366, 45371, 45463, 45555, 45646, 45736, 45828, 45922, 46013, 46101],
+    "is_regular": [false, true, true, true, true, true, true, true, true]
+  },
+  "cds2015": {
+    "dates": [45280, 45371, 45463, 45555, 45646, 45736, 45828, 45922, 46013, 46101],
+    "is_regular": [true, true, true, true, true, true, true, true, true]
+  },
+  "after": {
+    "dates": [45550, 45551, 45733, 45915, 46097]
+  },
+  "until": {
+    "dates": [45366, 45550]
+  },
+  "prev_next": {
+    "probe_serial": 45474,
+    "prev_serial": 45366,
+    "next_serial": 45551
+  },
+  "backward_with_first_date": {
+    "dates": [45366, 45397, 45551, 45733, 45915, 46097],
+    "is_regular": [false, false, true, true, true]
+  },
+  "date_list_ctor": {
+    "dates": [45366, 45552, 45733, 45915, 46097]
+  }
+}
