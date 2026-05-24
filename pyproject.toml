@@ -84,6 +84,7 @@ ignore = [
     "PLR0913", # too-many-args (financial APIs have many params)
     "PLR2004", # magic-value (constants in financial formulae)
     "PLR0911", # too-many-returns (C++→Python switch-on-enum ports naturally use early returns)
+    "PLR0912", # too-many-branches (same reason as PLR0911)
 ]
 
 [tool.ruff.lint.per-file-ignores]
