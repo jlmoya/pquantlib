@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date as _stdlib_date
-from typing import Final, NoReturn
+from typing import Final, NoReturn, overload
 
 from pquantlib import qassert
 from pquantlib.time.month import Month
@@ -254,6 +254,11 @@ class Date:
 
     # --- arithmetic --------------------------------------------------------
 
+    @overload
+    def __add__(self, other: int) -> Date: ...
+    @overload
+    def __add__(self, other: Period) -> Date: ...
+
     def __add__(self, other: int | Period) -> Date:
         if isinstance(other, Period):
             return _advance(self, other.length, other.units)
@@ -264,6 +269,13 @@ class Date:
 
     # `Date - int` and `Date - Period` return a new Date.
     # `Date - Date` returns an integer day count.
+    @overload
+    def __sub__(self, other: int) -> Date: ...
+    @overload
+    def __sub__(self, other: Period) -> Date: ...
+    @overload
+    def __sub__(self, other: Date) -> int: ...
+
     def __sub__(self, other: int | Period | Date) -> Date | int:
         if isinstance(other, Date):
             return self.serial - other.serial
