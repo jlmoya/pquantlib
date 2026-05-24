@@ -50,7 +50,7 @@ L1-A does NOT fan out across sub-worktrees. It's one worktree (`../pquantlib-pha
 |---|---|---|
 | **0. Harness bootstrap** | Submodule clone + first C++ build + harness verification | Everything that follows depends on the harness working. |
 | **1. Foundations** | `exceptions`, `testing` (tolerance + reference_reader), `patterns`, `util` | Tests in subsequent stages need these to exist. Order within stage: exceptions → tolerance → reference_reader → patterns → util. |
-| **2. Time core** | Enums → Period → Date → DateParser/PeriodParser → Calendar abstract + Null/Weekends/Joint/Bespoke → Schedule + MakeSchedule → IMM/ASX/ECB → TimeGrid/TimeSeries/Series | Date is the foundation; every calendar and day counter consumes it. |
+| **2. Time core** | Enums → Period → Date → DateParser/PeriodParser → Calendar abstract + Null/Weekends/Joint/Bespoke → **IMM** (reordered before Schedule — Schedule.from_rule validates against `is_imm_date` for ThirdWednesday rule) → Schedule + MakeSchedule → ASX/ECB → TimeGrid/TimeSeries (no Series — C++ v1.42.1 has no such class) | Date is the foundation; every calendar and day counter consumes it. |
 | **3. Day counters** | DayCounter abstract → 11 concretes | Independent of calendars, depends only on Date + enums. Land in parallel within stage. |
 | **4. Calendars** | Western/Eastern base → ~43 concretes alphabetically | Depend on time core; can be batched by region. |
 | **5. First math batch** | Constants → Closeness → Rounding family → Factorial → ErrorFunction → Beta → BernsteinPolynomial → PascalTriangle | Independent of time; proves the harness on numerical (non-date) primitives. |

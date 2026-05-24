@@ -48,11 +48,67 @@ Surprises:
   metaclass `__call__` (pyright sees `cls` as `Self@_SingletonMeta`, not `type`).
   Relaxed to `dict[Any, Any]` with an inline rationale comment.
 
-## Stage 2 — Time core (pending)
+## Stage 2 — Time core (closed)
 
-Up next: time enums → Period → Date → Date/PeriodParser → Calendar abstract +
-Null/WeekendsOnly/Joint/Bespoke → Schedule + MakeSchedule → IMM/ASX/ECB →
-TimeGrid/TimeSeries/Series.
+| Commit | Subject | Tests added |
+|---|---|---|
+| `fa8b7b6` | `feat(time): port enums (Weekday, Month, TimeUnit, Frequency, BusinessDayConvention, DateGeneration)` | 76 |
+| `26b1749` | `fix(infra): allow PLR0911 (too-many-returns) for switch-on-enum ports` | 0 |
+| `373f67a` | `feat(time): port Period` | 22 |
+| `67e055d` | `feat(time): port Date` | 23 |
+| `2b41823` | `feat(time): port DateParser + PeriodParser` | 14 |
+| `87553ea` | `fix(infra): allow PLR0912 (too-many-branches) for switch-on-enum ports` | 0 |
+| `4349930` | `align(time): add @overload signatures to Date.__add__ and __sub__` | 0 |
+| `3047166` | `feat(time): port Calendar + NullCalendar + WeekendsOnly + JointCalendar + BespokeCalendar` | 17 |
+| `e7ad2e6` | `feat(time): port IMM helpers` (reordered before Schedule — see below) | 9 |
+| `11f00f9` | `feat(time): port Schedule + MakeSchedule` | 18 |
+| `e55f4f1` | `feat(time): port ASX + ECB date helpers` | 15 |
+| `100b608` | `feat(time): port TimeGrid + TimeSeries` | 13 |
+
+Outcome: **258/0/0 tests** (added 207 over Stage 2), pyright strict clean, ruff
+lint+format clean. The full time-layer surface is usable — enums, Period, Date,
+parsers, Calendar abstract + 4 trivial calendars, Schedule + MakeSchedule, IMM,
+ASX, ECB, TimeGrid, TimeSeries.
+
+Surprises / decisions:
+- **`IMM` ported before `Schedule`** (Task 2.7a inserted between 2.5 and 2.6).
+  `Schedule.from_rule` validates `first_date` / `next_to_last_date` against
+  `is_imm_date` for the ThirdWednesday rule. Reordering was lighter than
+  stubbing IMM inside Schedule.
+- **Date.month() bug** surfaced during Date cross-validation: C++ `month()`
+  probes `monthOffset(m+1)` as the year-end bracket; for `m=12` that's `Month(13)`
+  which C++ allows via unchecked enum cast but Python `IntEnum` rejects. Fix:
+  widened `_month_offset` signature to accept `Month | int`.
+- **Date.__add__ / __sub__ overloads** added (`align(time): ...` commit).
+  Pyright cannot narrow the union `Date | int` return type from a runtime-
+  dispatched body alone — downstream callers like `Calendar.adjust` need
+  `Date - 1: Date`. `@overload` signatures provide the narrowing; no runtime
+  change.
+- **`PLR0911` + `PLR0912` ignored globally** — C++→Python switch-on-enum ports
+  hit these limits unavoidably. Each case in the C++ switch becomes an early
+  return / branch in Python. Per-method `# noqa` would be noise; global ignore
+  is the right precedent.
+- **`Schedule.from_rule` divergence**: C++ `Settings::evaluationDate()` fallback
+  for null `effective_date` in Backward rule is NOT ported. Python callers must
+  pass an explicit effective date; the divergence is captured in the module
+  docstring and the error message.
+- **`DateParser.parse_formatted` divergence**: C++ uses boost::date_time facets
+  with boost-style format strings; the Python port uses `datetime.strptime`
+  format codes instead. Common codes (`%Y`, `%m`, `%d`) work identically.
+- **`Visitor` collapsed to non-generic Protocol** earlier in Stage 1 is the
+  precedent for Python-vs-C++ template simplification.
+- **`name()` strings preserved verbatim**: `WeekendsOnly` returns the lowercase
+  `"weekends only"` (with space); `JointCalendar.name()` formats as
+  `"JoinHolidays(A, B, ...)"`. Required for the C++ `operator==` (name-based
+  equality).
+- **`Calendar` is `abc.ABC` direct inheritance** (no pImpl Bridge). Per-instance
+  `added_holidays` / `removed_holidays` rather than the C++ shared-via-Impl
+  pattern.
+- **`ECB.knownDates` is a hardcoded 200-entry serial-number table** (2005–2024)
+  embedded verbatim from the C++ source. The C++ source uses a `std::set<Date>`;
+  Python uses a mutable `set[Date]` extracted from a constant tuple.
+- **`Series` (mentioned in the L1-A plan) does NOT exist in C++ v1.42.1.** It
+  was a jquantlib-port-specific class. No Series module is created.
 
 ## Stage 3 — Day counters (pending)
 

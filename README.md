@@ -3,6 +3,7 @@
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
 [![Tag](https://img.shields.io/badge/tag-pquantlib--phase0--bootstrap-yellow)](#migration-status)
+[![Branch](https://img.shields.io/badge/branch-phase1--A%20(Stages%200--2%20closed)-orange)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -46,7 +47,8 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 
 | Phase | Tag | What landed | Tests | Date |
 |-------|-----|-------------|-------|------|
-| 0 | `pquantlib-phase0-bootstrap` (pending) | Project skeleton (uv workspace, 4 packages, pyright strict, ruff lint+format, pytest), CLAUDE.md, migration-harness/ scaffold, BSD LICENSE | 0/0/0/0 (no impl yet) | 2026-05-23 |
+| 0 | `pquantlib-phase0-bootstrap` | Project skeleton (uv workspace, 4 packages, pyright strict, ruff lint+format, pytest), CLAUDE.md, migration-harness/ scaffold, BSD LICENSE | 2/0/0 (smoke) | 2026-05-23 |
+| 1 L1-A (in progress) | _(branch `phase1-A`)_ | Stages 0–2 closed: harness bootstrap (QuantLib submodule + sentinel probe) → foundations (`exceptions`, `qassert`, `testing.tolerance`, `testing.reference_reader`, all 5 pattern modules) → **time core** (6 IntEnums, `Period`, `Date`, parsers, `Calendar` abstract + Null/WeekendsOnly/Joint/Bespoke, `Schedule` + `MakeSchedule`, `IMM`, `ASX`, `ECB`, `TimeGrid`, `TimeSeries`). Stages 3–5 (day counters, calendars, first math batch) pending. | 258/0/0 | 2026-05-23 |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -57,7 +59,8 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** initial scaffold commit. Bootstrap in progress; see [`docs/migration/phase0-design.md`](docs/migration/phase0-design.md) and the [Phase 0 plan](docs/migration/phase0-plan.md).
+**Current tip on `main`:** `ec4fed0 docs(migration): draft L1-A design + plan` (Phase 0 closed via `pquantlib-phase0-bootstrap` tag).
+**Current tip on `phase1-A`:** `100b608 feat(time): port TimeGrid + TimeSeries` (Stages 0–2 of L1-A landed, 258/0/0 green). See [`docs/migration/phase1-l1-A-design.md`](docs/migration/phase1-l1-A-design.md) + [`phase1-l1-A-plan.md`](docs/migration/phase1-l1-A-plan.md) + [`phase1-l1-A-progress.md`](docs/migration/phase1-l1-A-progress.md).
 
 ## Repo layout
 
