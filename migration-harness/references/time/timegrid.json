@@ -1,0 +1,31 @@
+{
+  "regular": {
+    "size": 5,
+    "times": [0, 0.25, 0.5, 0.75, 1],
+    "dt": [0.25, 0.25, 0.25, 0.25],
+    "front": 0,
+    "back": 1
+  },
+  "mandatory_only": {
+    "size": 5,
+    "times": [0, 0.5, 1, 1.5, 2]
+  },
+  "mandatory_with_steps": {
+    "size": 5,
+    "times": [0, 0.5, 1, 1.5, 2]
+  },
+  "lookups": {
+    "index_at_0_5": 2,
+    "closest_index_at_0_4": 2,
+    "closest_index_at_0_6": 2,
+    "closest_index_at_neg": 0,
+    "closest_index_at_big": 4,
+    "closest_time_at_0_4": 0.5
+  },
+  "timeseries": {
+    "size": 3,
+    "first_date_serial": 45366,
+    "last_date_serial": 45427,
+    "value_at_april": 2
+  }
+}

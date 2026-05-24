@@ -70,3 +70,7 @@ target_link_libraries(time_schedule_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === time / asx + ecb ===
 add_executable(time_asx_ecb_probe time/asx_ecb_probe.cpp)
 target_link_libraries(time_asx_ecb_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === time / timegrid + timeseries ===
+add_executable(time_timegrid_probe time/timegrid_probe.cpp)
+target_link_libraries(time_timegrid_probe PRIVATE ${QUANTLIB_LIBRARY})
