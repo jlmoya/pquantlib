@@ -82,3 +82,7 @@ target_link_libraries(daycounters_one_day_counter_probe PRIVATE ${QUANTLIB_LIBRA
 # === daycounters / actual family (360 / 364 / 365 / 36525 / 366) ===
 add_executable(daycounters_actual_family_probe daycounters/actual_family_probe.cpp)
 target_link_libraries(daycounters_actual_family_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === daycounters / thirty family (Thirty360 9 conventions + Thirty365) ===
+add_executable(daycounters_thirty_family_probe daycounters/thirty_family_probe.cpp)
+target_link_libraries(daycounters_thirty_family_probe PRIVATE ${QUANTLIB_LIBRARY})
