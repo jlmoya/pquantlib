@@ -98,3 +98,7 @@ target_link_libraries(daycounters_actualactual_probe PRIVATE ${QUANTLIB_LIBRARY}
 # === time / calendars (all 41 sovereign/exchange, default-market) ===
 add_executable(time_calendars_all_probe time/calendars_all_probe.cpp)
 target_link_libraries(time_calendars_all_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === math / first batch (rounding, factorial, errorfunction, beta, ...) ===
+add_executable(math_first_batch_probe math/first_batch_probe.cpp)
+target_link_libraries(math_first_batch_probe PRIVATE ${QUANTLIB_LIBRARY})
