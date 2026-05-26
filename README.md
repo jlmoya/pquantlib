@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase0--bootstrap-yellow)](#migration-status)
-[![Branch](https://img.shields.io/badge/branch-phase1--A%20(all%206%20stages%20closed)-orange)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--phase1--complete-green)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-581%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -48,7 +48,9 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | Phase | Tag | What landed | Tests | Date |
 |-------|-----|-------------|-------|------|
 | 0 | `pquantlib-phase0-bootstrap` | Project skeleton (uv workspace, 4 packages, pyright strict, ruff lint+format, pytest), CLAUDE.md, migration-harness/ scaffold, BSD LICENSE | 2/0/0 (smoke) | 2026-05-23 |
-| 1 L1-A (all 6 stages closed; awaiting review + tag) | _(branch `phase1-A`)_ | Stages 0–5: harness bootstrap → foundations (`exceptions`, `qassert`, `testing.tolerance`, `testing.reference_reader`, all 5 pattern modules) → **time core** (6 IntEnums, `Period`, `Date`, parsers, `Calendar` abstract + 4 trivial, `Schedule` + `MakeSchedule`, `IMM`, `ASX`, `ECB`, `TimeGrid`, `TimeSeries`) → **day counters** (DayCounter abstract + 11 concretes covering 24+ convention aliases) → **41 sovereign/exchange calendars** (parallelized via 5 isolated-worktree subagents) → **first math batch** (constants, closeness, rounding, factorial, error_function, beta, bernstein_polynomial, pascal_triangle). | 411/0/0 | 2026-05-23..2026-05-24 |
+| 1 L1-A (pilot) | `pquantlib-phase1-l1-A-complete` | Foundations + time core (41 sovereign/exchange calendars via 5-agent fan-out) + 11 day counters + 8 first-math modules | 415/0/0 | 2026-05-23..2026-05-24 |
+| 1 L1-B/C/D/E (parallel) | _(merged into Phase 1 tag)_ | L1-B (12 copulas + 3 normal distributions + 2 statistics + 5 currencies), L1-C (9 Solver1D + 5 simple integrals), L1-D (5 RNGs all EXACT-tier + BoxMuller + 7 optimization scaffolding), L1-E (4 interpolations + bilinear + scipy-backed Cholesky). 4 isolated-worktree subagents in parallel, ~25 min wall-clock. | +166 → 581/0/0 | 2026-05-24 |
+| **1 complete** | **`pquantlib-phase1-complete`** | **Full L1 layer** — math primitives, time, foundations. 581 tests across 16 C++ probes / ~10,000 reference values. | **581/0/0** | **2026-05-24** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -59,8 +61,7 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** `ec4fed0 docs(migration): draft L1-A design + plan` (Phase 0 closed via `pquantlib-phase0-bootstrap` tag).
-**Current tip on `phase1-A`:** `239079b merge: batch E` (all 6 stages of L1-A landed, 411/0/0 green; pending review + tag `pquantlib-phase1-l1-A-complete`). See [`docs/migration/phase1-l1-A-design.md`](docs/migration/phase1-l1-A-design.md) + [`phase1-l1-A-plan.md`](docs/migration/phase1-l1-A-plan.md) + [`phase1-l1-A-progress.md`](docs/migration/phase1-l1-A-progress.md).
+**Current tip on `main`:** `edcadbc docs(migration): write phase1-completion.md` (Phase 1 closed via `pquantlib-phase1-complete` tag). See [`docs/migration/phase1-completion.md`](docs/migration/phase1-completion.md) for the closure summary.
 
 ## Repo layout
 

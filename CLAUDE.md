@@ -28,15 +28,14 @@ Pin: `v1.42.1` @ `099987f0ca2c11c505dc4348cdb9ce01a598e1e5` (2026-04-16).
 
 ## Current state
 
-- **Phase:** 1 L1-A cluster — **all 6 stages closed.** Pending: spec-compliance + code-review subagent passes → FF-merge to `main` → tag `pquantlib-phase1-l1-A-complete` → draft L1-B/C/D/E plans.
-- **Branch:** `phase1-A` worktree at `../pquantlib-phase1-A`, branched off `main` @ `ec4fed0`. Direct push to `phase1-A` remote; FF-merges to `main` only at cluster completion.
-- **Workspace:** uv-managed 4-package monorepo (`pquantlib` + `pquantlib-{contrib,helpers,samples}`).
-- **Python:** 3.14 (analogue to JQuantLib's JDK 25 LTS choice).
-- **Type checker:** pyright strict.
-- **Lint+format:** ruff (with isort + pyupgrade + flake8-bugbear/comprehensions/simplify rules).
-- **Test framework:** pytest 8+, currently **411/0/0** on the worktree branch.
-- **Modules landed in L1-A (Stages 0–5):** harness (C++ submodule + sentinel probe), foundations (`exceptions`, `qassert`, `testing.tolerance`, `testing.reference_reader`, `patterns.*`), time core (6 IntEnums, `Period`, `Date`, parsers, `Calendar` abstract + Null/WeekendsOnly/Joint/Bespoke, `Schedule` + `MakeSchedule`, `IMM`, `ASX`, `ECB`, `TimeGrid`, `TimeSeries`), day counters (DayCounter abstract + 11 concretes), **41 sovereign/exchange calendars** (default-market each: Argentina/Australia/Austria/Botswana/Brazil/Canada/Chile/China/CzechRepublic/Denmark/Finland/France/Germany/HongKong/Hungary/Iceland/India/Indonesia/Israel/Italy/Japan/Mexico/NewZealand/Norway/Poland/Romania/Russia/SaudiArabia/Singapore/Slovakia/SouthAfrica/SouthKorea/Sweden/Switzerland/Taiwan/TARGET/Thailand/Turkey/Ukraine/UnitedKingdom/UnitedStates), and **first math batch** (`constants`, `closeness`, `rounding`, `factorial`, `error_function`, `beta`, `bernstein_polynomial`, `pascal_triangle`).
-- **Stage 4 was parallelized** across 5 subagents in isolated worktrees, ~25 min wall-clock for 41 calendars (vs ~6+ hours sequential). The dispatch pattern + per-batch breakdown is documented in `docs/migration/phase1-l1-A-progress.md`.
+- **Phase:** **Phase 1 complete** — all 5 L1 clusters closed and tagged `pquantlib-phase1-complete` @ `edcadbc`.
+- **Branch:** `main`. No active feature branches. Workflow for the next phase will mirror what L1 used: per-cluster worktrees, push direct to `main` per cluster (FF-only).
+- **Workspace:** uv-managed 4-package monorepo (`pquantlib` + `pquantlib-{contrib,helpers,samples}`). scipy added as a dep in L1-E.
+- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 8+, **currently 581/0/0**.
+- **L1 layer landed (Phase 1):** foundations (exceptions, qassert, testing, patterns), time core (Date, Period, Calendar abstract + 4 trivial + 41 sovereign/exchange, Schedule + MakeSchedule, IMM/ASX/ECB, TimeGrid/TimeSeries), day counters (DayCounter abstract + 11 concretes), 8 first-math modules, 12 copulas, 3 normal distributions, 2 statistics aggregators, 5 currencies, 9 Solver1D concretes, 5 simple integrals, 5 deterministic RNGs (all EXACT-tier bit-exact) + BoxMuller, 7 optimization scaffolding modules, 4 interpolations + bilinear, scipy-backed Cholesky.
+- **Parallelization wins:** Stage 4 (41 calendars) and L1-B/C/D/E (~166 tests across 4 clusters) each ran in ~25 min wall-clock via subagent fan-out. Pattern documented in `phase1-completion.md`.
+- **Cumulative L1 carve-outs** (deferred): full GaussianOrthogonalPolynomial hierarchy, Sobol/Burley2020 low-discrepancy, LM/BFGS/Simplex optimizers, 8+ cubic spline variants, QR/Eigen/SVD/SparseMatrix utilities, GammaFunction (factorial/beta still LOOSE-tier vs `math.lgamma`). Listed in `phase1-completion.md`.
+- **Next phase:** **Phase 2 (L2)** — termstructures + indexes, mirroring jquantlib's `phase2-L2-termstructures-indexes-plan.md`.
 
 ## Sibling repo (read-only reference)
 
