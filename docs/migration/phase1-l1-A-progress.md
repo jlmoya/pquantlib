@@ -110,7 +110,56 @@ Surprises / decisions:
 - **`Series` (mentioned in the L1-A plan) does NOT exist in C++ v1.42.1.** It
   was a jquantlib-port-specific class. No Series module is created.
 
-## Stage 3 — Day counters (pending)
+## Stage 3 — Day counters (closed)
+
+| Commit | Subject | Tests added |
+|---|---|---|
+| `79cca9b` | `feat(daycounters): port DayCounter abstract + OneDayCounter` | 7 |
+| `3e05ee6` | `feat(daycounters): port Actual360/364/36525/365Fixed/366 family` | 13 |
+| `7f7d87e` | `feat(daycounters): port Thirty360 (9 conventions) + Thirty365` | 14 |
+| `7c10922` | `feat(daycounters): port SimpleDayCounter + Business252` | 6 |
+| `601aa1e` | `feat(daycounters): port ActualActual (7 conventions, 4 underlying impls)` | 13 |
+
+Outcome: **311/0/0 tests** (added 53 over Stage 3), pyright strict clean, ruff
+lint+format clean. The full daycounters layer is usable: abstract DayCounter
++ 11 concretes covering every day-count convention C++ QuantLib v1.42.1 ships.
+
+Surprises / decisions:
+- **Probe-emit path naming**: `generate-references.sh` translates underscores
+  to slashes in the executable name to derive the JSON output path. So
+  `daycounters_one_day_counter_probe` writes to `references/daycounters/one/day/counter.json`
+  (not `daycounters/one_day_counter.json`). Tests load with the slash-separated key.
+  Pre-existing quirk from the harness scaffolding; harmless once you know it.
+- **C++ pImpl + 6 Impl classes for Thirty360 → single Python class** dispatching
+  on a `Convention` IntEnum. Same pattern for `Actual365Fixed` (3 impls) and
+  `ActualActual` (4 impls). Aliases (e.g. `ISMA ≡ BondBasis` in Thirty360,
+  `ISDA ≡ Historical ≡ Actual365` in ActualActual) become shared `name()` output
+  and shared dispatch — keeps C++-equality semantics intact.
+- **Business252 documented divergences (2 of them):**
+  - The C++ default `Business252()` constructor uses `Brazil()` calendar.
+    Brazil is not yet ported (Stage 4); the Python port requires an explicit
+    calendar argument. Probe uses `WeekendsOnly`.
+  - The C++ impl maintains module-level monthly + yearly business-day caches
+    keyed by calendar name to amortize cost over multi-year ranges. The Python
+    port skips the cache and delegates straight to
+    `Calendar.business_days_between` — algorithmically equivalent, only matters
+    for performance on very long spans. Cache can be added if profiling
+    identifies it as a hotspot.
+- **ActualActual ISMA-with-schedule reconstruction**: the test rebuilds the
+  same Schedule the probe used (NullCalendar / Unadjusted / Forward / 6-month
+  tenor over 2024-01-01..2025-01-01) and asserts the serial-number list
+  matches the probe's `schedule_dates_serials` field before exercising
+  year-fraction. This pins the probe to the Python schedule-generator's
+  behaviour, not just to the year-fraction output.
+- **C++ `Old_ISMA_Impl::yearFraction` is recursive** — the Python port mirrors
+  the recursion exactly (the only nontrivial recursion in the daycounters
+  layer). Defensive: in the split-into-whole-periods branch the while-loop
+  uses `d2 >= new_ref_end` instead of C++'s `d2 < new_ref_end break`
+  inversion, which would otherwise double-count the trailing period.
+- **`OneDayCounter.day_count` returns +1/-1 sign-only**, not `d2 - d1`. The
+  base `DayCounter.day_count` defaults to `d2 - d1`; concretes override it
+  freely (ActualActual `Old_ISMA` actually uses the default day_count even
+  though year_fraction is bespoke; the C++ inherits the default the same way).
 
 ## Stage 4 — Calendars (pending)
 

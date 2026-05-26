@@ -28,15 +28,15 @@ Pin: `v1.42.1` @ `099987f0ca2c11c505dc4348cdb9ce01a598e1e5` (2026-04-16).
 
 ## Current state
 
-- **Phase:** 1 L1-A cluster, Stage 2 closed (Stages 3–5 pending).
+- **Phase:** 1 L1-A cluster, Stages 0–3 closed (Stages 4–5 pending).
 - **Branch:** `phase1-A` worktree at `../pquantlib-phase1-A`, branched off `main` @ `ec4fed0`. Direct push to `phase1-A` remote; FF-merges to `main` only at cluster completion.
 - **Workspace:** uv-managed 4-package monorepo (`pquantlib` + `pquantlib-{contrib,helpers,samples}`).
 - **Python:** 3.14 (analogue to JQuantLib's JDK 25 LTS choice).
 - **Type checker:** pyright strict.
 - **Lint+format:** ruff (with isort + pyupgrade + flake8-bugbear/comprehensions/simplify rules).
-- **Test framework:** pytest 8+, currently **258/0/0** on the worktree branch.
-- **Modules landed in L1-A (Stages 0–2):** harness (C++ submodule + sentinel probe), foundations (`exceptions`, `qassert`, `testing.tolerance`, `testing.reference_reader`, `patterns.*`), time core (six IntEnums, `Period`, `Date`, parsers, `Calendar` abstract + Null/WeekendsOnly/Joint/Bespoke, `Schedule` + `MakeSchedule`, `IMM`, `ASX`, `ECB`, `TimeGrid`, `TimeSeries`).
-- **Next stages within L1-A:** Stage 3 (12 day counters), Stage 4 (~43 sovereign/exchange calendars), Stage 5 (first math batch: Constants, Closeness, Rounding, Factorial, ErrorFunction, Beta, BernsteinPolynomial, PascalTriangle).
+- **Test framework:** pytest 8+, currently **311/0/0** on the worktree branch.
+- **Modules landed in L1-A (Stages 0–3):** harness (C++ submodule + sentinel probe), foundations (`exceptions`, `qassert`, `testing.tolerance`, `testing.reference_reader`, `patterns.*`), time core (six IntEnums, `Period`, `Date`, parsers, `Calendar` abstract + Null/WeekendsOnly/Joint/Bespoke, `Schedule` + `MakeSchedule`, `IMM`, `ASX`, `ECB`, `TimeGrid`, `TimeSeries`), and **day counters (DayCounter abstract + 11 concretes: OneDayCounter, Actual360/364/36525/365Fixed/366, Thirty360 with 9 conventions, Thirty365, SimpleDayCounter, Business252, ActualActual with 7 conventions)**.
+- **Next stages within L1-A:** Stage 4 (~43 sovereign/exchange calendars), Stage 5 (first math batch: Constants, Closeness, Rounding, Factorial, ErrorFunction, Beta, BernsteinPolynomial, PascalTriangle).
 
 ## Sibling repo (read-only reference)
 
