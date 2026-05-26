@@ -161,6 +161,46 @@ Surprises / decisions:
   freely (ActualActual `Old_ISMA` actually uses the default day_count even
   though year_fraction is bespoke; the C++ inherits the default the same way).
 
-## Stage 4 — Calendars (pending)
+## Stage 4 — Calendars (closed)
 
-## Stage 5 — First math batch (pending)
+| Commit | Subject | Tests added |
+|---|---|---|
+| `ca11f74` | `infra(harness): emit reference holiday-sets for all 41 sovereign/exchange calendars` (single mega-probe → 4506 holiday dates in one JSON) | 0 |
+| `5a0b1a9` | `merge: batch A (10 European Western + Orthodox Ukraine)` — `worktree-agent-a90c246249f3d88bb` | 20 |
+| `94ea196` | `merge: batch B (Western Europe + Mexico + Orthodox Romania)` — `worktree-agent-a84664e0f52e86d08` | 16 |
+| `400540a` | `merge: batch C (Americas + Oceania + Africa)` — `worktree-agent-a5824a55f2c9b4fdc` | 16 |
+| `8d779b4` | `merge: batch D (Middle East + Russia/Orthodox + East Asia)` — `worktree-agent-a9bd4436d3446f5b0` | 14 |
+| `239079b` | `merge: batch E (China + HongKong + India + Indonesia + SouthKorea + Thailand + UK + US)` — `worktree-agent-af9e9e0b6bdca7b41` | 16 |
+
+Outcome: **41 sovereign/exchange calendars** ported, **82 cross-validation tests** added, all green. Total Stage 4 contribution: 5 subagent branches × 13 underlying feat commits + 5 merge commits + 1 probe-bootstrap commit = 19 commits.
+
+**Parallelization strategy**:
+- Single mega-probe at `time/calendars/all_probe.cpp` emits 11-year (2020-2030) non-weekend holiday sets for all 41 default-constructed calendars into one 4506-entry JSON.
+- Probe + JSON committed first (`ca11f74`) so all subagents could pull from a shared reference.
+- 5 isolated-worktree subagents dispatched in parallel — each handles ~8 calendars, writes Python modules + tests against the committed JSON, verifies pytest+pyright+ruff, commits and pushes their own branch.
+- Main session merges each branch back with `--no-ff` after all 5 return. Disjoint file sets per batch meant zero conflicts.
+- Total wall-clock: ~25 minutes for 41 calendars (vs ~6+ hours sequential).
+
+Surprises / decisions:
+- **Subagents caught two Western/Orthodox prompt errors**: Ukraine (batch A) and Romania (batch B) inherit from `Calendar::OrthodoxImpl` in C++, not WesternImpl. Agents verified by checking Orthodox-Easter dates in the reference JSON and corrected the inheritance. Documented inline in each module.
+- **Saudi Arabia + Israel TelAvivImpl** subclass `Calendar` directly (not `WesternCalendar`) because their weekend is Fri+Sat, not Sat+Sun. Batch D agent handled this correctly with a `_is_weekend` override.
+- **UnitedStates** has no default constructor in C++ (`explicit UnitedStates(Market)`). The Python port adds `Market.Settlement` as the default to match the probe's reference and typical usage.
+- **Multi-market dispatch pattern reused**: every multi-market calendar (China, US, UK, Brazil, Canada, Germany, Russia, Israel, etc.) dispatches on `self._market` inside `_is_business_day` and `name()` — mirrors the pImpl pattern we established for Thirty360, Actual365Fixed, ActualActual.
+- **Probe-emit-path quirk**: the `time_calendars_all_probe` executable name translates to JSON path `references/time/calendars/all.json` (single underscore split → single slash). Tests load via key `"time/calendars/all"`.
+- **One worktree-isolation gotcha**: 2 of the 5 subagent worktrees spawned at `main` rather than `phase1-A`. Both agents detected the mismatch (their worktree was missing recent commits) and self-corrected via `git reset --hard phase1-A` + `git submodule update`. No data loss, just a minor extra step.
+
+## Stage 5 — First math batch (closed)
+
+| Commit | Subject | Tests added |
+|---|---|---|
+| `384fa8d` | `feat(math): port Stage 5 first batch — constants, closeness, rounding, factorial, error_function, beta, bernstein, pascal` | 18 |
+
+Outcome: 8 first-math-batch modules under `pquantlib.math` — `constants`, `closeness`, `rounding`, `factorial`, `error_function`, `beta`, `bernstein_polynomial`, `pascal_triangle`. Single commit (small batch, tightly coupled). **329/0/0 → 411/0/0** combined with Stage 4.
+
+Surprises / decisions:
+- **Math constants pulled from Python `math` + `sys.float_info`** rather than re-declared as float literals. `M_PI = math.pi`, `QL_EPSILON = sys.float_info.epsilon`. Documented divergence — C++ has `M_PI` as a CPP macro from `<cmath>`; Python's `math` module imports the same C99 constant.
+- **Factorial + Beta fallbacks use `math.lgamma`** instead of porting `GammaFunction.logValue` (lives in distributions/, deferred). For tabulated factorials (n ≤ 27) the values are EXACT; for n > 27 the C++ vs Python GammaFunction-divergence is ~1e-9 relative, so those test cases use LOOSE tier with inline rationale.
+- **ErrorFunction delegates to `math.erf`** (stdlib C99) rather than reproducing the Sun-Microsystems polynomial fit used by C++. Both agree to ~1e-14 typically; LOOSE tier in tests for safety at extreme |x|.
+- **Rounding `Type.None_`** with trailing underscore to avoid the Python `None` keyword collision (RUF100 `noqa: PIE796` originally added but removed when ruff didn't flag it; the suffix stays as the convention).
+- **PascalTriangle uses `ClassVar`** for the cache (RUF012). Bootstrap rows 0..3 copied verbatim from C++; iterative `_next_order` extends as needed.
+- **Single math probe** rather than per-class probes — 8 modules in one probe file (`math/first_batch_probe.cpp`) emits closeness × 8 cases, rounding × 17 (every Type × digit × precision), factorial × 11, error_function × 15, beta × 14, bernstein × 11, pascal × 9 orders.
