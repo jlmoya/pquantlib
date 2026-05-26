@@ -18,22 +18,10 @@ relying on overloaded constructors (clearer call sites).
 from __future__ import annotations
 
 import bisect
-import math
 from collections.abc import Iterable
-from typing import Final
 
 from pquantlib import qassert
-
-# Tolerances for the C++ ``close_enough(a, b, n=42)`` analogue.
-# Inlined here rather than borrowed from testing.tolerance to keep
-# production code free of test-only module dependencies.
-_CLOSE_ENOUGH_ABS: Final[float] = 1e-14
-_CLOSE_ENOUGH_REL: Final[float] = 42 * 1e-12
-
-
-def _close_enough(a: float, b: float) -> bool:
-    """Mirrors C++ ``close_enough(a, b, 42)`` — relative-tolerance check."""
-    return math.isclose(a, b, abs_tol=_CLOSE_ENOUGH_ABS, rel_tol=_CLOSE_ENOUGH_REL)
+from pquantlib.math.closeness import close_enough as _close_enough
 
 
 class TimeGrid:

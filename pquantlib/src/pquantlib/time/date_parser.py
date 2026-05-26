@@ -36,7 +36,13 @@ def parse_iso(s: str) -> Date:
         day = int(s[8:10])
     except ValueError as exc:
         qassert.fail(f"invalid format: {exc}")
-    return Date.from_ymd(day, Month(month), year)
+    # Month(N) raises stdlib ValueError for N outside [1, 12]; wrap so
+    # callers see a LibraryException as the entire DateParser API contract.
+    try:
+        month_enum = Month(month)
+    except ValueError as exc:
+        qassert.fail(f"invalid format: {exc}")
+    return Date.from_ymd(day, month_enum, year)
 
 
 def parse_formatted(s: str, fmt: str) -> Date:

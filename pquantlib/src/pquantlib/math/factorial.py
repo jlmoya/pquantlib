@@ -16,6 +16,8 @@ from __future__ import annotations
 import math
 from typing import Final
 
+from pquantlib import qassert
+
 # Mirrors the C++ ``firstFactorials`` array (indices 0..27 inclusive).
 _FIRST_FACTORIALS: Final[tuple[float, ...]] = (
     1.0,
@@ -55,12 +57,17 @@ class Factorial:
 
     @staticmethod
     def get(n: int) -> float:
+        # C++ uses Natural (unsigned). Python int can be negative, and the
+        # tabulated-array path would silently fold negative n via Python
+        # negative indexing (e.g. n=-1 returns the n=27 value). Guard here.
+        qassert.require(n >= 0, f"Factorial.get requires n >= 0, got {n}")
         if n <= _TABULATED:
             return _FIRST_FACTORIALS[n]
         return math.exp(math.lgamma(n + 1))
 
     @staticmethod
     def ln(n: int) -> float:
+        qassert.require(n >= 0, f"Factorial.ln requires n >= 0, got {n}")
         if n <= _TABULATED:
             return math.log(_FIRST_FACTORIALS[n])
         return math.lgamma(n + 1)

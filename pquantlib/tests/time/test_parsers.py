@@ -89,6 +89,15 @@ def test_date_parse_iso_non_numeric_raises() -> None:
         date_parser.parse_iso("xxxx-xx-xx")
 
 
+def test_date_parse_iso_month_out_of_range_raises_library_exception() -> None:
+    # Month(0) and Month(13) raise stdlib ValueError; parse_iso wraps to
+    # LibraryException so callers can rely on the documented API contract.
+    with pytest.raises(LibraryException, match="invalid format"):
+        date_parser.parse_iso("2024-00-15")
+    with pytest.raises(LibraryException, match="invalid format"):
+        date_parser.parse_iso("2024-13-15")
+
+
 # --- DateParser.parse_formatted (Python-native, no probe) -------------------
 
 

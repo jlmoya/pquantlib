@@ -22,6 +22,12 @@ from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 from pquantlib.time.weekday import Weekday
 
+# Smallest serial at which the Israeli-holiday helper chain (up to 21 days
+# of subtraction in _is_simchat_torah → … → _is_new_years_day) stays within
+# the valid Date range. Below this, _is_business_day returns weekend-only.
+# Set to 1901-02-01 = serial 367 + 31 = 398 with a small safety margin.
+_MIN_SAFE_HOLIDAY_SERIAL: Final[int] = 400
+
 
 class IsraelMarket(IntEnum):
     Settlement = 0  # generic settlement calendar
@@ -418,6 +424,15 @@ class _IsraelTelAvivCalendar(Calendar):
         return w in (Weekday.Friday, Weekday.Saturday)
 
     def _is_business_day(self, d: Date) -> bool:
+        # Defensive: the Israeli-holiday helpers chain up to 21 days of
+        # subtraction (Simchat Torah → Sukkot → Yom Kippur → New Year's
+        # Day). For dates in the first month of the valid range, the
+        # subtraction would push below ``Date.min_date`` and raise. The
+        # Israeli holiday tables only cover years 2000+ in C++, so we
+        # short-circuit "no holiday possible" before 1901-02-01 here.
+        if d.serial < _MIN_SAFE_HOLIDAY_SERIAL:
+            return not self._is_weekend(d.weekday())
+
         w = d.weekday()
         y = d.year()
 

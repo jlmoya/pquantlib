@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from pquantlib.exceptions import LibraryException
 from pquantlib.math.bernstein_polynomial import BernsteinPolynomial
 from pquantlib.math.beta import beta_function, incomplete_beta_function
 from pquantlib.math.closeness import close, close_enough
@@ -151,6 +152,17 @@ def test_factorial_zero_and_one() -> None:
     tolerance.exact(Factorial.ln(0), 0.0)
 
 
+def test_factorial_negative_input_raises() -> None:
+    # C++ uses Natural (unsigned); Python int allows negatives, but Python
+    # negative indexing into _FIRST_FACTORIALS would silently return the
+    # last tabulated value. The explicit guard turns that into a clear
+    # LibraryException.
+    with pytest.raises(LibraryException, match="n >= 0"):
+        Factorial.get(-1)
+    with pytest.raises(LibraryException, match="n >= 0"):
+        Factorial.ln(-1)
+
+
 # --- error_function -----------------------------------------------------
 
 
@@ -214,6 +226,15 @@ def test_bernstein_partition_of_unity() -> None:
         tolerance.tight(total, 1.0)
 
 
+def test_bernstein_invalid_inputs_raise() -> None:
+    with pytest.raises(LibraryException, match="i >= 0"):
+        BernsteinPolynomial.get(-1, 5, 0.5)
+    with pytest.raises(LibraryException, match="n >= 0"):
+        BernsteinPolynomial.get(0, -1, 0.5)
+    with pytest.raises(LibraryException, match="i <= n"):
+        BernsteinPolynomial.get(6, 5, 0.5)
+
+
 # --- pascal -------------------------------------------------------------
 
 
@@ -227,3 +248,8 @@ def test_pascal_matches_cpp(cpp: dict[str, Any]) -> None:
 def test_pascal_row_sums_are_powers_of_two() -> None:
     for n in range(10):
         assert sum(PascalTriangle.get(n)) == 2**n
+
+
+def test_pascal_negative_order_raises() -> None:
+    with pytest.raises(LibraryException, match="order >= 0"):
+        PascalTriangle.get(-1)

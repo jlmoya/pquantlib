@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from pquantlib import qassert
+
 
 class PascalTriangle:
     """Cached lazy generator of Pascal-triangle rows."""
@@ -20,6 +22,10 @@ class PascalTriangle:
 
     @classmethod
     def get(cls, order: int) -> tuple[int, ...]:
+        # C++ takes a Size (unsigned). Python int can be negative; the
+        # cache lookup would silently return the last row via negative
+        # indexing. Guard here.
+        qassert.require(order >= 0, f"PascalTriangle.get requires order >= 0, got {order}")
         if not cls._coefficients:
             # Bootstrap rows 0..3 verbatim from the C++ implementation.
             cls._coefficients.append((1,))

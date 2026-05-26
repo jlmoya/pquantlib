@@ -6,9 +6,11 @@ day_count counts business days between d1 and d2 against the supplied
 calendar. year_fraction = day_count / 252.
 
 Divergence from C++:
-- The C++ default constructor uses ``Brazil()`` calendar. Brazil is not
-  yet ported (Stage 4); the Python port requires an explicit calendar.
-  Documented inline.
+- The C++ default constructor uses ``Brazil()`` calendar. Brazil now ships
+  (Stage 4), but the Python port keeps the explicit-calendar requirement
+  so the API surface doesn't silently depend on a calendar identity that
+  callers may not realize they're inheriting. Pass ``Business252(Brazil())``
+  to get the C++ default behaviour.
 - The C++ impl maintains module-level monthly + yearly business-day caches
   keyed by calendar name to amortize cost over multi-year date ranges.
   The Python port skips the cache and calls ``calendar.business_days_between``

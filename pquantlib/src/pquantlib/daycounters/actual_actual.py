@@ -259,14 +259,19 @@ def _coupon_dates_with_quasi_payments(schedule: Schedule) -> list[Date]:
     return dates
 
 
-def _year_fraction_guess(start: Date, end: Date) -> float:
-    """Mirrors C++ ``yearFractionGuess`` — asymptotic guess at year fraction."""
-    return (end - start) / 365.0
-
-
 def _coupons_per_year(ref_start: Date, ref_end: Date) -> int:
-    """Mirrors C++ ``findCouponsPerYear``. Only correct for periods > 15 days."""
+    """Mirrors C++ ``findCouponsPerYear``. Only correct for periods > 15 days.
+
+    Guarded against division-by-zero: callers should already filter via the
+    ``reference_day_count >= 16`` branch in ``_yf_with_ref_dates``, but the
+    guard here is defence-in-depth in case the helper is invoked directly.
+    """
     months = round(12 * (ref_end - ref_start) / 365.0)
+    qassert.require(
+        months != 0,
+        f"_coupons_per_year: reference period too short ({ref_end - ref_start} days, "
+        f"rounded to 0 months) — caller must guard via the 15-day-floor in C++.",
+    )
     return round(12.0 / months)
 
 
@@ -282,10 +287,7 @@ def _yf_with_ref_dates(d1: Date, d2: Date, d3: Date, d4: Date) -> float:
     return (d2 - d1) / (reference_day_count * coupons_per_year)
 
 
-# Re-export the year-fraction guess for callers that need it (mirrors C++
-# anonymous-namespace helper; useful for diagnostics).
 __all__ = [
     "ActualActual",
     "Convention",
 ]
-_ = _year_fraction_guess
