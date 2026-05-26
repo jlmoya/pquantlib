@@ -90,3 +90,7 @@ target_link_libraries(daycounters_thirty_family_probe PRIVATE ${QUANTLIB_LIBRARY
 # === daycounters / simple + business252 ===
 add_executable(daycounters_simple_business_probe daycounters/simple_business_probe.cpp)
 target_link_libraries(daycounters_simple_business_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === daycounters / actualactual ===
+add_executable(daycounters_actualactual_probe daycounters/actualactual_probe.cpp)
+target_link_libraries(daycounters_actualactual_probe PRIVATE ${QUANTLIB_LIBRARY})
