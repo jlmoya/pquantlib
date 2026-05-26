@@ -94,3 +94,7 @@ target_link_libraries(daycounters_simple_business_probe PRIVATE ${QUANTLIB_LIBRA
 # === daycounters / actualactual ===
 add_executable(daycounters_actualactual_probe daycounters/actualactual_probe.cpp)
 target_link_libraries(daycounters_actualactual_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === time / calendars (all 41 sovereign/exchange, default-market) ===
+add_executable(time_calendars_all_probe time/calendars_all_probe.cpp)
+target_link_libraries(time_calendars_all_probe PRIVATE ${QUANTLIB_LIBRARY})
