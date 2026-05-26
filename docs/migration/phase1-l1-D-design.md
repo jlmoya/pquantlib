@@ -1,7 +1,7 @@
 # Phase 1 L1-D — RNGs + simple optimization
 
 **Date:** 2026-05-24
-**Status:** drafted
+**Status:** **closed** — merged into `main` via the L1-D branch tip `5370a08`; tagged as part of `pquantlib-phase1-complete` @ `edcadbc`. Final test delta: **+52** (5 RNGs + BoxMuller all EXACT-tier bit-exact vs C++ + 7 optimization scaffolding modules).
 **Predecessor:** `pquantlib-phase1-l1-A-complete` @ `03d0ce8`
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
 **Style:** lean — see [`phase1-l1-A-design.md`](phase1-l1-A-design.md) for ground rules.

@@ -1,10 +1,19 @@
 # Phase 1 — L1 math primitives + time + foundations (design)
 
 **Date:** 2026-05-23
-**Status:** drafted, awaiting ack to start
+**Status:** **closed** — tagged `pquantlib-phase1-complete` @ `edcadbc` on 2026-05-24. **581/0/0** pytest, pyright + ruff clean. Closure summary at [`phase1-completion.md`](phase1-completion.md).
 **Predecessor:** `pquantlib-phase0-bootstrap` @ `85018e5`
 **Sister-project anchor:** jquantlib `phase2-l1-plan.md` + 4 sub-cluster plans (B/C/D/E)
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
+
+## Outcome (filled in at closure)
+
+Phase 1 shipped as 5 clusters across two stages of work:
+
+- **L1-A pilot** (sequential, 6 stages): 415/0/0 tests. Tagged `pquantlib-phase1-l1-A-complete` @ `03d0ce8`. See [`phase1-l1-A-completion.md`](phase1-l1-A-completion.md).
+- **L1-B / L1-C / L1-D / L1-E** (4 parallel cluster subagents, ~25 min wall-clock): +166 tests, total 581/0/0.
+
+The design's "~500 ported class" target was not hit — actual realized scope was tighter (the must-port subset per cluster). Carve-outs documented in [`phase1-completion.md`](phase1-completion.md).
 
 ## Goal
 

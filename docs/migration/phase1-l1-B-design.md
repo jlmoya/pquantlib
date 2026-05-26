@@ -1,7 +1,7 @@
 # Phase 1 L1-B — Copulas + simple distributions/statistics + currencies
 
 **Date:** 2026-05-24
-**Status:** drafted
+**Status:** **closed** — merged into `main` via `cbd55ac merge: L1-B`; tagged as part of `pquantlib-phase1-complete` @ `edcadbc`. Final test delta: **+50** (415 → 465 before subsequent merges).
 **Predecessor:** `pquantlib-phase1-l1-A-complete` @ `03d0ce8`
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
 **Style:** lean — leans on the L1-A design + plan for the per-class TDD loop, tolerance discipline, commit format. Read [`phase1-l1-A-design.md`](phase1-l1-A-design.md) for binding ground rules.

@@ -63,6 +63,75 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 
 **Current tip on `main`:** `edcadbc docs(migration): write phase1-completion.md` (Phase 1 closed via `pquantlib-phase1-complete` tag). See [`docs/migration/phase1-completion.md`](docs/migration/phase1-completion.md) for the closure summary.
 
+## What's available today (Phase 1 L1)
+
+Phase 1 ships the foundation: math primitives, time machinery, day counters, currencies, distributions, random number generators, simple optimization scaffolding, and a starter set of 1-D/2-D interpolations. Importable as `pquantlib.<module>`.
+
+### Foundations
+
+- **`pquantlib.exceptions`** — `LibraryException` (C++ `QL::Error` analogue), `RootNotBracketed`, etc.
+- **`pquantlib.qassert`** — `require(cond, msg)` / `ensure(...)` (C++ `QL_REQUIRE` / `QL_ENSURE`).
+- **`pquantlib.testing.tolerance`** — `exact(a, e)` / `tight(a, e)` / `loose(a, e)` / `custom(a, e, abs_tol, rel_tol)`.
+- **`pquantlib.testing.reference_reader`** — `load("<topic>/<class>")` returns probe-emitted JSON.
+- **`pquantlib.patterns`** — `Observer` / `Observable` (weakref-backed), `Singleton` (metaclass), `Visitor` / `Visitable` (Protocols), `LazyObject`, `CuriouslyRecurringTemplate`.
+
+### Time core
+
+- **`pquantlib.time.Date`** — frozen `@dataclass`, Excel-1900 epoch, `+`/`-`/`<`/etc. with `@overload`-narrowed return types.
+- **`pquantlib.time.Period`** — `frozen+slots`, normalized arithmetic.
+- **`pquantlib.time.DateParser` / `PeriodParser`** — string ↔ value-type.
+- **`pquantlib.time.Calendar`** — abstract base + 4 trivial concretes (`NullCalendar`, `WeekendsOnly`, `JointCalendar`, `BespokeCalendar`) + **41 sovereign/exchange calendars** (US/UK/Germany/France/Italy/Japan/Switzerland/Sweden/Brazil/China/India/Canada/Australia/Russia/Israel/etc., each with default-market `Convention` enum).
+- **`pquantlib.time.Schedule`** + **`MakeSchedule`** — builder pattern for date schedules.
+- **`pquantlib.time.IMM` / `ASX` / `ECB`** — module-of-free-functions exporting `next_date`, `is_imm_date`, `known_date`, etc.
+- **`pquantlib.time.TimeGrid`** — mandatory + close-enough times bundle.
+- **`pquantlib.time.TimeSeries[T]`** — PEP 695 generic; sorted-by-date container.
+
+### Day counters
+
+`pquantlib.daycounters` — `DayCounter` abstract + 11 concretes (`Actual360`, `Actual365Fixed` w/ Standard/NoLeap/Actual365 convention dispatch, `ActualActual` w/ ISMA/Bond/ISDA/Historical/Actual365/AFB/Euro variants, `Thirty360` w/ USA/BondBasis/European/Italian/German/ISMA/ISDA/NASD/EurobondBasis variants, `Business252`, `One`, `Simple`, `Thirty365`).
+
+### Math primitives
+
+- **`pquantlib.math.constants`** — `M_PI`, `QL_EPSILON`, `QL_MIN_REAL`, `QL_MAX_REAL` (from `math` + `sys.float_info`).
+- **`pquantlib.math.closeness.close_enough`** — relative-tolerance comparison.
+- **`pquantlib.math.rounding`** — 6 `Type` enums (Up/Down/Closest/Floor/Ceiling/None).
+- **`pquantlib.math.factorial`** — table to n=27 + `math.lgamma` fallback (LOOSE-tier).
+- **`pquantlib.math.error_function`** — `math.erf` delegate (LOOSE-tier).
+- **`pquantlib.math.beta`** + `incomplete_beta` + `beta_continued_fraction` — closed-form via `math.lgamma`.
+- **`pquantlib.math.bernstein_polynomial`** + **`pascal_triangle`** — combinatorial helpers with `qassert.require` guards.
+
+### Distributions, copulas, statistics
+
+- **`pquantlib.math.distributions`** — `NormalDistribution`, `CumulativeNormalDistribution` (via `math.erf`), `InverseCumulativeNormal` (Acklam algorithm), `MoroInverseCumulativeNormal`.
+- **`pquantlib.math.copulas`** — 12 closed-form 2-D copulas: AliMikhailHaq, Clayton, FarlieGumbelMorgenstern, Frank, Galambos, Gaussian, Gumbel, HuslerReiss, Independent, MaxCopula, MinCopula, Plackett. (MarshallOlkin deferred.) All `@dataclass(frozen=True, slots=True)` with `__call__`.
+- **`pquantlib.math.statistics`** — `GeneralStatistics` (running mean/variance/kurtosis/skew), `IncrementalStatistics` (Welford-style aggregator).
+
+### Random number generators (all EXACT-tier bit-exact vs C++)
+
+`pquantlib.math.randomnumbers` — `MersenneTwisterUniformRng` (MT19937), `KnuthUniformRng`, `LecuyerUniformRng`, `Ranlux3UniformRng`, `Xoshiro256StarStarUniformRng`, `BoxMullerGaussianRng`. Every PRNG reproduces C++ outputs bit-for-bit via `struct.pack('!d', x)` comparison.
+
+### Solvers and integrals
+
+- **`pquantlib.math.solvers1d`** — `Solver1D` abstract + 9 concretes (`Bisection`, `Brent`, `FalsePosition`, `FiniteDifferenceNewtonSafe`, `Halley`, `Newton`, `NewtonSafe`, `Ridder`, `Secant`).
+- **`pquantlib.math.integrals`** — `Integrator` abstract + 5 simple concretes (`SimpsonIntegral`, `TrapezoidIntegral`, `SegmentIntegral`, `GaussKronrodAdaptive`, `GaussLobattoIntegral`).
+
+### Optimization scaffolding
+
+`pquantlib.math.optimization` — `Constraint` family (`NoConstraint`, `PositiveConstraint`, `BoundaryConstraint`), `CostFunction`, `EndCriteria`, `OptimizationMethod` abstract, `Problem`. (Concrete LM/BFGS/Simplex/CG/SA optimizers deferred to a follow-up cluster.)
+
+### Interpolations + matrix utilities
+
+- **`pquantlib.math.interpolations`** — `Interpolation` abstract + 4 1-D concretes (`LinearInterpolation`, `LogLinearInterpolation`, `BackwardFlatInterpolation`, `ForwardFlatInterpolation`) + `BilinearInterpolation` 2-D.
+- **`pquantlib.math.matrixutilities`** — `Array` / `Matrix` typing aliases over `npt.NDArray[np.float64]`, plus `CholeskyDecomposition` (scipy delegate).
+
+### Currencies
+
+`pquantlib.currencies` — 5 ISO descriptors (USD, EUR, GBP, JPY, CHF) as `@dataclass(frozen=True, slots=True)`. (More currencies follow in L2 termstructures work.)
+
+### Carve-outs (deferred from Phase 1)
+
+Full `GaussianOrthogonalPolynomial` hierarchy (12+ subclass tree), `SobolRsg` + `Burley2020SobolRsg` low-discrepancy, `LevenbergMarquardt`/`Bfgs`/`Simplex`/`ConjugateGradient`/`SimulatedAnnealing` optimizers, 8+ cubic-spline variants (`AkimaCubicInterpolation`, `KrugerCubic`, `FritschButland`, etc.), `QRDecomposition`/`EigenvalueDecomposition`/`SVD`/`SparseMatrix` utilities, full `GammaFunction` (currently delegated to `math.lgamma`). Each will land either as L2 sub-clusters or a dedicated L1-completion cluster — see [`docs/migration/phase1-completion.md`](docs/migration/phase1-completion.md) for the complete list.
+
 ## Repo layout
 
 ```

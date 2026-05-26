@@ -1,7 +1,7 @@
 # Phase 1 L1-C — Solvers1D + simple integrals
 
 **Date:** 2026-05-24
-**Status:** drafted
+**Status:** **closed** — merged into `main` via `6580db9 merge: L1-C`; tagged as part of `pquantlib-phase1-complete` @ `edcadbc`. Final test delta: **+34** (Solver1D abstract + 9 concretes + Integrator abstract + 5 simple integrals).
 **Predecessor:** `pquantlib-phase1-l1-A-complete` @ `03d0ce8`
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
 **Style:** lean — see [`phase1-l1-A-design.md`](phase1-l1-A-design.md) for ground rules.

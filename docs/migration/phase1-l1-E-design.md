@@ -1,7 +1,7 @@
 # Phase 1 L1-E — Interpolations + matrix utilities + remaining math root
 
 **Date:** 2026-05-24
-**Status:** drafted
+**Status:** **closed** — merged into `main` via `8b64830 merge: L1-E`; tagged as part of `pquantlib-phase1-complete` @ `edcadbc`. Final test delta: **+30** (Array/Matrix typing aliases + Interpolation abstract + 4 1-D interpolations + Bilinear 2-D + scipy-backed Cholesky). Added `scipy>=1.13` as a workspace dependency.
 **Predecessor:** `pquantlib-phase1-l1-A-complete` @ `03d0ce8`
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
 **Style:** lean — see [`phase1-l1-A-design.md`](phase1-l1-A-design.md) for ground rules.
