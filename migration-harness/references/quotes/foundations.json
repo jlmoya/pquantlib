@@ -1,0 +1,16 @@
+{
+  "simple_quote_value": 5,
+  "simple_quote_is_valid": true,
+  "simple_quote_default_is_valid": false,
+  "simple_quote_set_value_diff": 5,
+  "simple_quote_after_set": 7,
+  "simple_quote_set_same_diff": 0,
+  "simple_quote_reset_is_valid": false,
+  "derived_quote_linear": 7,
+  "derived_quote_square": 16,
+  "derived_quote_after_update": 21,
+  "composite_quote_sum": 7,
+  "composite_quote_hypot": 5,
+  "composite_quote_value1": 3,
+  "composite_quote_value2": 4
+}

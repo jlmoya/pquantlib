@@ -118,3 +118,7 @@ target_link_libraries(cluster_d_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L1-E cluster: simple interpolations + matrix + math root ===
 add_executable(cluster_e_probe cluster_e/probe.cpp)
 target_link_libraries(cluster_e_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L2-A: foundations (quotes — SimpleQuote / DerivedQuote / CompositeQuote) ===
+add_executable(quotes_foundations_probe quotes/foundations_probe.cpp)
+target_link_libraries(quotes_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
