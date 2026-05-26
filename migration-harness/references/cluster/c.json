@@ -1,0 +1,23 @@
+{
+  "solvers": {
+    "bisection":           5,
+    "brent":               4.9999999999999813,
+    "false_position":      4.9999999999995577,
+    "ridder":              5,
+    "secant":              2,
+    "newton":              5,
+    "newton_safe":         5,
+    "halley":              5,
+    "fd_newton_safe":      5
+  },
+  "integrals": {
+    "simpson_x_squared":    0.33333333333333331,
+    "trapezoid_x_squared":  0.33333333334303461,
+    "segment_x_squared":    0.33335000000000042,
+    "kronrod_x_squared":    0.33333333333333226,
+    "lobatto_x_squared":    0.33333333333333326,
+    "simpson_sin":          2.000000000000977,
+    "trapezoid_sin":        1.999999999978197,
+    "kronrod_sin":          1.9999999999999944
+  }
+}

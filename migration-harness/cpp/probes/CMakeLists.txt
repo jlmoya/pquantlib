@@ -102,3 +102,19 @@ target_link_libraries(time_calendars_all_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === math / first batch (rounding, factorial, errorfunction, beta, ...) ===
 add_executable(math_first_batch_probe math/first_batch_probe.cpp)
 target_link_libraries(math_first_batch_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L1-B cluster: copulas + simple distributions + statistics + currencies ===
+add_executable(cluster_b_probe cluster_b/probe.cpp)
+target_link_libraries(cluster_b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L1-C cluster: Solver1D family + simple integrals ===
+add_executable(cluster_c_probe cluster_c/probe.cpp)
+target_link_libraries(cluster_c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L1-D cluster: deterministic RNGs ===
+add_executable(cluster_d_probe cluster_d/probe.cpp)
+target_link_libraries(cluster_d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L1-E cluster: simple interpolations + matrix + math root ===
+add_executable(cluster_e_probe cluster_e/probe.cpp)
+target_link_libraries(cluster_e_probe PRIVATE ${QUANTLIB_LIBRARY})
