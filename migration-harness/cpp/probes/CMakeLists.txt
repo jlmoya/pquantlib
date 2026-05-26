@@ -74,3 +74,7 @@ target_link_libraries(time_asx_ecb_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === time / timegrid + timeseries ===
 add_executable(time_timegrid_probe time/timegrid_probe.cpp)
 target_link_libraries(time_timegrid_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === daycounters / one ===
+add_executable(daycounters_one_day_counter_probe daycounters/one_day_counter_probe.cpp)
+target_link_libraries(daycounters_one_day_counter_probe PRIVATE ${QUANTLIB_LIBRARY})

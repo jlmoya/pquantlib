@@ -1,0 +1,10 @@
+{
+  "name": "1/1",
+  "cases": [
+    {"y1": 2024, "m1": 1, "d1": 1, "y2": 2024, "m2": 1, "d2": 1, "day_count": 1, "year_fraction": 1},
+    {"y1": 2024, "m1": 1, "d1": 1, "y2": 2024, "m2": 1, "d2": 2, "day_count": 1, "year_fraction": 1},
+    {"y1": 2024, "m1": 1, "d1": 2, "y2": 2024, "m2": 1, "d2": 1, "day_count": -1, "year_fraction": -1},
+    {"y1": 2024, "m1": 1, "d1": 1, "y2": 2025, "m2": 1, "d2": 1, "day_count": 1, "year_fraction": 1},
+    {"y1": 2025, "m1": 1, "d1": 1, "y2": 2024, "m2": 1, "d2": 1, "day_count": -1, "year_fraction": -1}
+  ]
+}
