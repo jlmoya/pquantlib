@@ -131,3 +131,7 @@ target_link_libraries(cluster_l2b_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L2-C cluster: indexes (Euribor/USDLibor/Sofr/...) + rate helpers ===
 add_executable(cluster_l2c_probe cluster_l2c/probe.cpp)
 target_link_libraries(cluster_l2c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L2-D cluster: cashflows (InterestRate / coupons / legs / aggregator) ===
+add_executable(cluster_l2d_probe cluster_l2d/probe.cpp)
+target_link_libraries(cluster_l2d_probe PRIVATE ${QUANTLIB_LIBRARY})
