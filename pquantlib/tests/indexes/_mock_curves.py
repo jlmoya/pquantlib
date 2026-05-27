@@ -38,9 +38,9 @@ class FlatForwardMock:
     def day_counter(self) -> DayCounter:
         return self.dc
 
-    def discount(self, arg: float | Date, extrapolate: bool = False) -> float:
+    def discount(self, t: float | Date, extrapolate: bool = False) -> float:
         del extrapolate
-        t = arg if not isinstance(arg, Date) else self.dc.year_fraction(self.reference, arg)
+        t = t if not isinstance(t, Date) else self.dc.year_fraction(self.reference, t)
         return exp(-self.rate * t)
 
     def zero_rate(self, arg: float | Date, extrapolate: bool = False) -> float:

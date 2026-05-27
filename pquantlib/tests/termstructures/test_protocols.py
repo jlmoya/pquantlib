@@ -31,8 +31,8 @@ class _MockYieldCurve:
     def day_counter(self) -> DayCounter:
         return Actual360()
 
-    def discount(self, arg: float | Date, extrapolate: bool = False) -> float:
-        del arg, extrapolate
+    def discount(self, t: float | Date, extrapolate: bool = False) -> float:
+        del t, extrapolate
         return 0.95
 
     def zero_rate(self, arg: float | Date, extrapolate: bool = False) -> float:

@@ -44,15 +44,15 @@ class YieldTermStructureProtocol(Protocol):
     can't structurally narrow to them.  Code that needs those should
     accept ``YieldTermStructure`` directly, not the Protocol.
 
-    The parameter name ``arg`` on ``discount`` matches the concrete
-    YieldTermStructure base class (which uses ``arg`` because of the
-    overloaded ``Time arg`` / ``Date arg`` accepting union in Python).
+    The parameter name ``t`` on ``discount`` matches the concrete
+    YieldTermStructure base class (which uses ``t`` accepting a
+    ``float | Date`` union).
     """
 
     def reference_date(self) -> Date: ...
     def max_date(self) -> Date: ...
     def day_counter(self) -> DayCounter: ...
-    def discount(self, arg: float | Date, extrapolate: bool = False) -> float: ...
+    def discount(self, t: float | Date, extrapolate: bool = False) -> float: ...
 
 
 @runtime_checkable
