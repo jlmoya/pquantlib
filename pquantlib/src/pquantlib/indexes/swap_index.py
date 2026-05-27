@@ -22,7 +22,6 @@ What's ported in L2-C:
 
 from __future__ import annotations
 
-from pquantlib import qassert
 from pquantlib.currencies.currency import Currency
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.indexes.ibor_index import IborIndex
@@ -87,14 +86,40 @@ class SwapIndex(InterestRateIndex):
         )
 
     def forecast_fixing(self, fixing_date: Date) -> float:
-        """Defer the full par-swap-rate calculation to L3.
+        """Par-swap rate at ``fixing_date`` — drives the underlying vanilla swap.
 
         # C++ parity: ql/indexes/swapindex.cpp ``SwapIndex::forecastFixing``
-          calls ``underlyingSwap(fixingDate)->fairRate()``. Both depend on
-          ``VanillaSwap`` (L3).
+        # calls ``underlyingSwap(fixingDate)->fairRate()``.
         """
-        qassert.fail(
-            "SwapIndex.forecast_fixing requires VanillaSwap (deferred to L3)",
+        return self.underlying_swap(fixing_date).fair_rate()
+
+    def underlying_swap(self, fixing_date: Date):  # type: ignore[no-untyped-def]
+        """Build the underlying VanillaSwap for a given fixing date.
+
+        # C++ parity: ql/indexes/swapindex.cpp ``SwapIndex::underlyingSwap`` —
+        # delegates to ``MakeVanillaSwap`` with effective date = value_date(fixing_date).
+        """
+        # Local import to keep the layering clean — indexes/ depend only on
+        # cashflows + termstructures; instruments/make_vanilla_swap pulls in
+        # the L3 swap stack which would invert the dependency order on
+        # module import.
+        from pquantlib.instruments.make_vanilla_swap import make_vanilla_swap  # noqa: PLC0415
+        from pquantlib.time.time_unit import TimeUnit  # noqa: PLC0415
+
+        # Spot date from the fixing date (fixing_days business days forward).
+        eff_date = self._fixing_calendar.advance(
+            fixing_date, self._fixing_days, TimeUnit.Days,
+        )
+        return make_vanilla_swap(
+            swap_tenor=self._tenor,
+            ibor_index=self._ibor_index,
+            fixed_rate=None,
+            effective_date=eff_date,
+            fixed_leg_tenor=self._fixed_leg_tenor,
+            fixed_leg_convention=self._fixed_leg_convention,
+            fixed_leg_termination_convention=self._fixed_leg_convention,
+            fixed_leg_day_count=self._fixed_leg_day_counter,
+            discount_curve=self._discount,
         )
 
     # --- inspectors ------------------------------------------------------------
