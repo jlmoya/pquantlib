@@ -9,8 +9,8 @@ Two modes — both implemented:
 
 ``useIndexedCoupon`` switches between fixing-based (calls index.fixing) and
 discount-factor-based (formula  ``(d(t_start)/d(t_end) - 1) / yearFraction``).
-This commit ports the discount-factor-only branch (matching the L2-C probe);
-the indexed-coupon branch requires L2-D IborCoupon and is deferred.
+Both branches are implemented (the L2-D IborCoupon classes are now
+available, completing the L2-C carry-over).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from pquantlib.time.time_unit import TimeUnit
 
 
 class FraRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
-    """FRA rate helper. Supports the ``useIndexedCoupon=False`` branch."""
+    """FRA rate helper. Supports both useIndexedCoupon branches."""
 
     def __init__(
         self,
@@ -51,10 +51,6 @@ class FraRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         evaluation_date: Date | None = None,
     ) -> None:
         super().__init__(rate)
-        qassert.require(
-            not use_indexed_coupon,
-            "useIndexedCoupon=True requires L2-D IborCoupon (deferred)",
-        )
         # Map months_to_start → period_to_start for both modes.
         if period_to_start is None and months_to_start is not None:
             period_to_start = Period(months_to_start, TimeUnit.Months)
@@ -101,12 +97,26 @@ class FraRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
     # --- BootstrapHelper interface --------------------------------------------
 
     def implied_quote(self) -> float:
+        """Return the model-implied FRA rate.
+
+        # C++ parity: ``FraRateHelper::impliedQuote``:
+        #   - useIndexedCoupon=true  → index.fixing(fixingDate, true)
+        #   - useIndexedCoupon=false → discount-factor par approximation
+        """
         qassert.require(self._term_structure is not None, "term structure not set")
         assert self._term_structure is not None
         qassert.require(self._earliest_date is not None, "dates not initialized")
         qassert.require(self._maturity_date is not None, "dates not initialized")
         assert self._earliest_date is not None
         assert self._maturity_date is not None
+
+        if self._use_indexed_coupon:
+            qassert.require(self._fixing_date is not None, "fixing date not initialized")
+            assert self._fixing_date is not None
+            return self._ibor_index.fixing(
+                self._fixing_date, forecast_todays_fixing=True
+            )
+
         return (
             self._term_structure.discount(self._earliest_date)
             / self._term_structure.discount(self._maturity_date) - 1.0
@@ -137,14 +147,25 @@ class FraRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         )
         self._earliest_date = earliest
         self._maturity_date = maturity
-        # use_indexed_coupon=False branch — spanning time on year_fraction.
-        self._spanning_time = self._ibor_index.day_counter().year_fraction(
-            earliest, maturity,
-        )
-        self._latest_relevant_date = maturity
+
+        # C++ parity: ``initializeDates`` branches on useIndexedCoupon:
+        # - true  → latest_relevant_date = index.maturityDate(earliest)
+        #           spanning_time is unused.
+        # - false → latest_relevant_date = maturity_date
+        #           spanning_time = year_fraction(earliest, maturity).
+        if self._use_indexed_coupon:
+            self._latest_relevant_date = self._ibor_index.maturity_date(earliest)
+        else:
+            self._spanning_time = self._ibor_index.day_counter().year_fraction(
+                earliest, maturity,
+            )
+            self._latest_relevant_date = maturity
 
         if self._pillar_choice in (PillarChoice.MaturityDate, PillarChoice.LastRelevantDate):
-            self._pillar_date = maturity
+            if self._pillar_choice == PillarChoice.MaturityDate:
+                self._pillar_date = maturity
+            else:
+                self._pillar_date = self._latest_relevant_date
         elif self._pillar_choice == PillarChoice.CustomDate:
             qassert.require(
                 self._pillar_date is not None,
