@@ -1,0 +1,66 @@
+{
+  "gbsm_process": {
+    "x0": 100,
+    "diffusion_t0": 0.20000000000000001,
+    "drift_t0": 0.010000000000010218,
+    "expectation_t0_dt1": 103.0454533953517,
+    "variance_t0_dt1": 0.040000000000000008,
+    "std_deviation_t0_dt1": 0.20000000000000001,
+    "evolve_t0_dt1_dw0": 101.00501670841682,
+    "evolve_t0_dt1_dw1": 123.36780599567435,
+    "apply_x100_dx0p2": 122.14027581601698,
+    "time_at_expiry": 1
+  },
+  "bs_process": {
+    "x0": 100,
+    "diffusion_t0": 0.20000000000000001,
+    "drift_t0": 0.030000000000129562,
+    "expectation_t0_dt1": 105.12710963760242,
+    "variance_t0_dt1": 0.040000000000000008
+  },
+  "black_process": {
+    "x0": 100,
+    "diffusion_t0": 0.20000000000000001,
+    "drift_t0": -0.020000000000000004,
+    "expectation_t0_dt1": 100
+  },
+  "bsm_process": {
+    "x0": 100,
+    "diffusion_t0": 0.20000000000000001,
+    "drift_t0": 0.010000000000010218,
+    "expectation_t0_dt1": 103.0454533953517,
+    "variance_t0_dt1": 0.040000000000000008
+  },
+  "euler_discretization": {
+    "drift_dt_quarter": -0.005000000000000001,
+    "diffusion_dt_quarter": 0.10000000000000001,
+    "variance_dt_quarter": 0.010000000000000002
+  },
+  "analytic_european": {
+    "call_npv": 9.2270055081540612,
+    "call_delta": 0.58685114613476486,
+    "call_gamma": 0.018950578755008711,
+    "call_vega": 37.90115751001742,
+    "call_theta": -5.0893189139983388,
+    "call_rho": 49.458109105322393,
+    "call_dividend_rho": -58.685114613476451,
+    "call_itm_cash_probability": 0.5199388058383726,
+    "put_npv": 6.3300806275499184,
+    "put_delta": -0.39334752717199073,
+    "put_gamma": 0.018950578755008711,
+    "put_vega": 37.90115751001742,
+    "put_theta": -2.2935691381082712,
+    "put_rho": -45.664833344748999,
+    "put_dividend_rho": 39.334752717199081
+  },
+  "binomial_european_call": {
+    "crr_n1000": 9.2250431552927434,
+    "jr_n1000": 9.2275968432531563,
+    "tian_n1000": 9.2286994465822065,
+    "lr_n1001": 9.2270051322049209
+  },
+  "american_put_binomial": {
+    "american_npv_n500": 6.6588350455804228,
+    "european_npv_n500": 6.3262184888136508
+  }
+}

@@ -143,3 +143,9 @@ target_link_libraries(cluster_l2e_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L3-A pilot: foundations (Payoffs + BlackFormula family) ===
 add_executable(l3a_foundations_probe l3a/foundations_probe.cpp)
 target_link_libraries(l3a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L3-D cluster: equity options + processes (GBSM family +
+#     EulerDiscretization + VanillaOption/EuropeanOption +
+#     AnalyticEuropeanEngine + BinomialVanillaEngine) ===
+add_executable(cluster_l3d_probe cluster_l3d/probe.cpp)
+target_link_libraries(cluster_l3d_probe PRIVATE ${QUANTLIB_LIBRARY})
