@@ -31,12 +31,12 @@ class _MockYieldCurve:
     def day_counter(self) -> DayCounter:
         return Actual360()
 
-    def discount(self, t: float | Date, extrapolate: bool = False) -> float:
-        del t, extrapolate
+    def discount(self, arg: float | Date, extrapolate: bool = False) -> float:
+        del arg, extrapolate
         return 0.95
 
-    def zero_rate(self, t: float | Date, extrapolate: bool = False) -> float:
-        del t, extrapolate
+    def zero_rate(self, arg: float | Date, extrapolate: bool = False) -> float:
+        del arg, extrapolate
         return 0.05
 
     def forward_rate(

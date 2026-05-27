@@ -61,13 +61,17 @@ class _FlatCompoundedCurve:
     def day_counter(self) -> DayCounter:
         return self._dc
 
-    def discount(self, t: float | Date, extrapolate: bool = False) -> float:
+    def discount(self, arg: float | Date, extrapolate: bool = False) -> float:
         del extrapolate
-        tau = self._dc.year_fraction(self._ref, t) if isinstance(t, Date) else float(t)
+        tau = (
+            self._dc.year_fraction(self._ref, arg)
+            if isinstance(arg, Date)
+            else float(arg)
+        )
         return (1.0 + self._rate) ** (-tau)
 
-    def zero_rate(self, t: float | Date, extrapolate: bool = False) -> float:
-        del t, extrapolate
+    def zero_rate(self, arg: float | Date, extrapolate: bool = False) -> float:
+        del arg, extrapolate
         return self._rate
 
     def forward_rate(
