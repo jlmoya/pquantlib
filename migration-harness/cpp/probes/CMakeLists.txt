@@ -163,3 +163,9 @@ target_link_libraries(cluster_l3d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     ForwardRateAgreement + DiscountingFwdEngine + FraRateHelper indexed) ===
 add_executable(cluster_l3e_probe cluster_l3e/probe.cpp)
 target_link_libraries(cluster_l3e_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L4-A pilot: foundations (LevenbergMarquardt + Simplex closing
+#     Phase 1 optimizer carry-overs, Parameter family round-trips, and
+#     NoConstraint/PositiveConstraint transforms) ===
+add_executable(l4a_foundations_probe l4a/foundations_probe.cpp)
+target_link_libraries(l4a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})

@@ -1,0 +1,42 @@
+{
+  "levenberg_marquardt": {
+    "end_criteria": 3,
+    "x": [1, 1],
+    "f": 0,
+    "function_evaluation": 54
+  },
+  "simplex": {
+    "end_criteria": 2,
+    "x": [1.0000000000004663, 1.0000000000009315],
+    "f": 2.1755304651803042e-25,
+    "function_evaluation": 287
+  },
+  "constant_parameter": {
+    "size": 1,
+    "value_at_0": 0.050000000000000003,
+    "value_at_3_25": 0.050000000000000003,
+    "value_at_100": 0.050000000000000003,
+    "params": [0.050000000000000003]
+  },
+  "piecewise_constant_parameter": {
+    "size": 4,
+    "value_at_0": 0.10000000000000001,
+    "value_at_1": 0.20000000000000001,
+    "value_at_1_5": 0.20000000000000001,
+    "value_at_3": 0.29999999999999999,
+    "value_at_3_5": 0.29999999999999999,
+    "value_at_5": 0.40000000000000002,
+    "value_at_6": 0.40000000000000002,
+    "params": [0.10000000000000001, 0.20000000000000001, 0.29999999999999999, 0.40000000000000002]
+  },
+  "no_constraint": {
+    "test_neg_zero_huge": true,
+    "upper_bound_at_0_is_pos_max": true,
+    "lower_bound_at_0_is_neg_max": true
+  },
+  "positive_constraint": {
+    "test_pos_zero": false,
+    "test_pos_neg": false,
+    "lower_bound": [0, 0]
+  }
+}
