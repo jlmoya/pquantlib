@@ -402,6 +402,191 @@ class CashFlows:
         return d2pdy2 / p_val
 
     # ===================================================================
+    # Leg-walking helpers used by the Bond base class
+    # ===================================================================
+
+    @classmethod
+    def start_date(cls, leg: Sequence[CashFlow]) -> Date:
+        """Earliest accrual_start_date among coupons (else earliest cf date).
+
+        C++ parity: ql/cashflows/cashflows.cpp:38-50.
+        """
+        qassert.require(len(leg) > 0, "empty leg")
+        # Use max Date as initial sentinel, mirror C++.
+        d = Date.max_date()
+        for cf in leg:
+            cf_d = cf.accrual_start_date() if isinstance(cf, Coupon) else cf.date()
+            d = min(d, cf_d)
+        return d
+
+    @classmethod
+    def maturity_date(cls, leg: Sequence[CashFlow]) -> Date:
+        """Latest accrual_end_date among coupons (else latest cf date).
+
+        C++ parity: ql/cashflows/cashflows.cpp:52-64.
+        """
+        qassert.require(len(leg) > 0, "empty leg")
+        d = Date.min_date()
+        for cf in leg:
+            cf_d = cf.accrual_end_date() if isinstance(cf, Coupon) else cf.date()
+            d = max(d, cf_d)
+        return d
+
+    @classmethod
+    def is_expired(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> bool:
+        """All cash flows have occurred at ``settlement_date``.
+
+        C++ parity: ql/cashflows/cashflows.cpp:66-81.
+        """
+        if not leg:
+            return True
+        # Walk from the end since the latest cashflow is most likely
+        # still pending — mirrors C++ reverse-iteration optimisation.
+        return all(
+            cf.has_occurred(settlement_date, include_settlement_date_flows)
+            for cf in reversed(leg)
+        )
+
+    @classmethod
+    def previous_cash_flow_date(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> Date:
+        """Date of the most recent already-occurred cash flow (or null Date).
+
+        C++ parity: ql/cashflows/cashflows.cpp:119-129.
+        """
+        for cf in reversed(leg):
+            if cf.has_occurred(settlement_date, include_settlement_date_flows):
+                return cf.date()
+        return Date()
+
+    @classmethod
+    def next_cash_flow_date(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> Date:
+        """Date of the next-to-occur cash flow (or null Date).
+
+        C++ parity: ql/cashflows/cashflows.cpp:131-141.
+        """
+        for cf in leg:
+            if not cf.has_occurred(settlement_date, include_settlement_date_flows):
+                return cf.date()
+        return Date()
+
+    @classmethod
+    def _next_cash_flow_index(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> int:
+        """Index of the next-to-occur cash flow, or ``len(leg)`` if none.
+
+        Internal helper used by accrued_amount / nominal / accrual_*_date
+        and the next_coupon_rate aggregator.
+        """
+        for i, cf in enumerate(leg):
+            if not cf.has_occurred(settlement_date, include_settlement_date_flows):
+                return i
+        return len(leg)
+
+    @classmethod
+    def _previous_cash_flow_index(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> int:
+        """Index of the most-recent already-occurred cf, or ``-1`` if none.
+
+        Internal helper for previous_coupon_rate aggregation.
+        """
+        for i in range(len(leg) - 1, -1, -1):
+            if leg[i].has_occurred(settlement_date, include_settlement_date_flows):
+                return i
+        return -1
+
+    @classmethod
+    def accrued_amount(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """Accrued amount across coupons sharing the next-payment date.
+
+        C++ parity: ql/cashflows/cashflows.cpp:376-393.
+        """
+        idx = cls._next_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        if idx == len(leg):
+            return 0.0
+        payment_date = leg[idx].date()
+        result = 0.0
+        for cf in leg[idx:]:
+            if cf.date() != payment_date:
+                break
+            if isinstance(cf, Coupon):
+                result += cf.accrued_amount(settlement_date)
+        return result
+
+    @classmethod
+    def _aggregate_rate(cls, leg: Sequence[CashFlow], idx: int) -> float:
+        """C++ parity: cashflows.cpp:185-211 (aggregateRate)."""
+        if idx == len(leg) or idx < 0:
+            return 0.0
+        payment_date = leg[idx].date()
+        result = 0.0
+        nominal = 0.0
+        for cf in leg[idx:]:
+            if cf.date() != payment_date:
+                break
+            if isinstance(cf, Coupon):
+                result += cf.nominal() * cf.accrual_period() * cf.rate()
+                nominal += cf.nominal() * cf.accrual_period()
+        if nominal == 0.0:
+            return 0.0
+        return result / nominal
+
+    @classmethod
+    def next_coupon_rate(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """Aggregate next-coupon rate (across same-date coupons).
+
+        C++ parity: ql/cashflows/cashflows.cpp:223-229.
+        """
+        idx = cls._next_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        return cls._aggregate_rate(leg, idx)
+
+    @classmethod
+    def previous_coupon_rate(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """Aggregate previous-coupon rate (across same-date coupons).
+
+        C++ parity: ql/cashflows/cashflows.cpp:214-221.
+        """
+        idx = cls._previous_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        return cls._aggregate_rate(leg, idx)
+
+    # ===================================================================
     # IRR (yield that reproduces a target NPV)
     # ===================================================================
 
