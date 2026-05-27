@@ -169,3 +169,9 @@ target_link_libraries(cluster_l3e_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     NoConstraint/PositiveConstraint transforms) ===
 add_executable(l4a_foundations_probe l4a/foundations_probe.cpp)
 target_link_libraries(l4a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L4-E cluster: swaption + capfloor instruments + helpers +
+#     analytic engines (Black/Bachelier/Jamshidian/G2 swaption;
+#     Black/Bachelier/AnalyticCapFloor capfloor) ===
+add_executable(cluster_l4e_probe cluster_l4e/probe.cpp)
+target_link_libraries(cluster_l4e_probe PRIVATE ${QUANTLIB_LIBRARY})

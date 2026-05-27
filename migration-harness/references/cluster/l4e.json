@@ -1,0 +1,70 @@
+{
+  "setup": {
+    "eval_date_serial": 45308,
+    "settle_serial": 47135,
+    "end_serial": 50787,
+    "strike": 0.029999999999999999,
+    "nominal": 1000000,
+    "flat_rate": 0.050000000000000003,
+    "fixed_leg_size": 20,
+    "floating_leg_size": 40,
+    "swap_fair_rate": 0.051364960690223602
+  },
+  "black_swaption_5y10y": {
+    "vol": 0.20000000000000001,
+    "npv": 5801.3702006947797
+  },
+  "bachelier_swaption_5y10y": {
+    "vol": 0.01,
+    "npv": 12196.167407667392
+  },
+  "jamshidian_swaption_5y10y": {
+    "hw_a": 0.1,
+    "hw_sigma": 0.01,
+    "npv": 1030.066196688638
+  },
+  "g2_swaption_5y10y": {
+    "a": 0.1, "sigma": 0.01, "b": 0.1, "eta": 0.01, "rho": -0.75,
+    "range": 6.0,
+    "intervals": 32,
+    "npv": 105.46110912692544
+  },
+  "cap_setup": {
+    "start_serial": 45310,
+    "end_serial": 47137,
+    "strike": 0.040000000000000001,
+    "nominal": 1000000,
+    "leg_size": 20
+  },
+  "black_cap_5y_4pct": {
+    "vol": 0.20000000000000001,
+    "npv": 53464.09581604816
+  },
+  "bachelier_cap_5y_4pct": {
+    "vol": 0.01,
+    "npv": 55430.890098600772
+  },
+  "analytic_cap_5y_4pct_hw": {
+    "hw_a": 0.1,
+    "hw_sigma": 0.01,
+    "npv": 53034.067475907017
+  },
+  "black_floor_5y_4pct": {
+    "vol": 0.20000000000000001,
+    "npv": 7518.9523662605952
+  },
+  "swaption_helper_roundtrip": {
+    "vol": 0.20000000000000001,
+    "strike": 0.03,
+    "market_value": 0.0057997560091250962,
+    "model_value": 0.0057997560091250962,
+    "calibration_error": 0
+  },
+  "cap_helper_roundtrip": {
+    "vol": 0.20000000000000001,
+    "length_years": 5,
+    "market_value": 0.024727699088490557,
+    "model_value": 0.024727699088490557,
+    "calibration_error": 0
+  }
+}
