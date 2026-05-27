@@ -1,10 +1,21 @@
 # Phase 2 — L2 termstructures + indexes + cashflows (design)
 
 **Date:** 2026-05-26
-**Status:** drafted, awaiting ack to start
+**Status:** **closed** — tagged `pquantlib-phase2-complete` @ `b5d2519` on 2026-05-26. **922/0/0** pytest, pyright + ruff clean. Closure summary at [`phase2-completion.md`](phase2-completion.md).
 **Predecessor:** `pquantlib-phase1-complete` @ `edcadbc` — 581/0/0, pyright + ruff clean
 **Sister-project anchor:** jquantlib `phase2-L2-termstructures-indexes-plan.md` (note: jquantlib's L2 is a 73-class *delta* port off a 2007 skeleton — PQuantLib's L2 is **larger** because we start from scratch)
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
+
+## Outcome (filled in at closure)
+
+Phase 2 shipped as 5 clusters across two stages of work:
+
+- **L2-A pilot** (sequential, 6 stages): 649/0/0 tests. Tagged `pquantlib-phase2-l2-A-complete` @ `4ace1f0`. See [`phase2-l2-A-completion.md`](phase2-l2-A-completion.md).
+- **L2-B / L2-C / L2-D / L2-E** (4 parallel cluster subagents, ~35 min wall-clock): +273 tests, total 922/0/0.
+
+Cross-cluster Protocols defined in L2-A (`YieldTermStructureProtocol`, `IborIndexProtocol`, `OvernightIndexProtocol`, `SwapIndexProtocol`) glued the 4 parallel clusters at merge time with zero integration code — structural typing matched concretes to consumers automatically.
+
+Two merge reconciliations (documented in [`phase2-completion.md`](phase2-completion.md)): `Compounding` + `InterestRate` duplicated across L2-B and L2-D (resolved by keeping L2-B's canonical placements); CMakeLists.txt with 4 parallel `add_executable` additions.
 
 ## Goal
 

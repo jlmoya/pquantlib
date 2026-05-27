@@ -2,6 +2,8 @@
 
 > **For agentic workers:** sub-cluster work uses the proven Phase 1 pattern — `superpowers:subagent-driven-development` for parallel B/C/D/E; sequential per-stub TDD for L2-A pilot.
 
+**Status:** **closed** — all 5 clusters landed on `main`; tag `pquantlib-phase2-complete` @ `b5d2519` on 2026-05-26. **922/0/0** tests. See [`phase2-completion.md`](phase2-completion.md).
+
 **Goal:** Land Phase 2's ~70 must-port classes on `main`, behind tag `pquantlib-phase2-complete`. Drives Phase 3 vanilla-pricing-engine work.
 
 **Predecessor:** `pquantlib-phase1-complete` @ `edcadbc` — 581/0/0, pyright + ruff clean.

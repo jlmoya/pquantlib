@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase1--complete-green)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-581%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--phase2--complete-green)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-922%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -51,6 +51,9 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | 1 L1-A (pilot) | `pquantlib-phase1-l1-A-complete` | Foundations + time core (41 sovereign/exchange calendars via 5-agent fan-out) + 11 day counters + 8 first-math modules | 415/0/0 | 2026-05-23..2026-05-24 |
 | 1 L1-B/C/D/E (parallel) | _(merged into Phase 1 tag)_ | L1-B (12 copulas + 3 normal distributions + 2 statistics + 5 currencies), L1-C (9 Solver1D + 5 simple integrals), L1-D (5 RNGs all EXACT-tier + BoxMuller + 7 optimization scaffolding), L1-E (4 interpolations + bilinear + scipy-backed Cholesky). 4 isolated-worktree subagents in parallel, ~25 min wall-clock. | +166 → 581/0/0 | 2026-05-24 |
 | **1 complete** | **`pquantlib-phase1-complete`** | **Full L1 layer** — math primitives, time, foundations. 581 tests across 16 C++ probes / ~10,000 reference values. | **581/0/0** | **2026-05-24** |
+| 2 L2-A (pilot) | `pquantlib-phase2-l2-A-complete` | Foundations: quotes + TermStructure + Extrapolator + BootstrapHelper + Index/IndexManager + 4 cross-cluster Protocols (Yield/Ibor/Overnight/Swap) | 649/0/0 | 2026-05-26 |
+| 2 L2-B/C/D/E (parallel) | _(merged into Phase 2 tag)_ | L2-B (yield curves + Compounding + InterestRate), L2-C (8 ibors + 2 swap + 7 rate helpers), L2-D (cashflows + Coupon hierarchy + leg generators + CashFlows aggregator + Duration), L2-E (vol termstructures: SmileSection + BlackVol/LocalVol family). 4 isolated-worktree subagents in parallel, ~35 min wall-clock. | +273 → 922/0/0 | 2026-05-26 |
+| **2 complete** | **`pquantlib-phase2-complete`** | **Full L2 layer** — termstructures + indexes + cashflows + quotes. 922 tests; cross-cluster Protocols proven as fan-out glue. | **922/0/0** | **2026-05-26** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -61,9 +64,9 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** `edcadbc docs(migration): write phase1-completion.md` (Phase 1 closed via `pquantlib-phase1-complete` tag). See [`docs/migration/phase1-completion.md`](docs/migration/phase1-completion.md) for the closure summary.
+**Current tip on `main`:** `b5d2519 merge: L2-E` (Phase 2 closed via `pquantlib-phase2-complete` tag). See [`docs/migration/phase2-completion.md`](docs/migration/phase2-completion.md) for the closure summary.
 
-## What's available today (Phase 1 L1)
+## What's available today (Phase 1 L1 + Phase 2 L2)
 
 Phase 1 ships the foundation: math primitives, time machinery, day counters, currencies, distributions, random number generators, simple optimization scaffolding, and a starter set of 1-D/2-D interpolations. Importable as `pquantlib.<module>`.
 
@@ -130,7 +133,70 @@ Phase 1 ships the foundation: math primitives, time machinery, day counters, cur
 
 ### Carve-outs (deferred from Phase 1)
 
-Full `GaussianOrthogonalPolynomial` hierarchy (12+ subclass tree), `SobolRsg` + `Burley2020SobolRsg` low-discrepancy, `LevenbergMarquardt`/`Bfgs`/`Simplex`/`ConjugateGradient`/`SimulatedAnnealing` optimizers, 8+ cubic-spline variants (`AkimaCubicInterpolation`, `KrugerCubic`, `FritschButland`, etc.), `QRDecomposition`/`EigenvalueDecomposition`/`SVD`/`SparseMatrix` utilities, full `GammaFunction` (currently delegated to `math.lgamma`). Each will land either as L2 sub-clusters or a dedicated L1-completion cluster — see [`docs/migration/phase1-completion.md`](docs/migration/phase1-completion.md) for the complete list.
+Full `GaussianOrthogonalPolynomial` hierarchy (12+ subclass tree), `SobolRsg` + `Burley2020SobolRsg` low-discrepancy, `LevenbergMarquardt`/`Bfgs`/`Simplex`/`ConjugateGradient`/`SimulatedAnnealing` optimizers, 8+ cubic-spline variants (`AkimaCubicInterpolation`, `KrugerCubic`, `FritschButland`, etc.), `QRDecomposition`/`EigenvalueDecomposition`/`SVD`/`SparseMatrix` utilities, full `GammaFunction` (currently delegated to `math.lgamma`). See [`docs/migration/phase1-completion.md`](docs/migration/phase1-completion.md).
+
+### Phase 2 L2 modules
+
+#### Quotes
+
+- **`pquantlib.quotes`** — `Quote` abstract + `SimpleQuote` (mutable, observer-aware) + `DerivedQuote(quote, f)` + `CompositeQuote(quote1, quote2, f)` — market-observable handles used by every termstructure and rate-helper input.
+
+#### Term structure scaffolding
+
+- **`pquantlib.termstructures.term_structure.TermStructure`** — abstract base; reference_date / max_date / day_counter / calendar / extrapolation support.
+- **`pquantlib.termstructures.extrapolator.Extrapolator`** — enable/disable extrapolation flag mixin.
+- **`pquantlib.termstructures.bootstrap_helper.BootstrapHelper[TS]`** — abstract; PEP 695 generic; `PillarChoice` enum.
+- **`pquantlib.termstructures.protocols`** — `YieldTermStructureProtocol`, `IborIndexProtocol`, `OvernightIndexProtocol`, `SwapIndexProtocol` — `@runtime_checkable` cross-cluster glue.
+
+#### Yield termstructures
+
+`pquantlib.termstructures.yield_term_structure.YieldTermStructure` (abstract); concretes under `pquantlib.termstructures.yield_.*`:
+
+- **`FlatForward`** (+ `FlatForward.from_rate(...)` classmethod) — constant-rate curve.
+- **`InterpolatedZeroCurve`** / **`InterpolatedForwardCurve`** / **`InterpolatedDiscountCurve`** — parameterized by an `InterpolationFactory` (PEP 695 generics; default Linear).
+- **`ZeroCurve`** / **`ForwardCurve`** / **`DiscountCurve`** — PEP 695 `type` aliases over the linear-interp variants.
+- **`ForwardSpreadedTermStructure`** / **`ZeroSpreadedTermStructure`** / **`DiscountSpreadedTermStructure`** — Quote-driven spread overlays.
+- **`ImpliedTermStructure`** — forward-shifted view of an existing curve.
+
+#### Rate helpers (under `pquantlib.termstructures.yield_`)
+
+- **`DepositRateHelper`** / **`FraRateHelper`** / **`FuturesRateHelper`** / **`SwapRateHelper`** / **`OISRateHelper`** / **`BondHelper`** / **`FxSwapRateHelper`** — all subclass `BootstrapHelper`. SwapRateHelper / OISRateHelper / BondHelper `implied_quote()` deferred to L3 (need pricing engines).
+
+#### Compounding + InterestRate
+
+- **`pquantlib.time.compounding.Compounding`** — IntEnum (Simple / Compounded / Continuous / SimpleThenCompounded / CompoundedThenSimple).
+- **`pquantlib.interest_rate.InterestRate`** — rate + day-counter + compounding + frequency; `compound_factor(t)` / `discount_factor(t)` / `equivalent_rate(...)` / `implied_rate(...)` factory; null sentinel via `InterestRate.null()` + `is_null()`.
+
+#### Index hierarchy
+
+`pquantlib.indexes.index.Index` (abstract base, observable) + `IndexManager` singleton (fixings repo, case-insensitive); under `pquantlib.indexes.*`:
+
+- **`InterestRateIndex`** / **`IborIndex`** / **`OvernightIndex`** / **`SwapIndex`** — abstract bases.
+- **8 ibor concretes**: `Euribor`, `USDLibor`, `GBPLibor`, `Eonia`, `Sofr`, `Sonia`, `FedFunds`, `Estr`. Multi-tenor via `Period` arg + classmethod shortcuts (e.g. `Euribor.three_months()`).
+- **2 swap indexes**: `EuriborSwapIsdaFixA`, `UsdLiborSwapIsdaFixAm`.
+
+#### Cashflows
+
+`pquantlib.cashflows.*`:
+
+- **`CashFlow`** (abstract) + **`SimpleCashFlow`** (+ `Redemption` + `AmortizingPayment`).
+- **`Coupon`** (abstract) + **`FixedRateCoupon`** + **`FloatingRateCoupon`** + **`IborCoupon`** + **`OvernightIndexedCoupon`**.
+- **`fixed_rate_leg(...)`** / **`ibor_leg(...)`** / **`overnight_leg(...)`** — free-function leg generators (Pythonic replacement for C++ Builder pattern).
+- **`CouponPricer`** (abstract) + **`IborCouponPricer`** + **`BlackIborCouponPricer`** + **`CompoundingOvernightIndexedCouponPricer`**.
+- **`CashFlows`** — static methods aggregator: `npv` / `bps` / `irr` / `simple_duration` / `macaulay_duration` / `modified_duration` / `convexity`.
+- **`Duration`** — IntEnum (Simple / Macaulay / Modified).
+
+#### Volatility termstructures (equity / FX minimum)
+
+`pquantlib.termstructures.volatility.*`:
+
+- **`VolatilityTermStructure`** abstract + **`SmileSection`** abstract + **`FlatSmileSection`** concrete.
+- **`BlackVolTermStructure`** (+ `BlackVolatilityTermStructure` + `BlackVarianceTermStructure` adapters) abstracts + **`BlackConstantVol`** + **`BlackVarianceCurve`** + **`BlackVarianceSurface`** (bilinear) concretes.
+- **`LocalVolTermStructure`** abstract + **`LocalConstantVol`** + **`LocalVolCurve`** + **`LocalVolSurface`** (Dupire, flat-curve simplification) concretes.
+
+### Carve-outs (deferred from Phase 2)
+
+All inflation termstructures/indexes/cashflows; all credit termstructures; ZABR/SABR/XABR volatility models; capfloor/optionlet/swaption volatility; 35 specialty ibors beyond the 8 must-port; specialized cashflows (Digital / Cms / CapFloored / AverageBmaCoupon); advanced curve construction (`FittedBondDiscountCurve` / `MultiCurve` / `GlobalBootstrap` / spline-fitting variants); `PiecewiseYieldCurve` full bootstrap; SwapIndex.forecast_fixing (needs L3 VanillaSwap); `Settings.evaluation_date` observable wiring (used in TermStructure moving mode + SmileSection floating mode + RelativeDateBootstrapHelper). Full list in [`docs/migration/phase2-completion.md`](docs/migration/phase2-completion.md).
 
 ## Repo layout
 

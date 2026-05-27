@@ -47,6 +47,21 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
   - [`phase1-l1-E-design.md`](phase1-l1-E-design.md) — interpolations + matrix utilities (numpy/scipy delegates) (+30 tests; merge `8b64830`).
 - Final test count: **581/0/0**. pyright + ruff clean.
 
-### Phase 2 — L2 termstructures + indexes (not yet started)
+### Phase 2 — L2 termstructures + indexes + cashflows (closed)
 
-Pending; mirror jquantlib's `phase2-L2-termstructures-indexes-plan.md`. Carve-outs from Phase 1 (full GaussianOrthogonalPolynomial hierarchy, SobolRsg/Burley2020 low-discrepancy, LM/BFGS/Simplex optimizers, 8+ cubic-spline variants, QR/Eigen/SVD/SparseMatrix, GammaFunction) land either as L2 sub-clusters or a dedicated L1-completion cluster — TBD at L2 kickoff.
+- [`phase2-design.md`](phase2-design.md) — binding spec (closed; outcome appendix at top).
+- [`phase2-plan.md`](phase2-plan.md) — executable plan.
+- [`phase2-completion.md`](phase2-completion.md) — closure summary, 5-cluster contribution table, parallelization notes, cumulative documented divergences from Phase 1+2, carve-outs, lessons learned.
+- **L2-A pilot cluster** (sequential, 6 stages — `pquantlib-phase2-l2-A-complete` @ `4ace1f0`):
+  - [`phase2-l2-A-completion.md`](phase2-l2-A-completion.md) — closure summary.
+- **L2-B / C / D / E** (4 parallel cluster subagents — landed into `main` and tagged together as `pquantlib-phase2-complete` @ `b5d2519`):
+  - [`phase2-l2-B-design.md`](phase2-l2-B-design.md) — yield curves (FlatForward + Interpolated{Zero,Forward,Discount} + spreaded + Implied) (+50 tests; merge `13fc008`).
+  - [`phase2-l2-C-design.md`](phase2-l2-C-design.md) — indexes + rate helpers (Euribor / Libor / Eonia / Sofr / Sonia / FedFunds / Estr + Deposit/FRA/Futures/Swap/OIS/Bond/FxSwap helpers) (+77 tests; merge `e015cd7`).
+  - [`phase2-l2-D-design.md`](phase2-l2-D-design.md) — cashflows (Coupon hierarchy + IborCoupon + OvernightIndexedCoupon + legs + pricers + CashFlows aggregator) (+50 tests post-dedup; merge `a9f23b0`).
+  - [`phase2-l2-E-design.md`](phase2-l2-E-design.md) — vol termstructures (SmileSection + BlackVol/LocalVol family) (+96 tests; merge `b5d2519`).
+- Tags: `pquantlib-phase2-l2-A-complete` @ `4ace1f0` (pilot), `pquantlib-phase2-complete` @ `b5d2519` (final).
+- Final test count: **922/0/0**. pyright + ruff clean.
+
+### Phase 3 — L3 instruments + pricingengines (not yet started)
+
+Pending; mirror jquantlib's `phase2-L3-instruments-pricingengines-plan.md`. Likely the largest L-layer (bonds, vanilla swaps, European options, pricing engines, payoffs). Phase 1+2 carve-outs that may need to land mid-Phase-3: `Settings.evaluation_date` observable wiring; `OptionletVolatilityStructure`; a concrete optimizer (LM or BFGS); `VanillaSwap` (unblocks SwapIndex.forecast_fixing + SwapRateHelper.implied_quote).
