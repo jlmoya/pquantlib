@@ -295,20 +295,37 @@ class TermStructureConsistentModel(Observable):
     # ql/models/model.hpp:73-82 (v1.42.1).
 
     Holds a yield term structure; concrete subclasses (G2++,
-    HullWhiteForward, etc.) layer the model dynamics on top.
+    HullWhite, ExtendedCoxIngersollRoss, etc.) layer the model dynamics
+    on top.
 
-    Python note: this class deliberately does NOT declare ``__slots__``
-    so subclasses (e.g. HullWhite, ExtendedCoxIngersollRoss in L4-B)
-    can multi-inherit from both this class and a CalibratedModel /
-    OneFactorAffineModel chain — Python forbids multiple-inheritance
-    layout conflicts between two slotted classes that both add new
-    instance variables. The single ``_term_structure`` attribute is
-    stored on ``__dict__`` instead.
+    Python notes:
+
+    1. This class deliberately does NOT declare ``__slots__`` so
+       subclasses (e.g. HullWhite, ExtendedCoxIngersollRoss in L4-B)
+       can multi-inherit from both this class and a CalibratedModel /
+       OneFactorAffineModel chain — Python forbids multiple-inheritance
+       layout conflicts between two slotted classes that both add new
+       instance variables.
+    2. The ctor's ``term_structure`` argument is OPTIONAL with a
+       ``None`` default. This is a deliberate divergence from the C++
+       signature: in a diamond MRO like
+       ``HullWhite(Vasicek, TermStructureConsistentModel)``,
+       Python's cooperative ``super().__init__()`` chain reaches this
+       class as the last node before ``Observable``. The default-None
+       overload lets that flow complete; HullWhite re-initialises
+       ``_term_structure`` explicitly afterwards. Callers that
+       construct ``TermStructureConsistentModel`` directly MUST pass
+       a real term structure; the default ``None`` is purely a
+       MRO-cooperative escape hatch.
     """
 
-    def __init__(self, term_structure: YieldTermStructure) -> None:
+    def __init__(self, term_structure: YieldTermStructure | None = None) -> None:
         super().__init__()
-        self._term_structure: YieldTermStructure = term_structure
+        # When the ctor is reached via cooperative super() in a
+        # multi-inheritance chain with term_structure=None, the
+        # subclass (e.g. HullWhite) is responsible for re-setting
+        # _term_structure to a real curve.
+        self._term_structure: YieldTermStructure | None = term_structure
 
     @property
     def term_structure(self) -> YieldTermStructure:
@@ -316,7 +333,16 @@ class TermStructureConsistentModel(Observable):
 
         # C++ parity: ``TermStructureConsistentModel::termStructure`` in
         # model.hpp:77-79.
+
+        Raises if not initialised (Python-only safety net for the
+        cooperative-super() default-None path; concrete subclasses
+        always populate this in their ctor).
         """
+        if self._term_structure is None:
+            raise RuntimeError(
+                "TermStructureConsistentModel: term_structure not initialised "
+                "(subclass must set _term_structure after super().__init__())"
+            )
         return self._term_structure
 
 
