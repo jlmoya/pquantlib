@@ -1,0 +1,99 @@
+{
+  "payoffs": {
+    "plain_vanilla": {
+      "name": "Vanilla",
+      "call_at_120": 20,
+      "call_at_100": 0,
+      "call_at_80": 0,
+      "put_at_120": 0,
+      "put_at_100": 0,
+      "put_at_80": 20
+    },
+    "cash_or_nothing": {
+      "name": "CashOrNothing",
+      "call_at_120": 1,
+      "call_at_100": 0,
+      "call_at_80": 0,
+      "put_at_120": 0,
+      "put_at_100": 0,
+      "put_at_80": 1
+    },
+    "asset_or_nothing": {
+      "name": "AssetOrNothing",
+      "call_at_120": 120,
+      "call_at_100": 0,
+      "call_at_80": 0,
+      "put_at_120": 0,
+      "put_at_100": 0,
+      "put_at_80": 80
+    },
+    "gap": {
+      "name": "Gap",
+      "call_at_120": 10,
+      "call_at_100": -10,
+      "call_at_80": 0,
+      "put_at_120": 0,
+      "put_at_100": -10,
+      "put_at_80": 10
+    },
+    "super_fund": {
+      "name": "SuperFund",
+      "at_90": 0,
+      "at_100": 1,
+      "at_110": 1.1000000000000001,
+      "at_120": 0,
+      "at_130": 0
+    },
+    "super_share": {
+      "name": "SuperShare",
+      "at_90": 0,
+      "at_100": 1,
+      "at_110": 1,
+      "at_120": 0,
+      "at_130": 0
+    }
+  },
+  "black_formula": {
+    "forward": 100,
+    "std_dev": 0.20000000000000001,
+    "discount": 0.94999999999999996,
+    "call_k100": 7.5672890826355097,
+    "put_k100": 7.5672890826355097,
+    "call_k80": 20.126633037549905,
+    "call_k120": 2.0399338700492389,
+    "put_k80": 1.1266330375499007,
+    "put_k120": 21.039933870049243,
+    "call_zero_stddev": 19,
+    "put_zero_stddev": 19,
+    "call_k100_no_df": 7.9655674554058002,
+    "call_k100_shift10": 8.762124200946376
+  },
+  "black_derivatives": {
+    "std_dev_derivative": 37.710492010316123,
+    "vol_derivative": 37.710492010316123,
+    "vol_derivative_check": 37.710492010316123
+  },
+  "black_implied_std_dev": {
+    "price": 7.5672890826355097,
+    "implied": 0.19999999999999998,
+    "original": 0.20000000000000001
+  },
+  "bachelier_black_formula": {
+    "forward": 100,
+    "std_dev": 5,
+    "discount": 0.94999999999999996,
+    "call_k100": 1.8949758319068053,
+    "put_k100": 1.8949758319068053,
+    "call_k80": 19.000033939977552,
+    "call_k120": 3.3939977553925904e-05,
+    "put_k80": 3.3939977553925904e-05,
+    "put_k120": 19.000033939977552,
+    "call_zero_stddev": 19
+  },
+  "bachelier_std_dev_derivative": 0.37899516638136105,
+  "bachelier_implied_vol": {
+    "price": 1.8949758319068053,
+    "implied_vol": 5,
+    "original_vol": 5
+  }
+}

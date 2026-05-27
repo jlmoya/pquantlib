@@ -139,3 +139,7 @@ target_link_libraries(cluster_l2d_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L2-E cluster: volatility term structures (Black + Local, equity/FX) ===
 add_executable(cluster_l2e_probe cluster_l2e/probe.cpp)
 target_link_libraries(cluster_l2e_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L3-A pilot: foundations (Payoffs + BlackFormula family) ===
+add_executable(l3a_foundations_probe l3a/foundations_probe.cpp)
+target_link_libraries(l3a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
