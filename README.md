@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase2--complete-green)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-922%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--phase3--complete-green)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-1284%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -54,6 +54,9 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | 2 L2-A (pilot) | `pquantlib-phase2-l2-A-complete` | Foundations: quotes + TermStructure + Extrapolator + BootstrapHelper + Index/IndexManager + 4 cross-cluster Protocols (Yield/Ibor/Overnight/Swap) | 649/0/0 | 2026-05-26 |
 | 2 L2-B/C/D/E (parallel) | _(merged into Phase 2 tag)_ | L2-B (yield curves + Compounding + InterestRate), L2-C (8 ibors + 2 swap + 7 rate helpers), L2-D (cashflows + Coupon hierarchy + leg generators + CashFlows aggregator + Duration), L2-E (vol termstructures: SmileSection + BlackVol/LocalVol family). 4 isolated-worktree subagents in parallel, ~35 min wall-clock. | +273 → 922/0/0 | 2026-05-26 |
 | **2 complete** | **`pquantlib-phase2-complete`** | **Full L2 layer** — termstructures + indexes + cashflows + quotes. 922 tests; cross-cluster Protocols proven as fan-out glue. | **922/0/0** | **2026-05-26** |
+| 3 L3-A (pilot) | `pquantlib-phase3-l3-A-complete` | Foundations: Settings.evaluation_date observable + 4 retroactive L1/L2 cleanups; Payoff + Exercise + Instrument + PricingEngine + GenericEngine + BlackFormula + Option + 3 cross-cluster Protocols (Instrument / PricingEngine / StochasticProcess) | 1037/0/0 | 2026-05-27 |
+| 3 L3-B/C/D/E (parallel) | _(merged into Phase 3 tag)_ | L3-B (bonds: Bond + 4 concretes + Callability + DiscountingBondEngine + BondForward), L3-C (swaps: Swap + VanillaSwap + OIS + ZeroCoupon + Make-factories + DiscountingSwapEngine + 3 L2-C carry-over closures), L3-D (equity options + processes: StochasticProcess hierarchy + GBSM family + VanillaOption + EuropeanOption + AnalyticEuropeanEngine + BinomialVanillaEngine), L3-E (forwards: Forward + Position + FxForward + FRA + DiscountingFwdEngine + L2-C FraRateHelper carry-over). 4 isolated-worktree subagents in parallel, ~50 min wall-clock. | +247 → 1284/0/0 | 2026-05-27 |
+| **3 complete** | **`pquantlib-phase3-complete`** | **Full L3 layer** — instruments + pricingengines. 1284 tests across ~50 classes; vanilla pricing path (bonds + swaps + European options + FX forwards) end-to-end. | **1284/0/0** | **2026-05-27** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -64,9 +67,9 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** `b5d2519 merge: L2-E` (Phase 2 closed via `pquantlib-phase2-complete` tag). See [`docs/migration/phase2-completion.md`](docs/migration/phase2-completion.md) for the closure summary.
+**Current tip on `main`:** `aacc2c2 align(termstructures): unify discount() param name to t across Protocol + mocks` (Phase 3 closed via `pquantlib-phase3-complete` tag). See [`docs/migration/phase3-completion.md`](docs/migration/phase3-completion.md) for the closure summary.
 
-## What's available today (Phase 1 L1 + Phase 2 L2)
+## What's available today (Phase 1 L1 + Phase 2 L2 + Phase 3 L3)
 
 Phase 1 ships the foundation: math primitives, time machinery, day counters, currencies, distributions, random number generators, simple optimization scaffolding, and a starter set of 1-D/2-D interpolations. Importable as `pquantlib.<module>`.
 
@@ -196,7 +199,48 @@ Full `GaussianOrthogonalPolynomial` hierarchy (12+ subclass tree), `SobolRsg` + 
 
 ### Carve-outs (deferred from Phase 2)
 
-All inflation termstructures/indexes/cashflows; all credit termstructures; ZABR/SABR/XABR volatility models; capfloor/optionlet/swaption volatility; 35 specialty ibors beyond the 8 must-port; specialized cashflows (Digital / Cms / CapFloored / AverageBmaCoupon); advanced curve construction (`FittedBondDiscountCurve` / `MultiCurve` / `GlobalBootstrap` / spline-fitting variants); `PiecewiseYieldCurve` full bootstrap; SwapIndex.forecast_fixing (needs L3 VanillaSwap); `Settings.evaluation_date` observable wiring (used in TermStructure moving mode + SmileSection floating mode + RelativeDateBootstrapHelper). Full list in [`docs/migration/phase2-completion.md`](docs/migration/phase2-completion.md).
+All inflation termstructures/indexes/cashflows; all credit termstructures; ZABR/SABR/XABR volatility models; capfloor/optionlet/swaption volatility; 35 specialty ibors beyond the 8 must-port; specialized cashflows (Digital / Cms / CapFloored / AverageBmaCoupon); advanced curve construction (`FittedBondDiscountCurve` / `MultiCurve` / `GlobalBootstrap` / spline-fitting variants); `PiecewiseYieldCurve` full bootstrap. See [`docs/migration/phase2-completion.md`](docs/migration/phase2-completion.md).
+
+(Phase 3 closed the previously-deferred `Settings.evaluation_date` wiring, `SwapRateHelper.implied_quote`, `OISRateHelper.implied_quote`, `SwapIndex.forecast_fixing`, and `FraRateHelper(useIndexedCoupon=True)` carry-overs.)
+
+### Phase 3 L3 modules
+
+#### Foundations (`pquantlib.*`)
+
+- **`pquantlib.payoffs`** — `Payoff` abstract + `PlainVanillaPayoff(option_type, strike)` + `CashOrNothingPayoff` + `AssetOrNothingPayoff` + `GapPayoff` + `SuperFundPayoff` + `SuperSharePayoff`. `OptionType` enum (Call=1, Put=−1).
+- **`pquantlib.exercise`** — `Exercise` abstract + `EuropeanExercise(date)` + `AmericanExercise(earliest, latest=None, payoff_at_expiry=False)` + `BermudanExercise(dates, ...)`.
+- **`pquantlib.option.Option`** — abstract base for option instruments.
+- **`pquantlib.patterns.observable_settings.ObservableSettings`** — now exposes `evaluation_date` field with observer notification.
+
+#### Instruments (`pquantlib.instruments.*`)
+
+- **`Instrument`** abstract + **`OneAssetOption`** abstract.
+- **`pquantlib.instruments.protocols`** — `InstrumentProtocol`, `PricingEngineProtocol`, `StochasticProcessProtocol`.
+- **Bonds** (`pquantlib.instruments.bonds.*`): `Bond` + `FixedRateBond` + `ZeroCouponBond` + `FloatingRateBond` + `AmortizingFixedRateBond` + `Callability` + `CallabilitySchedule` + `BondForward`.
+- **Swaps**: `Swap` + `FixedVsFloatingSwap` + `VanillaSwap` + `OvernightIndexedSwap` + `ZeroCouponSwap` + `make_vanilla_swap(...)` + `make_ois(...)` free-function factories.
+- **Options**: `VanillaOption` + `EuropeanOption`.
+- **Forwards**: `Forward` abstract + `ForwardTypePayoff` + `Position` enum + `FxForward` + `ForwardRateAgreement`.
+
+#### Pricing engines (`pquantlib.pricingengines.*`)
+
+- **`PricingEngine`** abstract + **`GenericEngine[ArgsT, ResultsT]`** PEP 695 generic.
+- **`pquantlib.pricingengines.black_formula`** — `black_formula(...)` (lognormal) / `bachelier_black_formula(...)` / `black_formula_implied_std_dev(...)` / `bachelier_black_formula_implied_vol(...)` + Black-vega derivatives.
+- **`pquantlib.pricingengines.bond.discounting_bond_engine.DiscountingBondEngine`**.
+- **`pquantlib.pricingengines.swap.discounting_swap_engine.DiscountingSwapEngine`**.
+- **`pquantlib.pricingengines.forward.discounting_fwd_engine.DiscountingFwdEngine`**.
+- **`pquantlib.pricingengines.vanilla.analytic_european_engine.AnalyticEuropeanEngine`** — closed-form BSM + Greeks (delta/gamma/vega/theta/rho).
+- **`pquantlib.pricingengines.vanilla.binomial_engine.BinomialVanillaEngine`** — parameterized by `TreeBuilder` enum (CRR / JarrowRudd / Tian / LeisenReimer); supports American/Bermudan via numpy backward induction.
+- **`pquantlib.pricingengines.vanilla.black_calculator.BlackCalculator`** — Visitor-replacement helper.
+
+#### Stochastic processes (`pquantlib.processes.*`)
+
+- **`StochasticProcess`** + **`StochasticProcess1D`** abstracts.
+- **`EulerDiscretization`** — drift/diffusion stepper.
+- **`GeneralizedBlackScholesProcess`** (risk-free + dividend + Black-vol curves), **`BlackScholesProcess`** (no dividends), **`BlackProcess`** (no rates — Black 76), **`BlackScholesMertonProcess`** (full BSM).
+
+### Carve-outs (deferred from Phase 3)
+
+All exotic instruments (Asian/Barrier/Basket/Cliquet/Lookback/Quanto/DoubleBarrier/etc.); all swaption + capfloor instruments + engines; CDS + ConvertibleBond; specialty swaps (BMA, Float/Float, NonStandard, MultipleResets, EquityTotalReturn); all model-coupled engines (Heston / Bates / GJR-GARCH / Hull-White / G2 / CEV / SABR); all MC + FD engines; specialty bonds (BTP / CmsRateBond / CpiBond / ConvertibleBond); specialty processes (Heston / Bates / G2 / CIR / Vasicek); full lattice/tree hierarchy; `VanillaOption.implied_volatility` (needs FD engine). Full list in [`docs/migration/phase3-completion.md`](docs/migration/phase3-completion.md). Phase 4 (L4 models) addresses most.
 
 ## Repo layout
 

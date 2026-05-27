@@ -1,10 +1,21 @@
 # Phase 3 — L3 instruments + pricingengines (design)
 
 **Date:** 2026-05-27
-**Status:** drafted, awaiting ack to start
+**Status:** **closed** — tagged `pquantlib-phase3-complete` @ `aacc2c2` on 2026-05-27. **1284/0/0** pytest, pyright + ruff clean. Closure summary at [`phase3-completion.md`](phase3-completion.md).
 **Predecessor:** `pquantlib-phase2-complete` @ `b5d2519` — 922/0/0, pyright + ruff clean
 **Sister-project anchor:** jquantlib `phase2-L3-instruments-pricingengines-plan.md` (a 76-class delta port off a 2007 skeleton — PQuantLib's L3 is **larger** because we start from scratch)
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
+
+## Outcome (filled in at closure)
+
+Phase 3 shipped as 5 clusters across two stages of work:
+
+- **L3-A pilot** (sequential, 6 stages): 1037/0/0 tests. Tagged `pquantlib-phase3-l3-A-complete` @ `e72bcdf`. See [`phase3-l3-A-completion.md`](phase3-l3-A-completion.md). `Settings.evaluation_date` observable wired + 4 retroactive L1/L2 cleanups closed in the same pilot.
+- **L3-B / L3-C / L3-D / L3-E** (4 parallel cluster subagents, ~50 min wall-clock): +247 tests (after post-merge alignment), total 1284/0/0.
+
+All clusters significantly exceeded their test targets (L3-B +81 vs +30; L3-D +97 vs +43; L3-C +41 vs +35; L3-E +28 vs +20). Subagents produced richer behavioral coverage than the planned floor.
+
+One merge reconciliation surprised: parameter-name mismatch between L3-C's concrete YieldTermStructure (`t`) and L3-E's slimmed Protocol comment (still `arg`). Caught by pyright in 8 mock-class locations; fixed in a single `align(...)` commit.
 
 ## Goal
 

@@ -62,6 +62,23 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase2-l2-A-complete` @ `4ace1f0` (pilot), `pquantlib-phase2-complete` @ `b5d2519` (final).
 - Final test count: **922/0/0**. pyright + ruff clean.
 
-### Phase 3 — L3 instruments + pricingengines (not yet started)
+### Phase 3 — L3 instruments + pricingengines (closed)
 
-Pending; mirror jquantlib's `phase2-L3-instruments-pricingengines-plan.md`. Likely the largest L-layer (bonds, vanilla swaps, European options, pricing engines, payoffs). Phase 1+2 carve-outs that may need to land mid-Phase-3: `Settings.evaluation_date` observable wiring; `OptionletVolatilityStructure`; a concrete optimizer (LM or BFGS); `VanillaSwap` (unblocks SwapIndex.forecast_fixing + SwapRateHelper.implied_quote).
+- [`phase3-design.md`](phase3-design.md) — binding spec (closed; outcome appendix at top).
+- [`phase3-plan.md`](phase3-plan.md) — executable plan.
+- [`phase3-completion.md`](phase3-completion.md) — closure summary, 5-cluster contribution table, parallelization notes, cumulative documented divergences from Phase 1+2+3, carve-outs, lessons learned.
+- **L3-A pilot cluster** (sequential, 6 stages — `pquantlib-phase3-l3-A-complete` @ `e72bcdf`):
+  - [`phase3-l3-A-completion.md`](phase3-l3-A-completion.md) — closure summary (Settings.evaluation_date wired + 4 retroactive cleanups + Payoff + Exercise + Instrument + PricingEngine + BlackFormula + Option + Protocols).
+- **L3-B / C / D / E** (4 parallel cluster subagents — landed into `main` and tagged together as `pquantlib-phase3-complete` @ `aacc2c2`):
+  - [`phase3-l3-B-design.md`](phase3-l3-B-design.md) — bonds (Bond + 4 concretes + DiscountingBondEngine + BondForward + Callability) (+81 tests).
+  - [`phase3-l3-C-design.md`](phase3-l3-C-design.md) — swaps (Swap + VanillaSwap + OIS + ZeroCoupon + Make-factories + DiscountingSwapEngine) + 3 L2-C carry-overs closed (+41 tests).
+  - [`phase3-l3-D-design.md`](phase3-l3-D-design.md) — equity options + processes (StochasticProcess hierarchy + GBSM family + VanillaOption + EuropeanOption + AnalyticEuropeanEngine + BinomialVanillaEngine + BlackCalculator) (+97 tests).
+  - [`phase3-l3-E-design.md`](phase3-l3-E-design.md) — forwards + FRAs (Forward + Position + FxForward + ForwardRateAgreement + DiscountingFwdEngine) + L2-C FraRateHelper carry-over closed (+28 tests).
+- Tags: `pquantlib-phase3-l3-A-complete` @ `e72bcdf` (pilot), `pquantlib-phase3-complete` @ `aacc2c2` (final).
+- Final test count: **1284/0/0**. pyright + ruff clean.
+
+### Phase 4 — L4 models (not yet started)
+
+Pending; mirror jquantlib's `phase2-L4-models-plan.md`. Expected scope: short-rate models + Heston + Hull-White + G2 + their calibration engines + the full optimizer suite (LM / BFGS / Simplex from Phase 1 carve-outs).
+
+Will unblock Phase 3 carve-outs: Swaption + CapFloor pricing engines; BlackIborCouponPricer cap/floor branches; `VanillaOption.implied_volatility`; all Heston / Bates / GJR-GARCH equity option engines.
