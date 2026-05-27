@@ -10,8 +10,8 @@ Concrete rate helpers (DepositRateHelper, FraRateHelper, SwapRateHelper,
 etc.) land in L2-C.
 
 ``RelativeDateBootstrapHelper`` (C++ subclass that registers with
-Settings.evaluationDate to re-initialize dates) is deferred until
-ObservableSettings.evaluation_date gains its observer plumbing.
+Settings.evaluationDate to re-initialize dates) is now supported via
+the ``ObservableSettings`` observer plumbing landed in L3-A.
 
 C++ also defines a ``BootstrapError`` template; that class is
 **deprecated in v1.40** with a recommendation to use a lambda
@@ -25,6 +25,7 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 
 from pquantlib import qassert
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.patterns.observer import Observable
 from pquantlib.quotes.quote import Quote
 from pquantlib.quotes.simple_quote import SimpleQuote
@@ -120,4 +121,45 @@ class BootstrapHelper[TS](Observable, ABC):
         return self._latest_date
 
     def update(self) -> None:
+        self.notify_observers()
+
+
+class RelativeDateBootstrapHelper[TS](BootstrapHelper[TS], ABC):
+    """Bootstrap helper with dates derived from the global evaluation date.
+
+    # C++ parity: ql/termstructures/bootstraphelper.hpp ``class
+    # RelativeDateBootstrapHelper`` (v1.42.1) — a thin subclass that
+    # registers with ``Settings::instance().evaluationDate()`` so that
+    # the helper's earliest/latest/pillar dates re-initialize whenever
+    # the global evaluation date moves.
+
+    Subclasses override :meth:`_initialize_dates` to (re-)compute the
+    helper's date triple. The ABC calls it once at construction and
+    again on every ``update()`` from ``ObservableSettings``.
+
+    Note: ``update()`` here both invalidates the helper's date cache
+    (by re-running ``_initialize_dates``) AND forwards the notification
+    to the helper's own observers — same dual responsibility as C++.
+    """
+
+    def __init__(self, quote: Quote | float) -> None:
+        super().__init__(quote)
+        # Register with global Settings so we get notified on eval-date moves.
+        ObservableSettings().register_with(self)
+        # Track the eval date we last initialized against; lazy re-init.
+        self._eval_date_at_last_init: Date | None = None
+
+    @abstractmethod
+    def _initialize_dates(self) -> None:
+        """Subclass: (re-)compute ``self._earliest_date`` / ``_latest_date`` /
+        ``_pillar_date`` / ``_maturity_date`` from the current global
+        evaluation date.
+        """
+
+    def update(self) -> None:
+        """Observer.update — re-initialize dates if eval date moved."""
+        today = ObservableSettings().evaluation_date_or_today()
+        if today != self._eval_date_at_last_init:
+            self._initialize_dates()
+            self._eval_date_at_last_init = today
         self.notify_observers()

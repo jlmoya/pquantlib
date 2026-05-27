@@ -8,11 +8,12 @@ default, the section *floats* by registering with
 ``Settings::instance().evaluationDate()``) and *time-anchored*
 construction (a raw ``Time`` exercise).
 
-PQuantLib L2-E ports both modes but keeps the floating variant in an
-**explicit** form: callers supply a reference date when constructing
-a date-anchored section. Mode "let the global evaluation date drift
-the reference" is deferred until ObservableSettings.evaluation_date
-becomes observable — the same deferral as TermStructure mode 3.
+PQuantLib L2-E ported both modes, but kept the floating variant
+disabled pending L3-A's Settings.evaluation_date observable wiring.
+Floating mode now works: construct with ``exercise_date`` AND
+``day_counter`` but leave ``reference_date=None``; the section
+registers with ``ObservableSettings()`` so its reference date and
+exercise time re-snap on every eval-date change.
 
 Notes:
 
@@ -24,9 +25,8 @@ Notes:
   ``FlatSmileSection`` does) or derive it from a referenced curve.
 - The expensive option-pricing methods (``option_price``,
   ``digital_option_price``, ``vega``, ``density``, the implied-vol
-  conversion ``volatility(strike, type, shift)``) require a ``BlackFormula``
-  port that isn't in L2-E. They will land alongside vanilla pricing in
-  Phase 3 (L3 instruments + pricingengines).
+  conversion ``volatility(strike, type, shift)``) require ``BlackFormula``
+  and will be wired during Phase 3 L3-D (vanilla option pricing).
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ from abc import ABC, abstractmethod
 
 from pquantlib import qassert
 from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.patterns.observer import Observable
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.time.date import Date
@@ -61,42 +62,52 @@ class SmileSection(Observable, ABC):
     ) -> None:
         """Construct a smile section.
 
-        Two construction modes:
+        Three construction modes:
 
-        - **Date-anchored**: pass ``exercise_date`` AND ``day_counter``
-          AND ``reference_date``. ``exercise_time`` is then derived as
+        - **Date-anchored, fixed reference**: pass ``exercise_date`` AND
+          ``day_counter`` AND ``reference_date``. ``exercise_time`` is
+          derived as
           ``day_counter.year_fraction(reference_date, exercise_date)``.
           ``exercise_date >= reference_date`` is enforced.
+        - **Date-anchored, floating reference**: pass ``exercise_date``
+          AND ``day_counter``, leave ``reference_date=None``. The section
+          registers with ``ObservableSettings()`` so the reference date
+          re-snaps to ``evaluation_date_or_today()`` whenever the global
+          eval date moves; the cached ``exercise_time`` is recomputed
+          lazily on each read.
         - **Time-anchored**: pass ``exercise_time`` (a non-negative
-          float). ``day_counter`` is optional in this mode (it falls
-          back to ``DayCounter()`` semantically; PQuantLib stores
-          ``None`` in that case). ``exercise_date`` and
-          ``reference_date`` remain ``None``.
+          float). ``day_counter`` is optional in this mode.
+          ``exercise_date`` and ``reference_date`` remain ``None``.
         """
         Observable.__init__(self)
 
-        # Determine which constructor mode was used.
+        self._floating: bool = False
         if exercise_date is not None:
-            qassert.require(
-                reference_date is not None,
-                "SmileSection date-anchored mode requires a reference_date "
-                "(floating-via-global-evaluation-date is deferred)",
-            )
             qassert.require(
                 day_counter is not None,
                 "SmileSection date-anchored mode requires a day_counter",
             )
-            assert reference_date is not None
             assert day_counter is not None
-            qassert.require(
-                exercise_date >= reference_date,
-                f"expiry date ({exercise_date}) must be greater than or equal "
-                f"to reference date ({reference_date})",
-            )
-            self._exercise_date: Date | None = exercise_date
-            self._reference_date: Date | None = reference_date
-            self._day_counter: DayCounter | None = day_counter
-            self._exercise_time: float = day_counter.year_fraction(reference_date, exercise_date)
+            if reference_date is None:
+                # Floating mode — register with Settings to invalidate
+                # the cached exercise_time on eval-date changes.
+                self._floating = True
+                ObservableSettings().register_with(self)
+                self._exercise_date: Date | None = exercise_date
+                self._reference_date: Date | None = None
+                self._day_counter: DayCounter | None = day_counter
+                self._exercise_time: float = 0.0  # filled by _refresh_floating
+                self._refresh_floating()
+            else:
+                qassert.require(
+                    exercise_date >= reference_date,
+                    f"expiry date ({exercise_date}) must be greater than or equal "
+                    f"to reference date ({reference_date})",
+                )
+                self._exercise_date = exercise_date
+                self._reference_date = reference_date
+                self._day_counter = day_counter
+                self._exercise_time = day_counter.year_fraction(reference_date, exercise_date)
         else:
             qassert.require(
                 exercise_time is not None,
@@ -114,6 +125,21 @@ class SmileSection(Observable, ABC):
 
         self._volatility_type: VolatilityType = volatility_type
         self._shift: float = shift
+
+    # --- floating-mode helper ----------------------------------------------
+
+    def _refresh_floating(self) -> None:
+        """Re-snap the floating reference date + exercise time."""
+        assert self._exercise_date is not None
+        assert self._day_counter is not None
+        ref = ObservableSettings().evaluation_date_or_today()
+        qassert.require(
+            self._exercise_date >= ref,
+            f"expiry date ({self._exercise_date}) must be greater than or equal "
+            f"to floating reference date ({ref})",
+        )
+        self._reference_date = ref
+        self._exercise_time = self._day_counter.year_fraction(ref, self._exercise_date)
 
     # --- subclass-implemented hooks ----------------------------------------
 
@@ -183,9 +209,11 @@ class SmileSection(Observable, ABC):
         return self._day_counter
 
     def update(self) -> None:
-        """Observer.update — propagates to own observers.
+        """Observer.update — refresh floating cache + propagate.
 
-        Floating-via-global-evaluation-date mode is deferred (see class
-        docstring); this implementation therefore just notifies.
+        In floating mode, the reference date is the global evaluation
+        date, so the cached exercise time must be recomputed.
         """
+        if self._floating:
+            self._refresh_floating()
         self.notify_observers()

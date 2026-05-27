@@ -3,17 +3,28 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
 
 import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.exceptions import LibraryException
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.termstructures.volatility.flat_smile_section import FlatSmileSection
 from pquantlib.termstructures.volatility.smile_section import SmileSection
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.testing import reference_reader, tolerance
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
+
+
+@pytest.fixture(autouse=True)
+def _reset_eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Keep ObservableSettings clean per test (floating-mode tests pin it)."""
+    s = ObservableSettings()
+    s.evaluation_date = None
+    yield
+    s.evaluation_date = None
 
 _REF = reference_reader.load("cluster/l2e")
 _FLAT = _REF["flat_smile_section"]
@@ -99,16 +110,6 @@ def test_flat_smile_section_with_shift() -> None:
     assert smile.shift() == 0.05
 
 
-def test_smile_section_date_mode_requires_reference_date() -> None:
-    with pytest.raises(LibraryException, match="reference_date"):
-        FlatSmileSection(
-            exercise_date=Date.from_ymd(15, Month.June, 2027),
-            volatility=0.20,
-            day_counter=Actual365Fixed(),
-            atm_level=100.0,
-        )
-
-
 def test_smile_section_date_mode_requires_day_counter() -> None:
     with pytest.raises(LibraryException, match="day_counter"):
         FlatSmileSection(
@@ -176,3 +177,59 @@ def test_smile_section_day_counter_available_in_time_mode_when_supplied() -> Non
     dc = Actual365Fixed()
     smile = FlatSmileSection(exercise_time=1.0, volatility=0.20, day_counter=dc)
     assert smile.day_counter() is dc
+
+
+# --- Floating-mode tests (date-anchored, no reference_date) ------------
+
+
+def test_smile_section_floating_mode_uses_global_eval_date() -> None:
+    """C++ parity: smilesection.cpp registers with Settings.evaluationDate()
+    when reference_date is null."""
+    s = ObservableSettings()
+    s.evaluation_date = Date.from_ymd(15, Month.June, 2026)
+    smile = FlatSmileSection(
+        exercise_date=Date.from_ymd(15, Month.June, 2027),
+        volatility=0.20,
+        day_counter=Actual365Fixed(),
+        atm_level=100.0,
+    )
+    assert smile.reference_date() == Date.from_ymd(15, Month.June, 2026)
+    tolerance.tight(smile.exercise_time(), 1.0)
+
+
+def test_smile_section_floating_mode_resnaps_on_eval_date_change() -> None:
+    """Moving the global eval date must invalidate the smile's exercise time."""
+    s = ObservableSettings()
+    s.evaluation_date = Date.from_ymd(15, Month.June, 2026)
+    smile = FlatSmileSection(
+        exercise_date=Date.from_ymd(15, Month.June, 2027),
+        volatility=0.20,
+        day_counter=Actual365Fixed(),
+        atm_level=100.0,
+    )
+    t0 = smile.exercise_time()
+    s.evaluation_date = Date.from_ymd(15, Month.December, 2026)
+    t1 = smile.exercise_time()
+    assert t1 < t0
+    assert smile.reference_date() == Date.from_ymd(15, Month.December, 2026)
+
+
+def test_smile_section_floating_mode_notifies_own_observers() -> None:
+    s = ObservableSettings()
+    s.evaluation_date = Date.from_ymd(15, Month.June, 2026)
+    smile = FlatSmileSection(
+        exercise_date=Date.from_ymd(15, Month.June, 2027),
+        volatility=0.20,
+        day_counter=Actual365Fixed(),
+        atm_level=100.0,
+    )
+    counts = [0]
+
+    class _Counter:
+        def update(self) -> None:
+            counts[0] += 1
+
+    obs = _Counter()
+    smile.register_with(obs)
+    s.evaluation_date = Date.from_ymd(15, Month.December, 2026)
+    assert counts[0] == 1

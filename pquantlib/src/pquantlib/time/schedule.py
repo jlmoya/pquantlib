@@ -19,8 +19,10 @@ Python design notes:
 - The rule-based path uses ``Schedule.from_rule(...)`` classmethod to
   avoid the C++ ctor-overload-by-positional-args ambiguity.
 - The Settings.evaluation_date fallback in the C++ backward-rule path
-  (when effective_date is null) is NOT ported here — Python callers
-  must pass an explicit effective_date. Documented divergence.
+  is supported: passing a null/default ``effective_date`` with rule
+  ``DateGeneration.Backward`` falls back to
+  ``ObservableSettings().evaluation_date_or_today()``. Mirrors C++
+  ``Schedule(...)`` line ~95 in schedule.cpp.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from pquantlib import qassert
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.time import imm
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendar import Calendar
@@ -149,11 +152,17 @@ class Schedule:
     ) -> Schedule:
         """Mirrors C++ rule-based ``Schedule(eff, term, tenor, cal, conv, ...)``."""
         qassert.require(termination_date != Date(), "null termination date")
-        qassert.require(
-            effective_date != Date(),
-            "null effective date (Settings.evaluation_date fallback not ported — "
-            "pass an explicit effective_date)",
-        )
+        if effective_date == Date():
+            # C++ parity: when the effective date is null in the
+            # backward-rule branch, fall back to the global evaluation
+            # date (today by default). Other rules still require an
+            # explicit effective date.
+            qassert.require(
+                rule == DateGeneration.Backward,
+                "null effective date (only Backward rule supports the "
+                "Settings.evaluation_date fallback; pass an explicit effective_date)",
+            )
+            effective_date = ObservableSettings().evaluation_date_or_today()
         qassert.require(
             effective_date < termination_date,
             f"effective date ({effective_date}) later than or equal to termination date ({termination_date})",

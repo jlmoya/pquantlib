@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from pquantlib.exceptions import LibraryException
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.testing import reference_reader
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendars.weekends_only import WeekendsOnly
@@ -309,7 +310,12 @@ def test_inspectors_round_trip() -> None:
     assert s.end_of_month is True
 
 
-def test_null_effective_date_raises() -> None:
+def test_null_effective_date_with_forward_rule_raises() -> None:
+    """Forward rule still requires an explicit effective date.
+
+    # C++ parity: schedule.cpp only the Backward branch falls back to
+    # Settings::evaluationDate() when the effective date is null.
+    """
     with pytest.raises(LibraryException, match="null effective date"):
         Schedule.from_rule(
             Date(),
@@ -318,9 +324,34 @@ def test_null_effective_date_raises() -> None:
             _cal(),
             BusinessDayConvention.Following,
             BusinessDayConvention.Following,
+            DateGeneration.Forward,
+            end_of_month=False,
+        )
+
+
+def test_null_effective_date_with_backward_rule_falls_back_to_eval_date() -> None:
+    """Backward rule falls back to ObservableSettings().evaluation_date_or_today().
+
+    # C++ parity: schedule.cpp ~line 95 — effective date defaults to
+    # Settings::instance().evaluationDate() when null in Backward mode.
+    """
+    s_obs = ObservableSettings()
+    pinned = Date.from_ymd(15, Month.March, 2024)
+    try:
+        s_obs.evaluation_date = pinned
+        s = Schedule.from_rule(
+            Date(),  # null effective_date — should fall back to pinned
+            _term(),
+            Period(1, TimeUnit.Years),
+            _cal(),
+            BusinessDayConvention.Following,
+            BusinessDayConvention.Following,
             DateGeneration.Backward,
             end_of_month=False,
         )
+        assert s.dates[0] == pinned
+    finally:
+        s_obs.evaluation_date = None
 
 
 def test_termination_before_effective_raises() -> None:
