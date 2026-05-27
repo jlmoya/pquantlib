@@ -122,3 +122,8 @@ target_link_libraries(cluster_e_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L2-A: foundations (quotes — SimpleQuote / DerivedQuote / CompositeQuote) ===
 add_executable(quotes_foundations_probe quotes/foundations_probe.cpp)
 target_link_libraries(quotes_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L2-B cluster: yield term structures (FlatForward + InterpolatedZero/
+#     Forward/Discount + 3 Spreaded + Implied) ===
+add_executable(cluster_l2b_probe cluster_l2b/probe.cpp)
+target_link_libraries(cluster_l2b_probe PRIVATE ${QUANTLIB_LIBRARY})

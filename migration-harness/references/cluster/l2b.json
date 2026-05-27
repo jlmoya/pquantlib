@@ -1,0 +1,98 @@
+{
+  "flat_forward": {
+    "cont_a360_05": {
+    "discount_t0": 1,
+    "discount_t1": 0.9512294245007139,
+    "discount_t2": 0.90483741803595952,
+    "discount_t05": 0.97530991202833262,
+    "zero_rate_t1": 0.050000000000000072,
+    "fwd_rate_t1_t2": 0.049999999999999864
+    },
+    "semi_a360_05": {
+    "discount_t1": 0.95181439619274244,
+    "discount_t2": 0.90595064479975518,
+    "zero_rate_t1": 0.049999999999999822
+    },
+    "quote_a365_03": {
+    "discount_t1": 0.97044553354850815,
+    "discount_t3": 0.91393118527122819
+    },
+    "simple_a360_05": {
+    "discount_t1": 0.95238095238095233,
+    "discount_t05": 0.97560975609756106
+    },
+    "date_discount": {
+    "d365_actual365": 0.97044553354850815
+    }
+  },
+  "interpolated_zero_curve": {
+    "discount_node0": 1,
+    "zero_rate_node0": 0.020002433333227938,
+    "discount_node1": 0.99819341466528511,
+    "zero_rate_node1": 0.022000000000001536,
+    "discount_node2": 0.99378650736995244,
+    "zero_rate_node2": 0.025000000000000272,
+    "discount_node3": 0.98613536790774825,
+    "zero_rate_node3": 0.027999999999999893,
+    "discount_node4": 0.97044553354850815,
+    "zero_rate_node4": 0.030000000000000079,
+    "discount_node5": 0.93239381990594827,
+    "zero_rate_node5": 0.034999999999999927,
+    "discount_t0_5": 0.9860948500109572,
+    "discount_t1_0": 0.97044553354850815,
+    "discount_t1_5": 0.9524192047390696,
+    "discount_t3_extrap": 0.89136614390683133,
+    "max_date_serial": 46918
+  },
+  "interpolated_forward_curve": {
+    "discount_t0_2": 0.99525785498606389,
+    "discount_t0_5": 0.98707602203334088,
+    "discount_t1_0": 0.97238037460093985,
+    "discount_t1_5": 0.95551174901845481,
+    "discount_t2_0_extrap": 0.93893575637722893,
+    "discount_t3_extrap": 0.90664145187574718,
+    "max_date_serial": 46918
+  },
+  "interpolated_discount_curve": {
+    "discount_node0": 1,
+    "discount_node1": 0.998,
+    "discount_node2": 0.99299999999999999,
+    "discount_node3": 0.98499999999999999,
+    "discount_node4": 0.96999999999999997,
+    "discount_node5": 0.93000000000000005,
+    "discount_t0_2": 0.99447279886690954,
+    "discount_t1_0": 0.96999999999999997,
+    "discount_t3_extrap": 0.8916494845360825,
+    "max_date_serial": 46918
+  },
+  "forward_spreaded": {
+    "zero_rate_t1": 0.060000000000000019,
+    "zero_rate_t2": 0.060000000000000026,
+    "discount_t1": 0.94176453358424861,
+    "discount_t2": 0.88692043671715748,
+    "zero_rate_t1_bumped": 0.070000000000000062,
+    "discount_t1_bumped": 0.93239381990594816
+  },
+  "zero_spreaded": {
+    "continuous_zero_rate_t1": 0.060000000000000019,
+    "continuous_discount_t1": 0.94176453358424872,
+    "continuous_discount_t2": 0.88692043671715748,
+    "semi_zero_rate_t1": 0.059729395414964873,
+    "semi_discount_t1": 0.94201941386939159
+  },
+  "interpolated_spread_discount": {
+    "discount_at_node_ref_plus_182": 0.97016383508137549,
+    "discount_at_node_ref_plus_365": 0.93631054165767957,
+    "discount_at_node_ref_plus_730": 0.87195621670707502,
+    "discount_t0_5": 0.97048681820214322,
+    "discount_t1_0": 0.93721960714848074,
+    "discount_t2_0_extrap": 0.87365897972128459,
+    "max_date_serial": 46918
+  },
+  "implied": {
+    "discount_t0": 1,
+    "discount_t1": 0.95122942450071402,
+    "reference_date_serial": 46553,
+    "max_date_serial": 109574
+  }
+}
