@@ -169,3 +169,8 @@ target_link_libraries(cluster_l3e_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     NoConstraint/PositiveConstraint transforms) ===
 add_executable(l4a_foundations_probe l4a/foundations_probe.cpp)
 target_link_libraries(l4a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L4-D cluster: G2/G2Forward/HullWhiteForward/OU/CIR processes +
+#     G2 two-additive-factor Gaussian short-rate model + G2.swaption ===
+add_executable(cluster_l4d_probe cluster_l4d/probe.cpp)
+target_link_libraries(cluster_l4d_probe PRIVATE ${QUANTLIB_LIBRARY})
