@@ -1,0 +1,65 @@
+{
+  "fixed_rate_bond": {
+    "settle_serial": 45674,
+    "issue_serial": 45672,
+    "maturity_serial": 47498,
+    "clean_price": 100.25557603443336,
+    "dirty_price": 100.28335381221115,
+    "accrued_amount": 0.02777777777778212,
+    "settlement_value": 100.28335381221116,
+    "npv": 100.25654730634864,
+    "notional": 100,
+    "yield": 0.049412250614172794,
+    "clean_price_from_yield": 100.25557600595479,
+    "n_cashflows": 11,
+    "start_date_serial": 45672,
+    "maturity_date_serial": 47498,
+    "is_tradable": 1,
+    "is_expired": 0
+  },
+  "accrued_mid_period": {
+    "settle_serial": 45762,
+    "accrued_amount": 1.2499999999999956,
+    "next_cf_serial": 45853,
+    "prev_cf_serial": 0,
+    "next_coupon_rate": 0.050000000000000003
+  },
+  "zero_coupon_bond": {
+    "settle_serial": 45674,
+    "redemption_serial": 47498,
+    "clean_price": 78.363090872991691,
+    "dirty_price": 78.363090872991691,
+    "npv": 78.342143820713943,
+    "df_at_redemption": 0.7834214382071395,
+    "expected_settlement_value": 78.342143820713943
+  },
+  "floating_rate_bond": {
+    "settle_serial": 45672,
+    "npv": 96.508192070084689,
+    "clean_price": 96.975980783202147,
+    "dirty_price": 96.975980783202147,
+    "accrued_amount": 0,
+    "notional": 100,
+    "n_cashflows": 11
+  },
+  "amortizing_fixed_rate_bond": {
+    "settle_serial": 45674,
+    "npv": 99.990763391761604,
+    "clean_price": 99.989721054781214,
+    "dirty_price": 100.017498832559,
+    "notional_at_settle": 100,
+    "notional_y1": 75,
+    "notional_y2": 50,
+    "notional_y3": 50,
+    "n_cashflows": 8
+  },
+  "bond_forward": {
+    "value_date_serial": 45674,
+    "delivery_date_serial": 45762,
+    "spot_value": 99.741034502334387,
+    "spot_income": 0,
+    "forward_price": 100.97832998104441,
+    "clean_forward_price": 99.728329981044411,
+    "strike": 100
+  }
+}
