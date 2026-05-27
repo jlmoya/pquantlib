@@ -185,3 +185,9 @@ target_link_libraries(cluster_l4c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     G2 two-additive-factor Gaussian short-rate model + G2.swaption ===
 add_executable(cluster_l4d_probe cluster_l4d/probe.cpp)
 target_link_libraries(cluster_l4d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L4-E cluster: swaption + capfloor instruments + helpers +
+#     analytic engines (Black/Bachelier/Jamshidian/G2 swaption;
+#     Black/Bachelier/AnalyticCapFloor capfloor) ===
+add_executable(cluster_l4e_probe cluster_l4e/probe.cpp)
+target_link_libraries(cluster_l4e_probe PRIVATE ${QUANTLIB_LIBRARY})

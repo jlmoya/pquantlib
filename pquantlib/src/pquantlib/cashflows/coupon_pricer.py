@@ -158,19 +158,27 @@ class IborCouponPricer(CouponPricer):
         assert isinstance(coupon, IborCoupon)
         idx = coupon.ibor_index()
         cal = idx.fixing_calendar()
-        fixing_days = idx.fixing_days()
+        idx_fixing_days = idx.fixing_days()
+        coupon_fixing_days = coupon.fixing_days()
         fixing_value_date = cal.advance(
-            coupon.fixing_date(), fixing_days, TimeUnit.Days
+            coupon.fixing_date(), idx_fixing_days, TimeUnit.Days
         )
         if coupon.is_in_arrears() or self._use_indexed_coupons:
             fixing_end_date = idx.maturity_date(fixing_value_date)
         else:
             # par-coupon approximation: fixing_end_date ≈ accrual_end_date
-            # rounded to the index's fixing-day grid.
+            # rounded to the index's fixing-day grid. C++ parity
+            # (couponpricer.cpp:71-77): back-step uses the **coupon's**
+            # fixing-days; forward-step uses the **index's** fixing-days.
+            # The asymmetry matters when the user overrode the coupon's
+            # fixing_days via withFixingDays(0) but the index still
+            # exposes its natural fixingDays (e.g. 2 for Euribor).
             next_fix = cal.advance(
-                coupon.accrual_end_date(), -fixing_days, TimeUnit.Days
+                coupon.accrual_end_date(), -coupon_fixing_days, TimeUnit.Days
             )
-            fixing_end_date = cal.advance(next_fix, fixing_days, TimeUnit.Days)
+            fixing_end_date = cal.advance(
+                next_fix, idx_fixing_days, TimeUnit.Days
+            )
             # Ensure the estimation period contains at least one day.
             min_end = fixing_value_date + Period(1, TimeUnit.Days)
             fixing_end_date = max(fixing_end_date, min_end)
