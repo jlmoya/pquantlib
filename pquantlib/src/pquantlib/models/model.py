@@ -10,13 +10,17 @@ C++ defines four bases:
   CalibrationFunction over CalibrationHelper instruments)
 - ``ShortRateModel`` (CalibratedModel + tree(TimeGrid))
 
-The pquantlib port mirrors the same hierarchy. ``AffineModel`` is
-sketched as a ``Protocol`` in ``protocols.py`` (Stage 5) rather than
-a class — Python's structural typing handles the "any model that has
-discount/discountBond/discountBondOption" use case more idiomatically
-than a virtual-inheritance pattern. ``ShortRateModel`` is deferred to
-L4-B (where the first concrete short-rate model — Vasicek/HullWhite —
-lands).
+The pquantlib port mirrors the same hierarchy. ``AffineModel`` was
+originally sketched only as a ``Protocol`` in ``protocols.py`` (L4-A
+stage 5); L4-B introduces a proper abstract base because OneFactorAffineModel
+needs to MRO-multi-inherit from both ``OneFactorModel`` (CalibratedModel
+subclass) and ``AffineModel``, which Python only supports cleanly with
+a concrete (abstract) class.
+
+``ShortRateModel`` is added here in L4-B — it's the CalibratedModel
+subclass with the abstract ``tree(TimeGrid)`` method. The tree() impl
+itself is deferred per the cluster spec (TrinomialTree + lattice
+plumbing carry-overs).
 
 L4-A scope (this module): the three abstract bases required to define
 ``calibrate()`` semantics. Concrete models land in L4-B/C/D/E.
@@ -69,6 +73,7 @@ from pquantlib.patterns.observer import Observable
 if TYPE_CHECKING:
     from pquantlib.math.optimization.end_criteria import EndCriteria
     from pquantlib.math.optimization.optimization_method import OptimizationMethod
+    from pquantlib.payoffs import OptionType
     from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 
 
@@ -569,3 +574,98 @@ class _ProjectedConstraintAdapter(Constraint):
     def lower_bound(self, params: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         full_lb = self._constraint.lower_bound(self._projection.include(params))
         return self._projection.project(full_lb)
+
+
+# ---------------------------------------------------------------------
+# L4-B abstract bases — AffineModel + ShortRateModel
+# ---------------------------------------------------------------------
+
+
+class AffineModel(Observable, ABC):
+    """Analytically tractable interest-rate model.
+
+    # C++ parity: ``class AffineModel : public virtual Observable`` in
+    # ql/models/model.hpp:45-64 (v1.42.1).
+
+    A pure abstract base: subclasses must provide closed-form
+    ``discount(t)``, ``discount_bond(now, maturity, factors)`` (vector
+    factors), and ``discount_bond_option(type, strike, maturity,
+    bond_maturity)``. The default 5-arg ``discount_bond_option``
+    forwards to the 4-arg form (mirroring the C++ inline default).
+
+    Multi-inherits in OneFactorAffineModel together with OneFactorModel
+    (which is a CalibratedModel); MRO resolves with Observable as the
+    common base.
+    """
+
+    @abstractmethod
+    def discount(self, t: float) -> float:
+        """Implied discount factor at time ``t``.
+
+        # C++ parity: ``AffineModel::discount(Time)``.
+        """
+        ...
+
+    @abstractmethod
+    def discount_bond(
+        self,
+        now: float,
+        maturity: float,
+        factors: npt.NDArray[np.float64],
+    ) -> float:
+        """Price of a discount bond ``P(now, maturity)`` given factors.
+
+        # C++ parity: ``AffineModel::discountBond(Time, Time, Array)``.
+        """
+        ...
+
+    @abstractmethod
+    def discount_bond_option(
+        self,
+        option_type: OptionType,
+        strike: float,
+        maturity: float,
+        bond_maturity: float,
+    ) -> float:
+        """Closed-form discount-bond European option.
+
+        # C++ parity: ``AffineModel::discountBondOption(Type, Real,
+        # Time, Time)``.
+        """
+        ...
+
+    def discount_bond_option_3args(
+        self,
+        option_type: OptionType,
+        strike: float,
+        maturity: float,
+        bond_start: float,
+        bond_maturity: float,
+    ) -> float:
+        """5-arg overload that defaults to ignoring ``bond_start``.
+
+        # C++ parity: inline ``AffineModel::discountBondOption(Type,
+        # Real, Time, Time, Time)`` at model.hpp:151-157 — by default
+        # delegates to the 4-arg overload. Subclasses (e.g. HullWhite)
+        # override this when the bond_start carries information.
+        """
+        return self.discount_bond_option(option_type, strike, maturity, bond_maturity)
+
+
+class ShortRateModel(CalibratedModel):
+    """Abstract one-/multi-factor short-rate model.
+
+    # C++ parity: ``class ShortRateModel : public CalibratedModel`` in
+    # ql/models/model.hpp:141-145 (v1.42.1).
+
+    Has ``tree(TimeGrid) -> Lattice`` as the only added abstract — its
+    implementation depends on TrinomialTree / Lattice lattice machinery
+    that is deferred per the L1 carve-outs. Concrete short-rate models
+    in L4-B (Vasicek/HullWhite/CIR) declare the method but raise
+    ``LibraryException("tree not yet implemented")`` when called.
+    """
+
+    def __init__(self, n_arguments: int) -> None:
+        # C++ parity: model.cpp ShortRateModel ctor — forwards to
+        # CalibratedModel(n_arguments).
+        super().__init__(n_arguments)
