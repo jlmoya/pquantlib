@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 
 from pquantlib import qassert
 from pquantlib.cashflows.floating_rate_coupon import FloatingRateCoupon
-from pquantlib.instruments.instrument import Instrument
+from pquantlib.instruments.instrument import Instrument, InstrumentResults
 from pquantlib.pricingengines.pricing_engine import PricingEngineArguments
 from pquantlib.time.date import Date
 
@@ -123,6 +123,15 @@ class CapFloorArguments(PricingEngineArguments):
             len(self.forwards) == n,
             f"number of start dates ({n}) differs from forwards ({len(self.forwards)})",
         )
+
+
+class CapFloorResults(InstrumentResults):
+    """Engine results carrier for CapFloor.
+
+    # C++ parity: ``CapFloor::results`` is just the standard
+    # ``Instrument::results`` plus the engine's ``additionalResults``
+    # map — both already provided by ``InstrumentResults``.
+    """
 
 
 class CapFloor(Instrument):
@@ -389,6 +398,7 @@ __all__ = [
     "Cap",
     "CapFloor",
     "CapFloorArguments",
+    "CapFloorResults",
     "CapFloorType",
     "Collar",
     "Floor",
