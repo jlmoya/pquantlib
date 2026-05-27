@@ -122,3 +122,7 @@ target_link_libraries(cluster_e_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L2-A: foundations (quotes — SimpleQuote / DerivedQuote / CompositeQuote) ===
 add_executable(quotes_foundations_probe quotes/foundations_probe.cpp)
 target_link_libraries(quotes_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L2-D cluster: cashflows (InterestRate / coupons / legs / aggregator) ===
+add_executable(cluster_l2d_probe cluster_l2d/probe.cpp)
+target_link_libraries(cluster_l2d_probe PRIVATE ${QUANTLIB_LIBRARY})

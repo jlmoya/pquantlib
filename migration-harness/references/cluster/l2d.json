@@ -1,0 +1,58 @@
+{
+  "interest_rate": {
+    "r": 0.050000000000000003,
+    "t": 1,
+    "cf_simple": 1.05,
+    "cf_annual": 1.05,
+    "cf_semi": 1.0506249999999999,
+    "cf_continuous": 1.0512710963760241,
+    "df_simple": 0.95238095238095233,
+    "df_annual": 0.95238095238095233,
+    "df_semi": 0.95181439619274244,
+    "df_continuous": 0.9512294245007139,
+    "eq_annual_to_semi": 0.049390153191919861,
+    "eq_back_to_annual": 0.050000000000000266,
+    "implied_5pct": 0.050000000000000044
+  },
+  "fixed_rate_coupon": {
+    "payment_date_serial": 46204,
+    "start_serial": 46023,
+    "end_serial": 46204,
+    "nominal": 100000,
+    "rate": 0.05,
+    "accrual_period": 0.50277777777777777,
+    "accrual_days": 181,
+    "amount": 2513.8888888888823
+  },
+  "simple_cash_flow": {
+    "amount": 1234.5599999999999,
+    "date_serial": 46204
+  },
+  "bond_flat_curve": {
+    "settle_serial": 46023,
+    "npv": 100245.519669983,
+    "bps": 19.085143648356055,
+    "npv_at_ytm5": 100245.51966998303,
+    "simple_duration": 1.9271516638260895,
+    "modified_duration": 1.8353825369772281,
+    "macaulay_duration": 1.9271516638260895,
+    "convexity": 5.1894231165952132,
+    "irr": 0.050000000000232817
+  },
+  "overnight_coupon": {
+    "start_serial": 46037,
+    "end_serial": 46068,
+    "nominal": 100000,
+    "accrual_period": 0.08611111111111111,
+    "rate": 0.040069111910222159,
+    "amount": 345.03957478246861
+  },
+  "ibor_coupon": {
+    "start_serial": 46023,
+    "end_serial": 46113,
+    "accrual_period": 0.25,
+    "index_fixing": 0.034891448825875304,
+    "rate": 0.034891448825875304,
+    "amount": 872.28622064688261
+  }
+}
