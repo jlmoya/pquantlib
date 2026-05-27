@@ -2,6 +2,8 @@
 
 > **For agentic workers:** sub-cluster work uses the proven Phase 1-3 pattern — sequential per-stub TDD for L4-A pilot; parallel via subagents for B/C/D/E.
 
+**Status:** **closed** — all 5 clusters landed on `main`; tag `pquantlib-phase4-complete` @ `fab5a0d` on 2026-05-27. **1544/0/0** tests. See [`phase4-completion.md`](phase4-completion.md).
+
 **Goal:** Land Phase 4's ~40 must-port classes on `main`, behind tag `pquantlib-phase4-complete`. Unblocks Phase 3 carve-outs (Swaption + CapFloor + Heston engines).
 
 **Predecessor:** `pquantlib-phase3-complete` @ `aacc2c2` — 1284/0/0, pyright + ruff clean.

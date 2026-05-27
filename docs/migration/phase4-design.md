@@ -1,10 +1,21 @@
 # Phase 4 — L4 models (design)
 
 **Date:** 2026-05-27
-**Status:** drafted, awaiting ack to start
+**Status:** **closed** — tagged `pquantlib-phase4-complete` @ `fab5a0d` on 2026-05-27. **1544/0/0** pytest, pyright + ruff clean. Closure summary at [`phase4-completion.md`](phase4-completion.md).
 **Predecessor:** `pquantlib-phase3-complete` @ `aacc2c2` — 1284/0/0, pyright + ruff clean
 **Sister-project anchor:** jquantlib `phase2-L4-models-plan.md`
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
+
+## Outcome (filled in at closure)
+
+Phase 4 shipped as 5 clusters across two stages:
+
+- **L4-A pilot** (sequential, 6 stages): 1351/0/0 tests. Tagged `pquantlib-phase4-l4-A-complete` @ `657b707`. See [`phase4-l4-A-completion.md`](phase4-l4-A-completion.md). **Closed Phase 1 optimizer carry-overs** (LM + Simplex via scipy).
+- **L4-B / L4-C / L4-D / L4-E** (4 parallel cluster subagents): +193 tests, total 1544/0/0.
+
+All 4 parallel clusters hit their targets; L4-E stalled mid-cluster on a ruff naming check and was completed inline in the main session (3 analytic engines: Jamshidian + G2 + AnalyticCapFloor).
+
+Phase 1 + Phase 3 carry-overs closed in this phase: LM + Simplex (L1-D); Swaption + CapFloor instruments (L3-E).
 
 ## Goal
 

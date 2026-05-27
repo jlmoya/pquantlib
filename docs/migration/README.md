@@ -77,8 +77,23 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase3-l3-A-complete` @ `e72bcdf` (pilot), `pquantlib-phase3-complete` @ `aacc2c2` (final).
 - Final test count: **1284/0/0**. pyright + ruff clean.
 
-### Phase 4 — L4 models (not yet started)
+### Phase 4 — L4 models (closed)
 
-Pending; mirror jquantlib's `phase2-L4-models-plan.md`. Expected scope: short-rate models + Heston + Hull-White + G2 + their calibration engines + the full optimizer suite (LM / BFGS / Simplex from Phase 1 carve-outs).
+- [`phase4-design.md`](phase4-design.md) — binding spec (closed; outcome appendix at top).
+- [`phase4-plan.md`](phase4-plan.md) — executable plan.
+- [`phase4-completion.md`](phase4-completion.md) — closure summary, 6-row cluster contribution table, parallelization notes, cumulative documented divergences from Phase 1+2+3+4, carve-outs, lessons learned.
+- **L4-A pilot cluster** (sequential, 6 stages — `pquantlib-phase4-l4-A-complete` @ `657b707`):
+  - [`phase4-l4-A-completion.md`](phase4-l4-A-completion.md) — closure summary (LM + Simplex carry-overs closed; Parameter + Model + CalibrationHelper bases + 3 Protocols).
+- **L4-B / C / D / E** (4 parallel cluster subagents — landed into `main` and tagged together as `pquantlib-phase4-complete` @ `fab5a0d`):
+  - [`phase4-l4-B-design.md`](phase4-l4-B-design.md) — short-rate models (Vasicek + HW + CIR + ExtendedCIR + OU/CIR processes) (+49).
+  - [`phase4-l4-C-design.md`](phase4-l4-C-design.md) — equity stochastic-vol (Heston + Bates + AnalyticHestonEngine via scipy.quad) (+53).
+  - [`phase4-l4-D-design.md`](phase4-l4-D-design.md) — G2++ two-factor + multi-process suite (+48).
+  - [`phase4-l4-E-design.md`](phase4-l4-E-design.md) — Swaption + CapFloor instruments (Phase 3 carve-outs closed) + analytic engines (Black/Bachelier swaption + Jamshidian + G2Swaption + Black/Bachelier/AnalyticCapFloor) + SwaptionHelper + CapHelper (+43).
+- Tags: `pquantlib-phase4-l4-A-complete` @ `657b707` (pilot), `pquantlib-phase4-complete` @ `fab5a0d` (final).
+- Final test count: **1544/0/0**. pyright + ruff clean.
 
-Will unblock Phase 3 carve-outs: Swaption + CapFloor pricing engines; BlackIborCouponPricer cap/floor branches; `VanillaOption.implied_volatility`; all Heston / Bates / GJR-GARCH equity option engines.
+### Phase 5 — L5 experimental + L6 test-suite parity (not yet started)
+
+Pending; mirror jquantlib's `phase2-L5-experimental-plan.md` + `phase2-L6-test-suite-parity-plan.md`. Largest remaining surface; targets `jquantlib-final` parity (3610 tests).
+
+Phase 5 priorities: tree/lattice machinery (unblocks BlackKarasinski + TreeSwaptionEngine + American option engines); Phase 1 carry-overs (Sobol/Burley2020, full GammaFunction, advanced spline interpolations, QR/Eigen/SVD); Phase 2 carve-outs (inflation, credit, ZABR/SABR/XABR vol, advanced curve construction); Phase 3 exotic instruments (Asian/Barrier/Basket/Cliquet/Lookback paired with MC + FD engines); test-suite parity.
