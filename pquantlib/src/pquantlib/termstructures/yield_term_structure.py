@@ -206,11 +206,17 @@ class YieldTermStructure(TermStructure):
             t1_adj = max(t1 - _DT / 2.0, 0.0)
             t2_adj = t1_adj + _DT
             compound = self.discount(t1_adj, True) / self.discount(t2_adj, True)
+            # C++ parity: yieldtermstructure.cpp:160-171 — when t2 == t1
+            # the outer t1/t2 are reassigned to the adjusted pair and
+            # ``t2 - t1`` then evaluates to ``dt`` (the fd width).
+            # Reproduce that semantically by passing ``_DT``.
+            t_for_rate = _DT
         else:
             qassert.require(t2 > t1, f"t2 ({t2}) < t1 ({t1})")
             compound = self.discount(t1, extrapolate) / self.discount(t2, extrapolate)
+            t_for_rate = t2 - t1
         return InterestRate.implied_rate(
-            compound, self.day_counter(), compounding, frequency, t2 - t1
+            compound, self.day_counter(), compounding, frequency, t_for_rate
         )
 
     # ---- jump inspectors ---------------------------------------------------

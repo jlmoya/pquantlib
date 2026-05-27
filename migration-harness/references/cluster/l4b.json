@@ -1,0 +1,86 @@
+{
+  "ornstein_uhlenbeck": {
+    "x0": 0.029999999999999999,
+    "speed": 0.5,
+    "volatility": 0.02,
+    "level": 0.050000000000000003,
+    "drift_at_0_03": 0.010000000000000002,
+    "drift_at_0_08": -0.014999999999999999,
+    "diffusion_at_0_03": 0.02,
+    "expectation_dt_1": 0.037869386805747335,
+    "variance_dt_1": 0.0002528482235314231,
+    "variance_dt_5": 0.00039730482120036581,
+    "std_deviation_dt_1": 0.015901201952413003
+  },
+  "ornstein_uhlenbeck_zero_speed": {
+    "variance_dt_1": 0.00040000000000000002,
+    "variance_dt_5": 0.002
+  },
+  "cox_ingersoll_ross": {
+    "x0": 0.050000000000000003,
+    "speed": 0.5,
+    "volatility": 0.10000000000000001,
+    "level": 0.059999999999999998,
+    "drift_at_x0": 0.0049999999999999975,
+    "diffusion_at_x0": 0.10000000000000001,
+    "expectation_dt_1": 0.053934693402873664,
+    "variance_dt_1": 0.00042443296463660169,
+    "variance_dt_5": 0.0010864285913263587
+  },
+  "vasicek": {
+    "r0": 0.050000000000000003,
+    "a": 0.10000000000000001,
+    "b": 0.050000000000000003,
+    "sigma": 0.01,
+    "lambda": 0,
+    "discount_t1": 0.95124414296525361,
+    "discount_t5": 0.77993560526584771,
+    "discount_t10": 0.6116497660594804,
+    "discount_bond_0_1": 0.95124414296525361,
+    "discount_bond_0_5": 0.77993560526584771,
+    "discount_bond_0_10": 0.6116497660594804,
+    "discount_bond_1_5_at_r03": 0.87523292442493839,
+    "discount_bond_1_5_at_r07": 0.76710068864488634,
+    "discount_bond_option_call": 0.0015531105168444619,
+    "discount_bond_option_put": 0.030175026771462315
+  },
+  "hull_white": {
+    "a": 0.10000000000000001,
+    "sigma": 0.01,
+    "curve_discount_1": 0.9512294245007139,
+    "curve_discount_5": 0.77880078307140488,
+    "curve_discount_10": 0.60653065971263342,
+    "model_discount_1": 0.95122942450071402,
+    "model_discount_5": 0.77880078307140477,
+    "model_discount_10": 0.60653065971263342,
+    "discount_bond_0_1_at_r05": 0.95122942450083126,
+    "discount_bond_0_5_at_r05": 0.77880078307180178,
+    "discount_bond_1_5_at_r05": 0.81832758756698232,
+    "discount_bond_1_5_at_r03": 0.87410343997418682,
+    "discount_bond_option_call": 0.0014139147087909596,
+    "discount_bond_option_put": 0.031158142462992925,
+    "discount_bond_option_3args_call": 0.0043646628956675445,
+    "discount_bond_option_3args_put": 0.014145843203532555
+  },
+  "hull_white_convexity_bias": 2.340594699245746e-05,
+  "cox_ingersoll_ross_model": {
+    "discount_t1": 0.94926141954833876,
+    "discount_t5": 0.75644226098748613,
+    "discount_t10": 0.56423295281232622,
+    "discount_bond_0_1_at_r05": 0.94926141954833876,
+    "discount_bond_0_5_at_r05": 0.75644226098748613,
+    "discount_bond_1_5_at_r03": 0.82957959089038968,
+    "discount_bond_option_call": 9.8512168787900355e-06,
+    "discount_bond_option_put": 0.050439796845480597
+  },
+  "extended_cox_ingersoll_ross": {
+    "model_discount_1": 0.9512294245007139,
+    "model_discount_5": 0.7788007830714051,
+    "model_discount_10": 0.60653065971263331,
+    "discount_bond_0_1_at_r05": 0.95122942450081083,
+    "discount_bond_0_5_at_r05": 0.77880078307158795,
+    "discount_bond_1_5_at_r03": 0.84684196577435711,
+    "discount_bond_option_call": 0.00075433516493182435,
+    "discount_bond_option_put": 0.030498562919133762
+  }
+}
