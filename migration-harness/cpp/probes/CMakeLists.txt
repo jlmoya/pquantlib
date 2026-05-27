@@ -169,3 +169,9 @@ target_link_libraries(cluster_l3e_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     NoConstraint/PositiveConstraint transforms) ===
 add_executable(l4a_foundations_probe l4a/foundations_probe.cpp)
 target_link_libraries(l4a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L4-B cluster: 1-factor short-rate models (Vasicek, HullWhite,
+#     CoxIngersollRoss, ExtendedCoxIngersollRoss) over OrnsteinUhlenbeck
+#     + CoxIngersollRoss processes, plus HullWhite::convexityBias. ===
+add_executable(cluster_l4b_probe cluster_l4b/probe.cpp)
+target_link_libraries(cluster_l4b_probe PRIVATE ${QUANTLIB_LIBRARY})
