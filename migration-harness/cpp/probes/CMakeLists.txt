@@ -143,3 +143,8 @@ target_link_libraries(cluster_l2e_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L3-A pilot: foundations (Payoffs + BlackFormula family) ===
 add_executable(l3a_foundations_probe l3a/foundations_probe.cpp)
 target_link_libraries(l3a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L3-E cluster: forwards + FRAs (Forward + FxForward +
+#     ForwardRateAgreement + DiscountingFwdEngine + FraRateHelper indexed) ===
+add_executable(cluster_l3e_probe cluster_l3e/probe.cpp)
+target_link_libraries(cluster_l3e_probe PRIVATE ${QUANTLIB_LIBRARY})

@@ -1,0 +1,46 @@
+{
+  "forward_type_payoff": {
+    "name": "Forward",
+    "long_at_120": 20,
+    "long_at_100": 0,
+    "long_at_80": -20,
+    "short_at_120": -20,
+    "short_at_100": 0,
+    "short_at_80": 20
+  },
+  "fx_forward": {
+    "eval_date_serial": 45308,
+    "settlement_serial": 45310,
+    "maturity_serial": 45673,
+    "source_nominal": 1000000,
+    "target_nominal": 1100000,
+    "strike_rate": 1.1000000000000001,
+    "spot_fx": 1.1000000000000001,
+    "npv": -19369.791021313402,
+    "fair_forward_rate": 1.0780388525217504,
+    "npv_source_ccy": -19369.791021313402,
+    "npv_target_ccy": -21306.770123444745
+  },
+  "forward_rate_agreement": {
+    "value_date_serial": 45399,
+    "maturity_date_serial": 45490,
+    "strike": 0.050000000000000003,
+    "notional": 1000000,
+    "indexed": {
+      "forward_rate": 0.050317307618302616,
+      "amount": 79.200950044270058,
+      "npv": 78.206237310002919
+    },
+    "par": {
+      "forward_rate": 0.050317307618302616,
+      "amount": 79.200950044270058,
+      "npv": 78.206237310002919
+    }
+  },
+  "fra_rate_helper_indexed": {
+    "earliest_serial": 45401,
+    "maturity_serial": 45492,
+    "latest_relevant_serial": 45492,
+    "implied_quote": 0.050317307618302616
+  }
+}
