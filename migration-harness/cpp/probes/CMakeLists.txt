@@ -135,3 +135,7 @@ target_link_libraries(cluster_l2c_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L2-D cluster: cashflows (InterestRate / coupons / legs / aggregator) ===
 add_executable(cluster_l2d_probe cluster_l2d/probe.cpp)
 target_link_libraries(cluster_l2d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L2-E cluster: volatility term structures (Black + Local, equity/FX) ===
+add_executable(cluster_l2e_probe cluster_l2e/probe.cpp)
+target_link_libraries(cluster_l2e_probe PRIVATE ${QUANTLIB_LIBRARY})
