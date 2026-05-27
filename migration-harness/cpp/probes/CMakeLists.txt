@@ -152,3 +152,9 @@ target_link_libraries(cluster_l3b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     DiscountingSwapEngine + SwapRateHelper / OISRateHelper roundtrips ===
 add_executable(cluster_l3c_probe cluster_l3c/probe.cpp)
 target_link_libraries(cluster_l3c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L3-D cluster: equity options + processes (GBSM family +
+#     EulerDiscretization + VanillaOption/EuropeanOption +
+#     AnalyticEuropeanEngine + BinomialVanillaEngine) ===
+add_executable(cluster_l3d_probe cluster_l3d/probe.cpp)
+target_link_libraries(cluster_l3d_probe PRIVATE ${QUANTLIB_LIBRARY})
