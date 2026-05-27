@@ -296,9 +296,15 @@ class TermStructureConsistentModel(Observable):
 
     Holds a yield term structure; concrete subclasses (G2++,
     HullWhiteForward, etc.) layer the model dynamics on top.
-    """
 
-    __slots__ = ("_term_structure",)
+    Python note: this class deliberately does NOT declare ``__slots__``
+    so subclasses (e.g. HullWhite, ExtendedCoxIngersollRoss in L4-B)
+    can multi-inherit from both this class and a CalibratedModel /
+    OneFactorAffineModel chain — Python forbids multiple-inheritance
+    layout conflicts between two slotted classes that both add new
+    instance variables. The single ``_term_structure`` attribute is
+    stored on ``__dict__`` instead.
+    """
 
     def __init__(self, term_structure: YieldTermStructure) -> None:
         super().__init__()
