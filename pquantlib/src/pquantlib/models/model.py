@@ -293,11 +293,31 @@ class TermStructureConsistentModel(Observable):
     HullWhiteForward, etc.) layer the model dynamics on top.
     """
 
-    __slots__ = ("_term_structure",)
+    # NOTE: no ``__slots__`` here. This class is designed to be a
+    # second base alongside ``CalibratedModel`` in diamond-inheritance
+    # subclasses (G2, HullWhiteForward). Adding ``__slots__`` would
+    # introduce a layout conflict with CalibratedModel's slot layout
+    # ("multiple bases have instance lay-out conflict").
 
-    def __init__(self, term_structure: YieldTermStructure) -> None:
+    def __init__(self, term_structure: YieldTermStructure | None = None) -> None:
+        # ``term_structure=None`` is the diamond-cooperative case: the
+        # MRO threads this ``__init__`` through (after ``Model``) on
+        # subclasses like G2 that explicitly initialise the term
+        # structure separately via ``_set_term_structure``. The plain
+        # single-inheritance case (just ``TermStructureConsistentModel``
+        # alone) passes ``term_structure`` directly.
         super().__init__()
-        self._term_structure: YieldTermStructure = term_structure
+        self._term_structure: YieldTermStructure | None = term_structure
+
+    def _set_term_structure(self, term_structure: YieldTermStructure) -> None:
+        """Late-bind the term structure (used by diamond-inheritance subclasses).
+
+        # C++ parity: none — Python helper for the
+        # cooperative-super pattern. C++ initialises via
+        # ``TermStructureConsistentModel(handle)`` directly in the
+        # subclass's member-initialiser list.
+        """
+        self._term_structure = term_structure
 
     @property
     def term_structure(self) -> YieldTermStructure:
@@ -306,6 +326,10 @@ class TermStructureConsistentModel(Observable):
         # C++ parity: ``TermStructureConsistentModel::termStructure`` in
         # model.hpp:77-79.
         """
+        assert self._term_structure is not None, (
+            "TermStructureConsistentModel.term_structure accessed before initialisation; "
+            "the subclass must call ``_set_term_structure`` in its __init__."
+        )
         return self._term_structure
 
 
