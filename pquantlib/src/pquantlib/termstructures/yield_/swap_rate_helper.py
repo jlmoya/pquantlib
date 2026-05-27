@@ -7,19 +7,13 @@ C++ ``SwapRateHelper::impliedQuote`` constructs a ``VanillaSwap`` via
 
     impliedQuote = -(floatLegNPV + spreadNPV) / (fixedLegBPS / 1e-4)
 
-That requires L3's ``VanillaSwap``, ``MakeVanillaSwap``, and
-``DiscountingSwapEngine``. PQuantLib L2-C ports the constructor surface +
-inspectors + dates initialization, but raises on ``implied_quote()`` —
-the full bootstrap pipeline lands in L3.
+L3-C closes the carry-over: ``implied_quote`` now builds the underlying
+swap via ``make_vanilla_swap`` and reads ``fair_rate()``.
 
-Inspectors that don't depend on VanillaSwap (settlement_days / tenor /
-fixed_frequency / fixed_convention / fixed_day_count / spread / fwd_start /
-end_of_month / use_indexed_coupons) are fully ported.
-
-Carve-out: the ``initialize_dates`` method currently approximates earliest /
+Carve-out: the ``initialize_dates`` method still approximates earliest /
 maturity dates via ``calendar.advance(...)`` rather than building a full
 ``VanillaSwap`` schedule. That's accurate enough for pillar-date computation;
-the precise BPS-based implied quote stays L3.
+a full schedule-driven implementation is deferred.
 """
 
 from __future__ import annotations
@@ -106,10 +100,46 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
     # --- BootstrapHelper interface --------------------------------------------
 
     def implied_quote(self) -> float:
-        qassert.fail(
-            "SwapRateHelper.implied_quote requires L3 VanillaSwap + DiscountingSwapEngine "
-            "(deferred to L3).",
+        """Implied par-swap rate from the underlying VanillaSwap.
+
+        # C++ parity: ``SwapRateHelper::impliedQuote`` (ratehelpers.cpp).
+        # We delegate to ``swap.fair_rate()``: the C++ formula
+        # ``-(floatLegNPV + spreadNPV) / (fixedLegBPS / 1e-4)`` is exactly
+        # what ``FixedVsFloatingSwap::fairRate`` computes via its result-fetch
+        # fallback when the engine doesn't supply fair_rate directly.
+        """
+        # Local import: termstructures/ should not depend on instruments/.
+        from pquantlib.instruments.make_vanilla_swap import make_vanilla_swap  # noqa: PLC0415
+
+        # The bootstrap loop calls ``set_term_structure`` before each
+        # ``implied_quote`` evaluation; use that curve as the discount.
+        qassert.require(
+            self._term_structure is not None,
+            "SwapRateHelper: term structure not set yet",
         )
+        ts = self._term_structure
+        assert ts is not None
+        # Build a swap whose fixed-rate is solved-for (None -> fair-rate path
+        # in make_vanilla_swap). Use the helper's tenor + the index + curve;
+        # MakeVanillaSwap's currency-driven defaults will reconstruct the
+        # same schedule the constructor described.
+        idx = self._ibor_index.clone(ts) if hasattr(self._ibor_index, "clone") else self._ibor_index
+        swap = make_vanilla_swap(
+            swap_tenor=self._tenor,
+            ibor_index=idx,
+            fixed_rate=None,
+            forward_start=self._fwd_start,
+            fixed_leg_tenor=Period.from_frequency(self._fixed_frequency),
+            fixed_leg_day_count=self._fixed_day_count,
+            fixed_leg_convention=self._fixed_convention,
+            fixed_leg_termination_convention=self._fixed_convention,
+            fixed_leg_end_of_month=self._end_of_month,
+            floating_leg_spread=self.spread(),
+            discount_curve=self._discount_curve if self._discount_curve is not None else ts,
+            evaluation_date=ts.reference_date(),
+            settlement_days=self._settlement_days,
+        )
+        return swap.fair_rate()
 
     # --- dates ----------------------------------------------------------------
 

@@ -73,6 +73,9 @@ class _FlatIborIndex:
         del fixing_date, forecast_todays_fixing
         return self._fixing
 
+    def maturity_date(self, value_date: Date) -> Date:
+        return value_date + Period(3, TimeUnit.Months)
+
 
 class _FlatOvernightIndex:
     """Mock OvernightIndexProtocol returning a constant daily fixing."""

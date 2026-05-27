@@ -106,7 +106,7 @@ class YieldTermStructure(TermStructure):
 
     # ---- discount overloads ------------------------------------------------
 
-    def discount(self, arg: float | Date, extrapolate: bool = False) -> float:
+    def discount(self, t: float | Date, extrapolate: bool = False) -> float:
         """Discount factor at a time or date.
 
         # C++ parity: ``YieldTermStructure::discount(Time|Date, bool)``.
@@ -115,9 +115,8 @@ class YieldTermStructure(TermStructure):
         time-overload range-checks via ``check_time_range`` (or the
         date-flavored ``check_range`` if jumps are present).
         """
-        if isinstance(arg, Date):
-            return self.discount(self.time_from_reference(arg), extrapolate)
-        t = arg
+        if isinstance(t, Date):
+            return self.discount(self.time_from_reference(t), extrapolate)
         self.check_time_range(t, extrapolate)
         if not self._jumps:
             return self._discount_impl(t)
@@ -135,7 +134,7 @@ class YieldTermStructure(TermStructure):
 
     def zero_rate(
         self,
-        arg: float | Date,
+        t: float | Date,
         compounding: Compounding,
         frequency: Frequency = Frequency.Annual,
         extrapolate: bool = False,
@@ -150,21 +149,20 @@ class YieldTermStructure(TermStructure):
           back to ``self.day_counter()``.
         - The Time overload uses ``self.day_counter()`` directly.
         """
-        if isinstance(arg, Date):
+        if isinstance(t, Date):
             dc = result_day_counter if result_day_counter is not None else self.day_counter()
-            d = arg
-            t = self.time_from_reference(d)
-            if t == 0.0:
+            d = t
+            t_num = self.time_from_reference(d)
+            if t_num == 0.0:
                 compound = 1.0 / self.discount(_DT, extrapolate)
                 # t was computed with a possibly different daycounter,
                 # but the difference shouldn't matter for very small times.
                 return InterestRate.implied_rate(compound, dc, compounding, frequency, _DT)
-            compound = 1.0 / self.discount(t, extrapolate)
+            compound = 1.0 / self.discount(t_num, extrapolate)
             return InterestRate.implied_rate_dates(
                 compound, dc, compounding, frequency, self.reference_date(), d
             )
         # Time overload
-        t = arg
         if t == 0.0:
             t = _DT
         compound = 1.0 / self.discount(t, extrapolate)
@@ -174,8 +172,8 @@ class YieldTermStructure(TermStructure):
 
     def forward_rate(
         self,
-        arg1: float | Date,
-        arg2: float | Date,
+        t1: float | Date,
+        t2: float | Date,
         compounding: Compounding,
         frequency: Frequency = Frequency.Annual,
         extrapolate: bool = False,
@@ -188,22 +186,21 @@ class YieldTermStructure(TermStructure):
         If both args are equal the instantaneous forward rate is returned
         (computed by finite-difference around ``t``).
         """
-        if isinstance(arg1, Date) and isinstance(arg2, Date):
+        if isinstance(t1, Date) and isinstance(t2, Date):
             dc = result_day_counter if result_day_counter is not None else self.day_counter()
-            d1, d2 = arg1, arg2
+            d1, d2 = t1, t2
             if d1 == d2:
                 self.check_range(d1, extrapolate)
-                t1 = max(self.time_from_reference(d1) - _DT / 2.0, 0.0)
-                t2 = t1 + _DT
-                compound = self.discount(t1, True) / self.discount(t2, True)
+                t1n = max(self.time_from_reference(d1) - _DT / 2.0, 0.0)
+                t2n = t1n + _DT
+                compound = self.discount(t1n, True) / self.discount(t2n, True)
                 return InterestRate.implied_rate(compound, dc, compounding, frequency, _DT)
             qassert.require(d1 < d2, f"{d1} later than {d2}")
             compound = self.discount(d1, extrapolate) / self.discount(d2, extrapolate)
             return InterestRate.implied_rate_dates(compound, dc, compounding, frequency, d1, d2)
         # Time overload
-        assert not isinstance(arg1, Date), "forward_rate: mixed Date/float args not allowed"
-        assert not isinstance(arg2, Date), "forward_rate: mixed Date/float args not allowed"
-        t1, t2 = float(arg1), float(arg2)
+        assert not isinstance(t1, Date), "forward_rate: mixed Date/float args not allowed"
+        assert not isinstance(t2, Date), "forward_rate: mixed Date/float args not allowed"
         if t2 == t1:
             self.check_time_range(t1, extrapolate)
             t1_adj = max(t1 - _DT / 2.0, 0.0)

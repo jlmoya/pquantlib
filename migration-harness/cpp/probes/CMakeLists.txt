@@ -147,3 +147,8 @@ target_link_libraries(l3a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === L3-B cluster: bond instruments + DiscountingBondEngine + BondForward ===
 add_executable(cluster_l3b_probe cluster_l3b/probe.cpp)
 target_link_libraries(cluster_l3b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L3-C cluster: swaps (Vanilla/OIS/ZeroCoupon) +
+#     DiscountingSwapEngine + SwapRateHelper / OISRateHelper roundtrips ===
+add_executable(cluster_l3c_probe cluster_l3c/probe.cpp)
+target_link_libraries(cluster_l3c_probe PRIVATE ${QUANTLIB_LIBRARY})

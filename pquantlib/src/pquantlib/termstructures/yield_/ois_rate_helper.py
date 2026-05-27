@@ -3,9 +3,8 @@
 # C++ parity: ql/termstructures/yield/oisratehelper.{hpp,cpp} class OISRateHelper.
 
 C++ ``OISRateHelper`` builds an ``OvernightIndexedSwap`` via ``MakeOIS`` and
-calls ``swap_->fairRate()`` for ``impliedQuote``. PQuantLib L2-C ports the
-constructor + inspectors + ``initialize_dates``; ``implied_quote`` raises
-until ``OvernightIndexedSwap`` + ``MakeOIS`` land in L3.
+calls ``swap_->fairRate()`` for ``impliedQuote``. L3-C closes the carry-over:
+``implied_quote`` now delegates to ``make_ois`` + ``swap.fair_rate()``.
 """
 
 from __future__ import annotations
@@ -61,10 +60,39 @@ class OISRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
     # --- BootstrapHelper interface --------------------------------------------
 
     def implied_quote(self) -> float:
-        qassert.fail(
-            "OISRateHelper.implied_quote requires L3 OvernightIndexedSwap + MakeOIS "
-            "(deferred to L3).",
+        """Implied OIS rate from the underlying OvernightIndexedSwap.
+
+        # C++ parity: ``OISRateHelper::impliedQuote`` (oisratehelper.cpp) —
+        # ``swap_->fairRate()``.
+        """
+        # Local import: termstructures/ should not depend on instruments/.
+        from pquantlib.instruments.make_ois import make_ois  # noqa: PLC0415
+
+        qassert.require(
+            self._term_structure is not None,
+            "OISRateHelper: term structure not set yet",
         )
+        ts = self._term_structure
+        assert ts is not None
+        idx = (
+            self._overnight_index.clone(ts)
+            if hasattr(self._overnight_index, "clone")
+            else self._overnight_index
+        )
+        swap = make_ois(
+            swap_tenor=self._tenor,
+            overnight_index=idx,
+            fixed_rate=None,
+            forward_start=self._fwd_start,
+            settlement_days=self._settlement_days,
+            payment_lag=self._payment_lag,
+            payment_adjustment=self._payment_convention,
+            telescopic_value_dates=self._telescopic_value_dates,
+            end_of_month=self._end_of_month,
+            discount_curve=self._discount_curve if self._discount_curve is not None else ts,
+            evaluation_date=ts.reference_date(),
+        )
+        return swap.fair_rate()
 
     # --- dates ---------------------------------------------------------------
 

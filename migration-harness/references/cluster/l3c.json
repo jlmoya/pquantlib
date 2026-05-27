@@ -1,0 +1,49 @@
+{
+  "vanilla_swap_5y": {
+    "settle_serial": 45310,
+    "end_serial": 47137,
+    "fixed_leg_size": 10,
+    "floating_leg_size": 20,
+    "npv": 6080.6251834834402,
+    "fair_rate": 0.051394821920224994,
+    "fair_spread": -0.001365612782186021,
+    "fixed_leg_npv": -217971.38026417754,
+    "floating_leg_npv": 224052.00544766098,
+    "fixed_leg_bps": -435.94276052835579,
+    "floating_leg_bps": 445.26715499468355
+  },
+  "vanilla_swap_receiver_6pct": {
+    "npv": 37513.650869352714,
+    "fair_rate": 0.051394821920224855
+  },
+  "ois_2y": {
+    "settle_serial": 45310,
+    "end_serial": 46041,
+    "fixed_leg_size": 2,
+    "overnight_leg_size": 2,
+    "npv": 1577.4159998668038,
+    "fair_rate": 0.04082458914558721,
+    "fixed_leg_npv": -76518.882563921885,
+    "overnight_leg_npv": 78096.298563788689
+  },
+  "zero_coupon_swap_5y": {
+    "start_serial": 45310,
+    "maturity_serial": 47137,
+    "fixed_payment": 280960.36678731552,
+    "npv": 6123.7655048635206,
+    "fixed_leg_npv": -217932.59944949389,
+    "floating_leg_npv": 224056.36495435741,
+    "fair_fixed_payment": 288855.17190922983,
+    "fair_fixed_rate": 0.051271999684121994
+  },
+  "swap_rate_helper": {
+    "earliest_serial": 45310,
+    "maturity_serial": 47137,
+    "implied_quote": 0.052060018149616347
+  },
+  "ois_rate_helper": {
+    "earliest_serial": 45310,
+    "maturity_serial": 46042,
+    "implied_quote": 0.04082458914558728
+  }
+}
