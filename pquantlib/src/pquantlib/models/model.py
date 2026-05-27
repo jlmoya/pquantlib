@@ -345,6 +345,16 @@ class TermStructureConsistentModel(Observable):
             )
         return self._term_structure
 
+    def _set_term_structure(self, term_structure: YieldTermStructure) -> None:
+        """Late-bind the term structure after cooperative super().__init__().
+
+        # C++ parity: not in C++ (C++ uses a single-shot ctor). Python's
+        # diamond-MRO (CalibratedModel + TermStructureConsistentModel — e.g.
+        # G2 / HullWhite / ExtendedCIR) makes a constructor-only init brittle;
+        # subclasses call this helper after super() to populate the slot.
+        """
+        self._term_structure = term_structure
+
 
 class _CalibrationFunction(CostFunction):
     """Residual cost function for a calibration.
