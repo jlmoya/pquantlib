@@ -201,11 +201,19 @@ class YieldTermStructure(TermStructure):
         # Time overload
         assert not isinstance(t1, Date), "forward_rate: mixed Date/float args not allowed"
         assert not isinstance(t2, Date), "forward_rate: mixed Date/float args not allowed"
+        # C++ parity: yieldtermstructure.cpp:154-172 mutates ``t1`` and
+        # ``t2`` directly in the t2==t1 branch, so that the subsequent
+        # ``impliedRate(..., t2-t1)`` call uses the shifted interval
+        # ``_DT`` rather than zero. The original Python port computed
+        # ``t1_adj`` / ``t2_adj`` locally but then used the *unmodified*
+        # ``t1, t2`` for ``implied_rate`` — which triggers a
+        # ``positive time required`` failure at ``t1 == t2``. Mirror
+        # C++ exactly by rebinding ``t1`` / ``t2``.
         if t2 == t1:
             self.check_time_range(t1, extrapolate)
-            t1_adj = max(t1 - _DT / 2.0, 0.0)
-            t2_adj = t1_adj + _DT
-            compound = self.discount(t1_adj, True) / self.discount(t2_adj, True)
+            t1 = max(t1 - _DT / 2.0, 0.0)
+            t2 = t1 + _DT
+            compound = self.discount(t1, True) / self.discount(t2, True)
         else:
             qassert.require(t2 > t1, f"t2 ({t2}) < t1 ({t1})")
             compound = self.discount(t1, extrapolate) / self.discount(t2, extrapolate)
