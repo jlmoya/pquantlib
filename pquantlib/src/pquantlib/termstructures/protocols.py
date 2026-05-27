@@ -36,19 +36,23 @@ class YieldTermStructureProtocol(Protocol):
     L2-D's IborCoupon, OvernightIndexedCoupon, and CashFlows aggregator
     take this Protocol; L2-B's FlatForward / Interpolated*Curve /
     PiecewiseYieldCurve satisfy it.
+
+    Note: only the ``discount`` accessor is part of the Protocol — the
+    concrete ``YieldTermStructure`` base class extends with
+    ``zero_rate`` / ``forward_rate`` accessors with richer signatures
+    (compounding / frequency / result day-counter), and the Protocol
+    can't structurally narrow to them.  Code that needs those should
+    accept ``YieldTermStructure`` directly, not the Protocol.
+
+    The parameter name ``arg`` on ``discount`` matches the concrete
+    YieldTermStructure base class (which uses ``arg`` because of the
+    overloaded ``Time arg`` / ``Date arg`` accepting union in Python).
     """
 
     def reference_date(self) -> Date: ...
     def max_date(self) -> Date: ...
     def day_counter(self) -> DayCounter: ...
-    def discount(self, t: float | Date, extrapolate: bool = False) -> float: ...
-    def zero_rate(self, t: float | Date, extrapolate: bool = False) -> float: ...
-    def forward_rate(
-        self,
-        t1: float | Date,
-        t2: float | Date,
-        extrapolate: bool = False,
-    ) -> float: ...
+    def discount(self, arg: float | Date, extrapolate: bool = False) -> float: ...
 
 
 @runtime_checkable

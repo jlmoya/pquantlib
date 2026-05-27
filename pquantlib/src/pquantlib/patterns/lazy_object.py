@@ -25,10 +25,21 @@ class LazyObject(Observable):
     def _perform_calculations(self) -> None: ...
 
     def calculate(self) -> None:
-        """Run ``_perform_calculations`` exactly once until ``update`` invalidates."""
+        """Run ``_perform_calculations`` exactly once until ``update`` invalidates.
+
+        # C++ parity: ``LazyObject::calculate`` sets ``calculated_=true``
+        # BEFORE calling ``performCalculations`` to prevent infinite
+        # recursion in bootstrap-style flows (e.g. ``Forward::forwardValue``
+        # calls ``calculate()`` from inside ``performCalculations``).
+        # The flag is rolled back if the calculation raises.
+        """
         if not self._calculated:
-            self._perform_calculations()
             self._calculated = True
+            try:
+                self._perform_calculations()
+            except BaseException:
+                self._calculated = False
+                raise
 
     def update(self) -> None:
         """Invalidate the cache and notify downstream observers."""

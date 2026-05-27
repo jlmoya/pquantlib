@@ -158,3 +158,8 @@ target_link_libraries(cluster_l3c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     AnalyticEuropeanEngine + BinomialVanillaEngine) ===
 add_executable(cluster_l3d_probe cluster_l3d/probe.cpp)
 target_link_libraries(cluster_l3d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L3-E cluster: forwards + FRAs (Forward + FxForward +
+#     ForwardRateAgreement + DiscountingFwdEngine + FraRateHelper indexed) ===
+add_executable(cluster_l3e_probe cluster_l3e/probe.cpp)
+target_link_libraries(cluster_l3e_probe PRIVATE ${QUANTLIB_LIBRARY})
