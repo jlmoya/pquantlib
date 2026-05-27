@@ -1,0 +1,175 @@
+{
+  "euribor_3m": {
+    "name": "Euribor3M Actual/360",
+    "familyName": "Euribor",
+    "tenor_length": 3,
+    "tenor_units": 2,
+    "fixingDays": 2,
+    "currencyCode": "EUR",
+    "fixingCalendarName": "TARGET",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "ModifiedFollowing",
+    "endOfMonth": true
+  },
+  "euribor_6m": {
+    "name": "Euribor6M Actual/360",
+    "familyName": "Euribor",
+    "tenor_length": 6,
+    "tenor_units": 2,
+    "fixingDays": 2,
+    "currencyCode": "EUR",
+    "fixingCalendarName": "TARGET",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "ModifiedFollowing",
+    "endOfMonth": true
+  },
+  "euribor_1y": {
+    "name": "Euribor1Y Actual/360",
+    "familyName": "Euribor",
+    "tenor_length": 1,
+    "tenor_units": 3,
+    "fixingDays": 2,
+    "currencyCode": "EUR",
+    "fixingCalendarName": "TARGET",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "ModifiedFollowing",
+    "endOfMonth": true
+  },
+  "euribor_1w": {
+    "name": "Euribor1W Actual/360",
+    "familyName": "Euribor",
+    "tenor_length": 1,
+    "tenor_units": 1,
+    "fixingDays": 2,
+    "currencyCode": "EUR",
+    "fixingCalendarName": "TARGET",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "Following",
+    "endOfMonth": false
+  },
+  "usd_libor_3m": {
+    "name": "USDLibor3M Actual/360",
+    "familyName": "USDLibor",
+    "tenor_length": 3,
+    "tenor_units": 2,
+    "fixingDays": 2,
+    "currencyCode": "USD",
+    "fixingCalendarName": "London stock exchange",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "ModifiedFollowing",
+    "endOfMonth": true
+  },
+  "gbp_libor_6m": {
+    "name": "GBPLibor6M Actual/365 (Fixed)",
+    "familyName": "GBPLibor",
+    "tenor_length": 6,
+    "tenor_units": 2,
+    "fixingDays": 0,
+    "currencyCode": "GBP",
+    "fixingCalendarName": "London stock exchange",
+    "dayCounterName": "Actual/365 (Fixed)",
+    "businessDayConvention": "ModifiedFollowing",
+    "endOfMonth": true
+  },
+  "eonia": {
+    "name": "EoniaON Actual/360",
+    "familyName": "Eonia",
+    "tenor_length": 1,
+    "tenor_units": 0,
+    "fixingDays": 0,
+    "currencyCode": "EUR",
+    "fixingCalendarName": "TARGET",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "Following",
+    "endOfMonth": false
+  },
+  "sofr": {
+    "name": "SOFRON Actual/360",
+    "familyName": "SOFR",
+    "tenor_length": 1,
+    "tenor_units": 0,
+    "fixingDays": 0,
+    "currencyCode": "USD",
+    "fixingCalendarName": "SOFR fixing calendar",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "Following",
+    "endOfMonth": false
+  },
+  "sonia": {
+    "name": "SoniaON Actual/365 (Fixed)",
+    "familyName": "Sonia",
+    "tenor_length": 1,
+    "tenor_units": 0,
+    "fixingDays": 0,
+    "currencyCode": "GBP",
+    "fixingCalendarName": "London stock exchange",
+    "dayCounterName": "Actual/365 (Fixed)",
+    "businessDayConvention": "Following",
+    "endOfMonth": false
+  },
+  "fed_funds": {
+    "name": "FedFundsON Actual/360",
+    "familyName": "FedFunds",
+    "tenor_length": 1,
+    "tenor_units": 0,
+    "fixingDays": 0,
+    "currencyCode": "USD",
+    "fixingCalendarName": "Federal Reserve Bankwire System",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "Following",
+    "endOfMonth": false
+  },
+  "estr": {
+    "name": "ESTRON Actual/360",
+    "familyName": "ESTR",
+    "tenor_length": 1,
+    "tenor_units": 0,
+    "fixingDays": 0,
+    "currencyCode": "EUR",
+    "fixingCalendarName": "TARGET",
+    "dayCounterName": "Actual/360",
+    "businessDayConvention": "Following",
+    "endOfMonth": false
+  },
+  "euribor_3m_fixing": {
+    "fix_serial": 45308,
+    "value_serial": 45310,
+    "maturity_serial": 45401,
+    "yearFraction": 0.25277777777777777,
+    "fixing": 0.050317307618303497
+  },
+  "usd_libor_3m_fixing": {
+    "fix_serial": 45308,
+    "value_serial": 45310,
+    "maturity_serial": 45401,
+    "yearFraction": 0.25277777777777777,
+    "fixing": 0.050317307618303497
+  },
+  "sofr_fixing": {
+    "fix_serial": 45308,
+    "value_serial": 45308,
+    "maturity_serial": 45309,
+    "yearFraction": 0.0027777777777777779,
+    "fixing": 0.050003472382948999
+  },
+  "deposit_rate_helper": {
+    "earliest_serial": 45310,
+    "maturity_serial": 45401,
+    "implied_quote": 0.050317307618303497
+  },
+  "fra_rate_helper": {
+    "earliest_serial": 45401,
+    "maturity_serial": 45492,
+    "implied_quote": 0.050317307618302616
+  },
+  "futures_rate_helper": {
+    "earliest_serial": 45371,
+    "maturity_serial": 45463,
+    "implied_quote": 94.967919060136595
+  },
+  "fx_swap_rate_helper": {
+    "earliest_serial": 45310,
+    "latest_serial": 45401,
+    "implied_quote": 0.0054986290247799998
+  }
+}
