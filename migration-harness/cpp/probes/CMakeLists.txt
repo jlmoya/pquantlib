@@ -127,3 +127,7 @@ target_link_libraries(quotes_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     Forward/Discount + 3 Spreaded + Implied) ===
 add_executable(cluster_l2b_probe cluster_l2b/probe.cpp)
 target_link_libraries(cluster_l2b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L2-C cluster: indexes (Euribor/USDLibor/Sofr/...) + rate helpers ===
+add_executable(cluster_l2c_probe cluster_l2c/probe.cpp)
+target_link_libraries(cluster_l2c_probe PRIVATE ${QUANTLIB_LIBRARY})
