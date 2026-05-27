@@ -78,6 +78,9 @@ class _MockIborIndex:
         del fixing_date, forecast_todays_fixing
         return 0.035
 
+    def maturity_date(self, value_date: Date) -> Date:
+        return value_date + Period(3, TimeUnit.Months)
+
 
 class _MockOvernightIndex:
     def name(self) -> str:
