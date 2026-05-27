@@ -206,8 +206,8 @@ int main() {
     {
         LocalConstantVol lcv(ref, 0.20, dc);
         std::cout << "  \"local_constant_vol\": {\n";
-        std::cout << "    \"vol_t1_S100\": " << lcv.localVol(1.0, 100.0) << ",\n";
-        std::cout << "    \"vol_t2_S90\": " << lcv.localVol(2.0, 90.0) << "\n";
+        std::cout << "    \"vol_t1_s100\": " << lcv.localVol(1.0, 100.0) << ",\n";
+        std::cout << "    \"vol_t2_s90\": " << lcv.localVol(2.0, 90.0) << "\n";
         std::cout << "  },\n";
     }
 
@@ -276,9 +276,9 @@ int main() {
 
         std::cout << "  \"local_vol_surface\": {\n";
         // local vol at (t=0.5, S=100).
-        std::cout << "    \"local_vol_t_0p5_S100\": " << lvs.localVol(0.5, 100.0, true) << ",\n";
-        std::cout << "    \"local_vol_t_0p75_S100\": " << lvs.localVol(0.75, 100.0, true) << ",\n";
-        std::cout << "    \"local_vol_t_1p0_S100\": " << lvs.localVol(1.0, 100.0, true) << "\n";
+        std::cout << "    \"local_vol_t_0p5_s100\": " << lvs.localVol(0.5, 100.0, true) << ",\n";
+        std::cout << "    \"local_vol_t_0p75_s100\": " << lvs.localVol(0.75, 100.0, true) << ",\n";
+        std::cout << "    \"local_vol_t_1p0_s100\": " << lvs.localVol(1.0, 100.0, true) << "\n";
         std::cout << "  }\n";
     }
 
