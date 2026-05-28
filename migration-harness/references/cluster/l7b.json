@@ -1,0 +1,84 @@
+{
+  "interpolated_zero": {
+    "day_counter": "Actual/360",
+    "frequency": 12,
+    "reference_serial": 43845,
+    "base_serial": 43831,
+    "max_serial": 47484,
+    "nodes": [
+      {"date_serial": 43831, "rate": 0.014999999999999999},
+      {"date_serial": 44197, "rate": 0.02},
+      {"date_serial": 44927, "rate": 0.025000000000000001},
+      {"date_serial": 45658, "rate": 0.021999999999999999},
+      {"date_serial": 47484, "rate": 0.024}
+    ],
+    "samples": [
+      {
+        "label": "midnode_2022_01",
+        "date_serial": 44576,
+        "zero_rate": 0.022500000000000003
+      },
+      {
+        "label": "midnode_2024_07",
+        "date_serial": 45488,
+        "zero_rate": 0.022755129958960327
+      },
+      {
+        "label": "midnode_2027_06",
+        "date_serial": 46553,
+        "zero_rate": 0.022964950711938662
+      },
+      {
+        "label": "midnode_2021_jun_15",
+        "date_serial": 44362,
+        "zero_rate": 0.021034246575342468
+      },
+      {
+        "label": "midnode_2026_dec_15",
+        "date_serial": 46371,
+        "zero_rate": 0.022765607886089813
+      }
+    ]
+  },
+  "interpolated_yoy": {
+    "base_serial": 43831,
+    "base_rate": 0.02,
+    "max_serial": 47484,
+    "nodes": [
+      {"date_serial": 43831, "rate": 0.02},
+      {"date_serial": 44197, "rate": 0.021999999999999999},
+      {"date_serial": 44927, "rate": 0.025000000000000001},
+      {"date_serial": 45658, "rate": 0.023},
+      {"date_serial": 47484, "rate": 0.024}
+    ],
+    "samples": [
+      {
+        "label": "midnode_2022_01",
+        "date_serial": 44576,
+        "yoy_rate": 0.0235
+      },
+      {
+        "label": "midnode_2024_07",
+        "date_serial": 45488,
+        "yoy_rate": 0.023503419972640219
+      },
+      {
+        "label": "midnode_2027_06",
+        "date_serial": 46553,
+        "yoy_rate": 0.023482475355969333
+      }
+    ]
+  },
+  "traits": {
+    "avg_inflation": 0.02,
+    "max_inflation": 0.5,
+    "max_iterations": 40
+  },
+  "piecewise_zero_roundtrip": {
+    "quotes": [0.021999999999999999, 0.024, 0.025000000000000001],
+    "maturity_serials": [44578, 45672, 47498],
+    "swap_obs_lag_months": 3,
+    "curve_base_serial": 43739,
+    "implied_quotes": [0.022000000000000242, 0.023999999999999799, 0.024999999999999911]
+  }
+}
