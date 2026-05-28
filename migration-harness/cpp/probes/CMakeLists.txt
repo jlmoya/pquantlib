@@ -205,3 +205,9 @@ target_link_libraries(l5a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     TreeCapFloorEngine, BlackKarasinski model + ShortRateModel.tree() ===
 add_executable(cluster_l5b_probe cluster_l5b/probe.cpp)
 target_link_libraries(cluster_l5b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L5-D cluster: 1-D Finite-Difference Black-Scholes framework +
+#     FdBlackScholesVanillaEngine (closes the Phase 3 carve-out for
+#     VanillaOption::impliedVolatility on American options). ===
+add_executable(cluster_l5d_probe cluster_l5d/probe.cpp)
+target_link_libraries(cluster_l5d_probe PRIVATE ${QUANTLIB_LIBRARY})
