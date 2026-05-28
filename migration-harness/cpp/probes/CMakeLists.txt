@@ -198,3 +198,9 @@ target_link_libraries(cluster_l4e_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     methods/protocols.py used by lattices and MC/FD engines.) ===
 add_executable(l5a_foundations_probe l5a/foundations_probe.cpp)
 target_link_libraries(l5a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L5-D cluster: 1-D Finite-Difference Black-Scholes framework +
+#     FdBlackScholesVanillaEngine (closes the Phase 3 carve-out for
+#     VanillaOption::impliedVolatility on American options). ===
+add_executable(cluster_l5d_probe cluster_l5d/probe.cpp)
+target_link_libraries(cluster_l5d_probe PRIVATE ${QUANTLIB_LIBRARY})

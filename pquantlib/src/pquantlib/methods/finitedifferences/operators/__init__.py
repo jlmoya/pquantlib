@@ -1,0 +1,1 @@
+"""Finite-difference linear operators."""
