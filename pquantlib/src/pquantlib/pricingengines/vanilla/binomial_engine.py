@@ -49,6 +49,9 @@ import numpy.typing as npt
 from pquantlib import qassert
 from pquantlib.exercise import Exercise
 from pquantlib.instruments.one_asset_option import OneAssetOptionResults
+from pquantlib.math.distributions.binomial_distribution import (
+    peizer_pratt_method2_inversion as _peizer_pratt_method2_inversion,
+)
 from pquantlib.option import OptionArguments
 from pquantlib.payoffs import PlainVanillaPayoff
 from pquantlib.pricingengines.generic_engine import GenericEngine
@@ -57,22 +60,6 @@ from pquantlib.processes.generalized_black_scholes_process import (
 )
 from pquantlib.time.compounding import Compounding
 from pquantlib.time.frequency import Frequency
-
-
-def _peizer_pratt_method2_inversion(z: float, n: int) -> float:
-    """Peizer-Pratt method 2 inversion of the cumulative binomial.
-
-    # C++ parity: ``_peizer_pratt_method2_inversion`` in
-    # ``ql/math/distributions/binomialdistribution.hpp`` (v1.42.1).
-
-    Used by the Leisen-Reimer tree builder. ``n`` must be odd.
-    """
-    qassert.require(n % 2 == 1, f"n must be an odd number: {n} not allowed")
-    result = z / (n + 1.0 / 3.0 + 0.1 / (n + 1.0))
-    result *= result
-    result = math.exp(-result * (n + 1.0 / 6.0))
-    sign = 1.0 if z > 0 else -1.0
-    return 0.5 + sign * math.sqrt(0.25 * (1.0 - result))
 
 
 class TreeBuilder(IntEnum):
