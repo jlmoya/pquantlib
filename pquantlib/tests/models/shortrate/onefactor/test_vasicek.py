@@ -12,11 +12,12 @@ from typing import Any
 import numpy as np
 import pytest
 
-from pquantlib.exceptions import LibraryException
 from pquantlib.models.shortrate.onefactor.vasicek import Vasicek
+from pquantlib.models.shortrate.short_rate_tree import ShortRateTree
 from pquantlib.payoffs import OptionType
 from pquantlib.testing.reference_reader import load as load_reference
 from pquantlib.testing.tolerance import tight
+from pquantlib.time.time_grid import TimeGrid
 
 
 @pytest.fixture
@@ -90,15 +91,18 @@ def test_vasicek_discount_bond_option_put(reference_data: dict[str, Any]) -> Non
     tight(actual, ref["discount_bond_option_put"])
 
 
-def test_vasicek_tree_raises() -> None:
-    """``tree()`` is deferred until the lattice infra is ported.
+def test_vasicek_tree_returns_short_rate_tree() -> None:
+    """``tree()`` builds a recombining trinomial lattice (L5-B).
 
-    # L4-B carve-out: TrinomialTree / TreeLattice1D / ShortRateTree are
-    # not yet in pquantlib; calls raise ``LibraryException``.
+    The L4-B carve-out is closed by porting TrinomialTree /
+    TreeLattice1D / ShortRateTree in L5-B.
     """
     v = _build_vasicek()
-    with pytest.raises(LibraryException, match="tree"):
-        v.tree(None)
+    grid = TimeGrid.regular(end=1.0, steps=10)
+    tree = v.tree(grid)
+    assert isinstance(tree, ShortRateTree)
+    # Time-grid identity carried through.
+    assert tree.time_grid() is grid
 
 
 def test_vasicek_params_writethrough() -> None:

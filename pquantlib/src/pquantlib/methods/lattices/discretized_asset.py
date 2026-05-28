@@ -37,6 +37,7 @@ from __future__ import annotations
 import math
 import sys
 from abc import ABC, abstractmethod
+from enum import IntEnum
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -46,6 +47,22 @@ from pquantlib.math.closeness import close_enough
 
 if TYPE_CHECKING:
     from pquantlib.methods.lattices.lattice import Lattice
+
+
+class CouponAdjustment(IntEnum):
+    """Pre vs post coupon adjustment toggle.
+
+    # C++ parity: ``enum class CouponAdjustment { pre, post }`` in
+    # ql/discretizedasset.hpp:128 (v1.42.1).
+
+    Used by ``DiscretizedSwap`` (per fixed / floating coupon) and
+    ``DiscretizedSwaption`` (its date-snapping algorithm picks ``post``
+    when the unadjusted coupon date is in the past relative to the
+    exercise date).
+    """
+
+    Pre = 0
+    Post = 1
 
 # C++ ``QL_MAX_REAL`` (the sentinel ``DiscretizedAsset`` uses to mean
 # "no adjustment has happened yet"). Python ``sys.float_info.max`` is
@@ -113,6 +130,16 @@ class DiscretizedAsset(ABC):
     def set_values(self, v: Array) -> None:
         """Setter helper (mirrors C++ ``Array& values()`` writable accessor)."""
         self._values = v
+
+    def set_method(self, method: Lattice) -> None:
+        """Setter helper for the held Lattice.
+
+        Used by ``TreeLattice1D.initialize`` to install ``self`` as the
+        driving lattice. Mirrors the C++ idiom of writing
+        ``asset.method_ = this`` directly inside the lattice's
+        ``initialize``.
+        """
+        self._method = method
 
     # -- high-level interface --------------------------------------------
 
