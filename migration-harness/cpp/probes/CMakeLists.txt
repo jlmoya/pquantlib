@@ -243,3 +243,8 @@ target_link_libraries(cluster_l6c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     + inflation-period helper for the Phase 7 inflation cluster). ===
 add_executable(l7a_foundations_probe l7a/foundations_probe.cpp)
 target_link_libraries(l7a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L7-B cluster: inflation curves + bootstrap helpers (interpolated
+#     zero/yoy curves + piecewise bootstrap roundtrip from ZCIIS helpers). ===
+add_executable(cluster_l7b_probe cluster_l7b/probe.cpp)
+target_link_libraries(cluster_l7b_probe PRIVATE ${QUANTLIB_LIBRARY})
