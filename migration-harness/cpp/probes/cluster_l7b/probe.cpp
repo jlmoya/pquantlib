@@ -53,12 +53,14 @@ int main() {
     //      intermediate evaluations.
     {
         std::cout << "  \"interpolated_zero\": {\n";
+        // Use period-start dates so inflation_period bucketing on
+        // zeroRate(d) lands inside [baseDate, maxDate].
         std::vector<Date> dates = {
-            Date(15, January, 2020),
-            Date(15, January, 2021),
-            Date(15, January, 2023),
-            Date(15, January, 2025),
-            Date(15, January, 2030)};
+            Date(1, January, 2020),
+            Date(1, January, 2021),
+            Date(1, January, 2023),
+            Date(1, January, 2025),
+            Date(1, January, 2030)};
         std::vector<Rate> rates = {0.015, 0.02, 0.025, 0.022, 0.024};
 
         InterpolatedZeroInflationCurve<Linear> curve(
@@ -103,12 +105,14 @@ int main() {
     // ---- InterpolatedYoYInflationCurve: same shape with YoY semantics.
     {
         std::cout << "  \"interpolated_yoy\": {\n";
+        // Use period-start dates so inflation_period bucketing on
+        // zeroRate(d) lands inside [baseDate, maxDate].
         std::vector<Date> dates = {
-            Date(15, January, 2020),
-            Date(15, January, 2021),
-            Date(15, January, 2023),
-            Date(15, January, 2025),
-            Date(15, January, 2030)};
+            Date(1, January, 2020),
+            Date(1, January, 2021),
+            Date(1, January, 2023),
+            Date(1, January, 2025),
+            Date(1, January, 2030)};
         std::vector<Rate> rates = {0.020, 0.022, 0.025, 0.023, 0.024};
 
         InterpolatedYoYInflationCurve<Linear> curve(

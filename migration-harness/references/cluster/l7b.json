@@ -3,69 +3,69 @@
     "day_counter": "Actual/360",
     "frequency": 12,
     "reference_serial": 43845,
-    "base_serial": 43845,
-    "max_serial": 47498,
+    "base_serial": 43831,
+    "max_serial": 47484,
     "nodes": [
-      {"date_serial": 43845, "rate": 0.014999999999999999},
-      {"date_serial": 44211, "rate": 0.02},
-      {"date_serial": 44941, "rate": 0.025000000000000001},
-      {"date_serial": 45672, "rate": 0.021999999999999999},
-      {"date_serial": 47498, "rate": 0.024}
+      {"date_serial": 43831, "rate": 0.014999999999999999},
+      {"date_serial": 44197, "rate": 0.02},
+      {"date_serial": 44927, "rate": 0.025000000000000001},
+      {"date_serial": 45658, "rate": 0.021999999999999999},
+      {"date_serial": 47484, "rate": 0.024}
     ],
     "samples": [
       {
         "label": "midnode_2022_01",
         "date_serial": 44576,
-        "zero_rate": 0.022404109589041096
+        "zero_rate": 0.022500000000000003
       },
       {
         "label": "midnode_2024_07",
         "date_serial": 45488,
-        "zero_rate": 0.022812585499316005
+        "zero_rate": 0.022755129958960327
       },
       {
         "label": "midnode_2027_06",
         "date_serial": 46553,
-        "zero_rate": 0.02294961664841183
+        "zero_rate": 0.022964950711938662
       },
       {
         "label": "midnode_2021_jun_15",
         "date_serial": 44362,
-        "zero_rate": 0.020938356164383564
+        "zero_rate": 0.021034246575342468
       },
       {
         "label": "midnode_2026_dec_15",
         "date_serial": 46371,
-        "zero_rate": 0.022750273822562977
+        "zero_rate": 0.022765607886089813
       }
     ]
   },
   "interpolated_yoy": {
-    "base_serial": 43845,
+    "base_serial": 43831,
     "base_rate": 0.02,
-    "max_serial": 47498,
+    "max_serial": 47484,
     "nodes": [
-      {"date_serial": 43845, "rate": 0.02},
-      {"date_serial": 44211, "rate": 0.021999999999999999},
-      {"date_serial": 44941, "rate": 0.025000000000000001},
-      {"date_serial": 45672, "rate": 0.023},
-      {"date_serial": 47498, "rate": 0.024}
+      {"date_serial": 43831, "rate": 0.02},
+      {"date_serial": 44197, "rate": 0.021999999999999999},
+      {"date_serial": 44927, "rate": 0.025000000000000001},
+      {"date_serial": 45658, "rate": 0.023},
+      {"date_serial": 47484, "rate": 0.024}
     ],
     "samples": [
       {
         "label": "midnode_2022_01",
         "date_serial": 44576,
-        "yoy_rate": 0.023442465753424659
+        "yoy_rate": 0.0235
       },
       {
         "label": "midnode_2024_07",
         "date_serial": 45488,
-        "yoy_rate": 0.02354172366621067
+        "yoy_rate": 0.023503419972640219
       },
       {
         "label": "midnode_2027_06",
         "date_serial": 46553,
-        "yoy_rate": 0.023474808324205915
+        "yoy_rate": 0.023482475355969333
       }
     ]
   },
