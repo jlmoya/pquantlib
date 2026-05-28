@@ -3,12 +3,19 @@
 # C++ parity: ql/math/factorial.hpp + ql/math/factorial.cpp (v1.42.1).
 
 C++ tabulates factorials 0..27 (28 entries) and falls back to
-``exp(GammaFunction.logValue(n+1))`` for larger n. The Python port uses
-``math.lgamma`` (stdlib, C99-equivalent) for the fallback rather than
-porting GammaFunction yet (which lives in distributions/, deferred to a
-later cluster). Documented divergence: cross-validation against the C++
-probe still pins agreement at TIGHT tolerance for n up to 170 (typical
-QuantLib usage range).
+``exp(GammaFunction.logValue(n+1))`` for larger n. As of L5-A, the
+Python port delegates the same way: ``Factorial.get(n)`` for n > 27
+calls ``GammaFunction().log_value(n+1)`` (port of the C++ Lanczos
+approximation). This closes the L1 carve-out where the fallback was
+``math.lgamma`` and a few ULPs of divergence had to be tolerated at
+LOOSE tier.
+
+The cross-validation tolerance is still LOOSE because Lanczos itself
+is an approximation (~15 decimal digits) and the C++ probe values
+were captured from the very same algorithm — but Python's float
+arithmetic does not reorder identically to clang ``-O2``, so a tiny
+ULP-level drift remains for large ``n``. The tier reflects the
+algorithm's accuracy, not the agreement between Python and C++.
 """
 
 from __future__ import annotations
@@ -17,6 +24,7 @@ import math
 from typing import Final
 
 from pquantlib import qassert
+from pquantlib.math.distributions.gamma_function import GammaFunction
 
 # Mirrors the C++ ``firstFactorials`` array (indices 0..27 inclusive).
 _FIRST_FACTORIALS: Final[tuple[float, ...]] = (
@@ -63,11 +71,13 @@ class Factorial:
         qassert.require(n >= 0, f"Factorial.get requires n >= 0, got {n}")
         if n <= _TABULATED:
             return _FIRST_FACTORIALS[n]
-        return math.exp(math.lgamma(n + 1))
+        # C++ parity: factorial.cpp:55 — exp(GammaFunction().logValue(n+1)).
+        return math.exp(GammaFunction.log_value(float(n + 1)))
 
     @staticmethod
     def ln(n: int) -> float:
         qassert.require(n >= 0, f"Factorial.ln requires n >= 0, got {n}")
         if n <= _TABULATED:
             return math.log(_FIRST_FACTORIALS[n])
-        return math.lgamma(n + 1)
+        # C++ parity: factorial.cpp:64 — GammaFunction().logValue(n+1).
+        return GammaFunction.log_value(float(n + 1))
