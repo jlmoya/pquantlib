@@ -42,6 +42,7 @@ Python divergences from C++:
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import Protocol, cast, runtime_checkable
 
 from pquantlib import qassert
 from pquantlib.currencies.currency import Currency
@@ -54,6 +55,56 @@ from pquantlib.time.frequency import Frequency
 from pquantlib.time.month import Month
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
+
+
+class _DayCounterLike(Protocol):
+    """Structural subset of DayCounter used by inflation_year_fraction.
+
+    Local Protocol to avoid the circular import that a direct import of
+    ``pquantlib.daycounters.day_counter.DayCounter`` would create
+    (daycounters → currencies → indexes/inflation).
+    """
+
+    def year_fraction(self, d1: Date, d2: Date) -> float: ...
+
+
+@runtime_checkable
+class _ZeroInflationTSLike(Protocol):
+    """Structural subset of ``ZeroInflationTermStructure`` used by
+    ``ZeroInflationIndex._forecast_fixing``.
+
+    Avoids the circular import on
+    ``pquantlib.termstructures.inflation.zero_inflation_term_structure``.
+    """
+
+    def base_date(self) -> Date: ...
+    def zero_rate(self, d: Date, extrapolate: bool = False) -> float: ...
+    def day_counter(self) -> _DayCounterLike: ...
+
+
+def inflation_year_fraction(
+    f: Frequency,
+    index_is_interpolated: bool,
+    day_counter: _DayCounterLike,
+    d1: Date,
+    d2: Date,
+) -> float:
+    """Compute the year-fraction between two inflation dates.
+
+    # C++ parity: ``inflationYearFraction`` in
+    # ql/termstructures/inflationtermstructure.cpp (v1.42.1).
+
+    For *interpolated* indexes, the year-fraction is the raw
+    ``dayCounter.year_fraction(d1, d2)``. For *non-interpolated*
+    indexes the fixings are constant within an inflation period, so the
+    inflation-time between two dates is computed between the *period
+    starts* containing each date.
+    """
+    if index_is_interpolated:
+        return day_counter.year_fraction(d1, d2)
+    lim_d1 = inflation_period(d1, f)
+    lim_d2 = inflation_period(d2, f)
+    return day_counter.year_fraction(lim_d1[0], lim_d2[0])
 
 
 def inflation_period(d: Date, f: Frequency) -> tuple[Date, Date]:
@@ -223,12 +274,16 @@ class ZeroInflationIndex(InflationIndex):
         return end
 
     def fixing(self, fixing_date: Date, forecast_todays_fixing: bool = False) -> float:
-        """Look up a stored fixing for ``fixing_date``.
+        """Look up a past fixing or forecast via the zero-inflation curve.
 
-        # C++ parity: ``ZeroInflationIndex::fixing`` either returns a past
-        # fixing or forecasts via the zero-inflation term-structure. Until
-        # L7-B lands the curves, only the past-fixing branch is wired; the
-        # forecasting branch raises a deliberate ``NotImplementedError``.
+        # C++ parity: ``ZeroInflationIndex::fixing`` (inflationindex.cpp:200ff).
+        # If the period start has a stored fixing, return it; otherwise
+        # forecast via the zero-inflation term-structure handle.
+        # Forecast formula:
+        #   I(T) = I(baseDate) * (1 + Z1)^t1
+        # where Z1 = ts.zero_rate(periodStart), t1 = inflation_year_fraction(
+        # frequency, indexInterpolated=False, ts.day_counter, baseDate,
+        # periodStart).
         """
         del forecast_todays_fixing
         start, _ = inflation_period(fixing_date, self.frequency())
@@ -236,14 +291,39 @@ class ZeroInflationIndex(InflationIndex):
         value = history[start]
         if value is not None:
             return value
+        # No past fixing → forecast.
         qassert.require(
-            self._zero_inflation_ts is None,
-            f"forecast path for {self.name()} not yet wired (L7-B will land it)",
+            self._zero_inflation_ts is not None,
+            f"Missing {self.name()} fixing for {start} and no zero-inflation "
+            "term structure to forecast from.",
         )
-        qassert.fail(
-            f"Missing {self.name()} fixing for {start}; "
-            "store one via add_fixing before calling fixing()."
+        return self._forecast_fixing(fixing_date)
+
+    def _forecast_fixing(self, fixing_date: Date) -> float:
+        """Forecast ``I(T)`` via the zero-inflation curve.
+
+        # C++ parity: ``ZeroInflationIndex::forecastFixing`` (inflationindex.cpp:219-237).
+        # The ts slot is typed ``object`` to avoid a hard circular import;
+        # we cast to the local ``_ZeroInflationTSLike`` Protocol for the
+        # call site, which captures the structural methods we need.
+        """
+        qassert.require(self._zero_inflation_ts is not None, "no zero TS")
+        ts = cast(_ZeroInflationTSLike, self._zero_inflation_ts)
+        base_date = ts.base_date()
+        # Base-date fixing must exist (recurses via fixing() above).
+        base_fixing = self.fixing(base_date)
+        period_start, _ = inflation_period(fixing_date, self.frequency())
+        z1 = ts.zero_rate(period_start, False)
+        t1 = inflation_year_fraction(
+            self.frequency(),
+            False,
+            ts.day_counter(),
+            base_date,
+            period_start,
         )
+        if z1 <= -1.0:
+            return 0.0
+        return base_fixing * ((1.0 + z1) ** t1)
 
 
 class YoYInflationIndex(InflationIndex):
