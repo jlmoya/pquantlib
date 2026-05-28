@@ -1,5 +1,7 @@
 # Phase 5 — L5 tree/lattice + MC + FD + exotic instruments (executable plan)
 
+**Status:** **closed** — all 5 clusters landed on `main`; tag `pquantlib-phase5-complete` @ `d322fca` on 2026-05-28. **1883/0/0** tests. See [`phase5-completion.md`](phase5-completion.md).
+
 **Goal:** Land Phase 5's ~50 must-port classes on `main`, behind tag `pquantlib-phase5-complete`. Closes Phase 1 carry-overs (Sobol + GammaFunction + Akima cubic), Phase 3 `VanillaOption.implied_volatility`, Phase 4 BlackKarasinski + TreeSwaptionEngine + TreeCapFloorEngine.
 
 **Predecessor:** `pquantlib-phase4-complete` @ `fab5a0d` — 1544/0/0, pyright + ruff clean.

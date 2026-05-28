@@ -1,7 +1,7 @@
 # Phase 5 — L5 tree/lattice + MC + FD + exotic instruments (design)
 
 **Date:** 2026-05-28
-**Status:** drafted, awaiting ack to start
+**Status:** **closed** — tagged `pquantlib-phase5-complete` @ `d322fca` on 2026-05-28. **1883/0/0** pytest, pyright + ruff clean. Closure summary at [`phase5-completion.md`](phase5-completion.md).
 **Predecessor:** `pquantlib-phase4-complete` @ `fab5a0d` — 1544/0/0, pyright + ruff clean
 **Sister-project anchor:** jquantlib `phase2-L5-experimental-plan.md`
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`

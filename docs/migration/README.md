@@ -92,8 +92,21 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase4-l4-A-complete` @ `657b707` (pilot), `pquantlib-phase4-complete` @ `fab5a0d` (final).
 - Final test count: **1544/0/0**. pyright + ruff clean.
 
-### Phase 5 — L5 experimental + L6 test-suite parity (not yet started)
+### Phase 5 — L5 tree/lattice + MC + FD + exotic instruments (closed)
 
-Pending; mirror jquantlib's `phase2-L5-experimental-plan.md` + `phase2-L6-test-suite-parity-plan.md`. Largest remaining surface; targets `jquantlib-final` parity (3610 tests).
+- [`phase5-design.md`](phase5-design.md) — binding spec (closed; outcome appendix at top).
+- [`phase5-plan.md`](phase5-plan.md) — executable plan.
+- [`phase5-completion.md`](phase5-completion.md) — closure summary, 6-row cluster contribution table, parallelization notes, cumulative documented divergences, carve-outs, lessons learned. Notes the FIVE phases of carry-overs Phase 5 closed.
+- **L5-A pilot cluster** (sequential, 5 stages — `pquantlib-phase5-l5-A-complete` @ `aa19340`):
+  - [`phase5-l5-A-completion.md`](phase5-l5-A-completion.md) — closure summary (Phase 1 carry-overs + Tree/Lattice base + DiscretizedAsset + Protocols).
+- **L5-B / C / D / E** (4 parallel cluster subagents — landed and tagged together as `pquantlib-phase5-complete` @ `d322fca`):
+  - [`phase5-l5-B-design.md`](phase5-l5-B-design.md) — trees + lattices + tree engines + BlackKarasinski (closes Phase 4 carve-outs) (+54).
+  - [`phase5-l5-C-design.md`](phase5-l5-C-design.md) — Monte Carlo framework + MCEuropeanEngine + MCAsianEngine (+63).
+  - [`phase5-l5-D-design.md`](phase5-l5-D-design.md) — Finite-difference framework + FdBlackScholesVanillaEngine + VanillaOption.implied_volatility (closes Phase 3 carve-out) (+64).
+  - [`phase5-l5-E-design.md`](phase5-l5-E-design.md) — exotic instruments + 6 analytic engines + BivariateCumulativeNormalDistribution (closes Phase 1 carve-out) (+97).
+- Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
+- Final test count: **1883/0/0**. pyright + ruff clean.
 
-Phase 5 priorities: tree/lattice machinery (unblocks BlackKarasinski + TreeSwaptionEngine + American option engines); Phase 1 carry-overs (Sobol/Burley2020, full GammaFunction, advanced spline interpolations, QR/Eigen/SVD); Phase 2 carve-outs (inflation, credit, ZABR/SABR/XABR vol, advanced curve construction); Phase 3 exotic instruments (Asian/Barrier/Basket/Cliquet/Lookback paired with MC + FD engines); test-suite parity.
+### Phase 6 — modernization + final closure (not yet started)
+
+Pending. Python 3.14 modernization sweep (PEP 695 generics where missing, match-case, frozen+slots dataclasses, type statements); remaining high-impact carve-outs (LongstaffSchwartz American MC, Heston/G2/Bates MC engines, DoubleBarrier family); `pquantlib-final` tag with comprehensive carve-out documentation.

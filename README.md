@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase4--complete-green)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-1544%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--phase5--complete-green)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-1883%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -60,6 +60,9 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | 4 L4-A (pilot) | `pquantlib-phase4-l4-A-complete` | Foundations: Phase 1 LM + Simplex carry-overs closed (scipy-backed); Parameter hierarchy + Model + CalibratedModel + CalibrationHelper bases + 3 cross-cluster Protocols (Model / CalibrationHelper / ShortRateModel) | 1351/0/0 | 2026-05-27 |
 | 4 L4-B/C/D/E (parallel) | _(merged into Phase 4 tag)_ | L4-B (short-rate: Vasicek + HW + CIR + ExtendedCIR + OU/CIR processes), L4-C (Heston + Bates + AnalyticHestonEngine), L4-D (G2++ + TwoFactorModel + multi-process suite), L4-E (Swaption + CapFloor instruments closing Phase 3 carve-out + Black/Bachelier/Jamshidian/G2 swaption engines + Black/Bachelier/AnalyticCapFloor engines + SwaptionHelper + CapHelper). 4 parallel cluster subagents, ~50 min wall-clock. | +193 → 1544/0/0 | 2026-05-27 |
 | **4 complete** | **`pquantlib-phase4-complete`** | **Full L4 layer** — models (short-rate + equity stochastic-vol + calibration helpers + analytic swaption/capfloor engines). 1544 tests across ~40 classes. Phase 1 optimizer carry-overs + Phase 3 Swaption/CapFloor carve-outs closed. | **1544/0/0** | **2026-05-27** |
+| 5 L5-A (pilot) | `pquantlib-phase5-l5-A-complete` | Foundations: Phase 1 Sobol + Burley2020 + GammaFunction Lanczos + AkimaCubic carry-overs closed; Tree[T] + Lattice + DiscretizedAsset hierarchy + 3 cross-cluster Protocols | 1614/0/0 | 2026-05-28 |
+| 5 L5-B/C/D/E (parallel) | _(merged into Phase 5 tag)_ | L5-B (TrinomialTree + BlackScholesLattice + TreeSwaption/CapFloorEngine + **BlackKarasinski** — closes Phase 4 carve-outs), L5-C (MC framework + MCEuropeanEngine + MCAsianEngine), L5-D (FD framework + **FdBlackScholesVanillaEngine + VanillaOption.implied_volatility** — closes Phase 3 carve-out), L5-E (6 exotic instrument families + 6 analytic engines + **BivariateCumulativeNormalDistribution** — closes Phase 1 carve-out). 4 parallel cluster subagents, ~50 min wall-clock. | +269 → 1883/0/0 | 2026-05-28 |
+| **5 complete** | **`pquantlib-phase5-complete`** | **Full L5 layer** — tree/lattice + MC + FD + exotic instruments. 1883 tests across ~50 classes. Closed 5 distinct phases of carry-overs (Phase 1 Sobol/GammaFunction/Akima/Bivariate; Phase 3 VanillaOption.implied_volatility; Phase 4 BlackKarasinski/TreeSwaption/TreeCapFloor). | **1883/0/0** | **2026-05-28** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -70,9 +73,9 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** `fab5a0d merge: L4-E` (Phase 4 closed via `pquantlib-phase4-complete` tag). See [`docs/migration/phase4-completion.md`](docs/migration/phase4-completion.md) for the closure summary.
+**Current tip on `main`:** `d322fca merge: L5-E` (Phase 5 closed via `pquantlib-phase5-complete` tag). See [`docs/migration/phase5-completion.md`](docs/migration/phase5-completion.md) for the closure summary.
 
-## What's available today (Phase 1 L1 + Phase 2 L2 + Phase 3 L3 + Phase 4 L4)
+## What's available today (Phase 1 L1 + Phase 2 L2 + Phase 3 L3 + Phase 4 L4 + Phase 5 L5)
 
 Phase 1 ships the foundation: math primitives, time machinery, day counters, currencies, distributions, random number generators, simple optimization scaffolding, and a starter set of 1-D/2-D interpolations. Importable as `pquantlib.<module>`.
 
@@ -302,7 +305,52 @@ All exotic instruments (Asian/Barrier/Basket/Cliquet/Lookback/Quanto/etc.); spec
 
 ### Carve-outs (deferred from Phase 4)
 
-MarketModels (125 files of LMM machinery); tree/lattice engines (TreeSwaptionEngine, TreeCapFloorEngine, DiscretizedSwaption, BlackKarasinski needs TrinomialTree); all MC + FD engines; specialty short-rate (Gaussian1d / GSR / MarkovFunctional / HestonSLV / GJR-GARCH / BatesDoubleExp); volatility models (GARCH / GarmanKlass / etc.). Full list in [`docs/migration/phase4-completion.md`](docs/migration/phase4-completion.md). Phase 5 addresses tree/lattice + MC + FD + remaining Phase 1+2+3 carry-overs.
+MarketModels (125 files of LMM machinery); specialty short-rate (Gaussian1d / GSR / MarkovFunctional / HestonSLV / GJR-GARCH / BatesDoubleExp); volatility models (GARCH / GarmanKlass / etc.). See [`docs/migration/phase4-completion.md`](docs/migration/phase4-completion.md).
+
+(Phase 5 closed: BlackKarasinski + TreeSwaptionEngine + TreeCapFloorEngine + MC framework + FD framework + exotic instruments.)
+
+### Phase 5 L5 modules
+
+#### Phase 1 carry-overs closed
+- **`pquantlib.math.randomnumbers.sobol_rsg.SobolRsg`** + **`Burley2020SobolRsg`** — low-discrepancy via scipy.stats.qmc.Sobol.
+- **`pquantlib.math.distributions.gamma_function.GammaFunction`** — Lanczos approximation; replaces math.lgamma in Factorial.
+- **`pquantlib.math.distributions.bivariate_cumulative_normal.BivariateCumulativeNormalDistribution`** + `Dr78` alias — Genz-Bretz via scipy.stats.multivariate_normal.
+- **`pquantlib.math.interpolations.akima_cubic_interpolation.AkimaCubicInterpolation`** — scipy.interpolate.Akima1DInterpolator.
+
+#### Tree / lattice (`pquantlib.methods.lattices.*`)
+- **`Tree[T]`** + **`Lattice`** abstracts; **`BinomialTree`** concretes (CRR / JarrowRudd / Tian / LeisenReimer); **`TrinomialTree`**; **`TreeLattice1D`**; **`BlackScholesLattice`**.
+- **`DiscretizedAsset`** + **`DiscretizedOption`** + **`DiscretizedDiscountBond`** + **`DiscretizedSwap`** + **`DiscretizedSwaption`** + **`DiscretizedCapFloor`**.
+
+#### Tree-based engines + BlackKarasinski (Phase 4 carve-outs closed)
+- **`pquantlib.pricingengines.swaption.tree_swaption_engine.TreeSwaptionEngine(model, time_steps)`**.
+- **`pquantlib.pricingengines.capfloor.tree_capfloor_engine.TreeCapFloorEngine(model, time_steps)`**.
+- **`pquantlib.models.shortrate.onefactor.black_karasinski.BlackKarasinski(termStructure, a=0.1, sigma=0.1)`**.
+- `ShortRateModel.tree(grid)` across Vasicek / HW / CIR / ExtendedCIR / BlackKarasinski.
+
+#### Monte Carlo framework (`pquantlib.methods.montecarlo.*`)
+- **`Path`** + **`MultiPath`** + **`BrownianBridge`** + **`PathGenerator`** + **`MultiPathGenerator`** + **`PathPricer`** + **`McSimulation`** + **`MonteCarloModel`**.
+- **`MCVanillaEngine`** abstract + **`MCEuropeanEngine`** + **`MCDiscreteArithmeticAveragePriceEngine`**.
+- **`DiscreteAveragingAsianOption`** + **`AnalyticDiscreteGeometricAveragePriceAsianEngine`** (Levy 1997).
+
+#### Finite-difference framework (`pquantlib.methods.finitedifferences.*`)
+- 18 modules: layout + meshers (FdmBlackScholesMesher) + operators (TripleBandLinearOp + FirstDeriv/SecondDeriv + FdmBlackScholesOp) + schemes (ExplicitEuler/ImplicitEuler/CrankNicolson) + step conditions (FdmAmericanStepCondition + Composite) + solver (FdmBackwardSolver) + config DTOs.
+- **`pquantlib.pricingengines.vanilla.fd_black_scholes_vanilla_engine.FdBlackScholesVanillaEngine(process, t_grid=100, x_grid=100, scheme=CrankNicolson)`** — supports European + American.
+- **`pquantlib.instruments.vanilla_option.VanillaOption.implied_volatility(...)`** — Brent solver dispatching to AnalyticEuropean or FD as appropriate. **Closes Phase 3 carve-out.**
+
+#### Exotic instruments + analytic engines (`pquantlib.instruments.*` + `pquantlib.pricingengines.*`)
+- **`AsianOption`** family (`ContinuousAveragingAsianOption` + `DiscreteAveragingAsianOption`).
+- **`BarrierOption`** + `BarrierType` IntEnum (DownIn / UpIn / DownOut / UpOut).
+- **`BasketOption`** + `BasketPayoff` hierarchy (Min / Max / Average / Spread).
+- **`ContinuousFloatingLookbackOption`** + **`ContinuousFixedLookbackOption`**.
+- **`CliquetOption`**, **`DigitalOption`**.
+- **Analytic engines**: `AnalyticContinuousGeometricAveragePriceAsianEngine` (Kemna-Vorst), `AnalyticBarrierEngine` (Reiner-Rubinstein), `AnalyticBinaryBarrierEngine`, `StulzEngine` (2-asset basket), `AnalyticContinuousFloatingLookbackEngine` (Conze-Viswanathan).
+
+#### Additional payoffs (`pquantlib.payoffs`)
+- **`FloatingTypePayoff`**, **`PercentageStrikePayoff`**.
+
+### Carve-outs (deferred from Phase 5)
+
+Tree/lattice: TreeLattice2D + G2.tree(), Joshi4/AdditiveEQP/Trigeorgis builders. MC: LongstaffSchwartz American MC, Heston/G2/Bates/HW MC engines, low-discrepancy MC, all exotic MC engines. FD: multi-asset FD (Heston/G2/Bates), time-dependent operators, operator-splitting (HV/MS/CS), BoundaryCondition framework, Concentrating1dMesher. Exotic: DoubleBarrier, PartialTimeBarrier, SoftBarrier, HolderExtensible, ComplexChooser, Compound, 3+ asset baskets. See [`docs/migration/phase5-completion.md`](docs/migration/phase5-completion.md). Phase 6 addresses high-impact remainder + modernization.
 
 ## Repo layout
 
