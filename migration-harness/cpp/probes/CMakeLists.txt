@@ -191,3 +191,10 @@ target_link_libraries(cluster_l4d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     Black/Bachelier/AnalyticCapFloor capfloor) ===
 add_executable(cluster_l4e_probe cluster_l4e/probe.cpp)
 target_link_libraries(cluster_l4e_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L5-A pilot: foundations (Phase 1 carry-overs SobolRsg /
+#     Burley2020SobolRsg / GammaFunction / AkimaCubicInterpolation,
+#     plus the tree/lattice + DiscretizedAsset base hierarchies and
+#     methods/protocols.py used by lattices and MC/FD engines.) ===
+add_executable(l5a_foundations_probe l5a/foundations_probe.cpp)
+target_link_libraries(l5a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
