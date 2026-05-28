@@ -223,3 +223,8 @@ target_link_libraries(cluster_l5d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     (asian/barrier/basket/lookback closed-form pricing). ===
 add_executable(cluster_l5e_probe cluster_l5e/probe.cpp)
 target_link_libraries(cluster_l5e_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L6-B cluster: BatesEngine (analytic Bates jump-diffusion engine
+#     via the AnalyticHestonEngine add_on_term hook). ===
+add_executable(cluster_l6b_probe cluster_l6b/probe.cpp)
+target_link_libraries(cluster_l6b_probe PRIVATE ${QUANTLIB_LIBRARY})
