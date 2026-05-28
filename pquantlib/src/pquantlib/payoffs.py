@@ -24,9 +24,15 @@ Concrete payoffs:
   ``strike <= price < second_strike`` else 0.
 * ``SuperSharePayoff(strike, second_strike, cash_payoff)`` —
   ``cash_payoff`` if ``strike <= price < second_strike`` else 0.
+* ``FloatingTypePayoff(option_type)`` — payoff at strike fixed at
+  exercise (used by floating-strike lookbacks; the strike is set by
+  the realized extremum at maturity).
+* ``PercentageStrikePayoff(option_type, moneyness)`` — payoff =
+  ``price * max(1 - moneyness, 0)`` (Call) used by cliquet ratchet
+  options; moneyness expresses strike as a percentage of forward.
 
-C++ ``NullPayoff``, ``PercentageStrikePayoff``, ``FloatingTypePayoff``
-are deferred (rarely used in vanilla path, expanded in later phases).
+C++ ``NullPayoff`` is deferred (rarely used in vanilla path, expanded
+in later phases).
 """
 
 from __future__ import annotations
@@ -102,6 +108,54 @@ class StrikedTypePayoff(TypePayoff, ABC):
 
     def description(self) -> str:
         return f"{super().description()}, {self._strike} strike"
+
+
+@final
+class FloatingTypePayoff(TypePayoff):
+    """Floating-strike payoff — strike fixed at exercise from realized
+    extremum.
+
+    # C++ parity: ql/instruments/payoffs.{hpp,cpp} ``FloatingTypePayoff``.
+    # ``operator()(price)`` is unsupported (raises) — the engine MUST
+    # supply the strike via ``operator()(price, strike)`` (lookbacks
+    # set the strike from the realized min/max at exercise).
+    """
+
+    def name(self) -> str:
+        return "FloatingType"
+
+    def __call__(self, price: float) -> float:
+        qassert.require(False, "floating payoff not handled")
+        # Unreachable — qassert.require raises. Kept for type-checker.
+        return 0.0
+
+    def call(self, price: float, strike: float) -> float:
+        """Realized payoff given the strike fixed at exercise.
+
+        # C++ parity: ``FloatingTypePayoff::operator()(Real, Real)``.
+        """
+        if self._option_type == OptionType.Call:
+            return max(price - strike, 0.0)
+        return max(strike - price, 0.0)
+
+
+@final
+class PercentageStrikePayoff(StrikedTypePayoff):
+    """Percentage-strike (moneyness) payoff — used by cliquet ratchets.
+
+    # C++ parity: ql/instruments/payoffs.{hpp,cpp} ``PercentageStrikePayoff``.
+    # ``operator()(price)`` evaluates ``price * max(1 - moneyness, 0)``
+    # (Call) or ``price * max(moneyness - 1, 0)`` (Put). The strike is
+    # interpreted as a percentage of the forward.
+    """
+
+    def name(self) -> str:
+        return "PercentageStrike"
+
+    def __call__(self, price: float) -> float:
+        if self._option_type == OptionType.Call:
+            return price * max(1.0 - self._strike, 0.0)
+        return price * max(self._strike - 1.0, 0.0)
 
 
 @final
@@ -263,9 +317,11 @@ class SuperSharePayoff(StrikedTypePayoff):
 __all__ = [
     "AssetOrNothingPayoff",
     "CashOrNothingPayoff",
+    "FloatingTypePayoff",
     "GapPayoff",
     "OptionType",
     "Payoff",
+    "PercentageStrikePayoff",
     "PlainVanillaPayoff",
     "StrikedTypePayoff",
     "SuperFundPayoff",

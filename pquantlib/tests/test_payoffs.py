@@ -14,9 +14,11 @@ from pquantlib.exceptions import LibraryException
 from pquantlib.payoffs import (
     AssetOrNothingPayoff,
     CashOrNothingPayoff,
+    FloatingTypePayoff,
     GapPayoff,
     OptionType,
     Payoff,
+    PercentageStrikePayoff,
     PlainVanillaPayoff,
     StrikedTypePayoff,
     SuperFundPayoff,
@@ -210,3 +212,69 @@ def test_super_share_matches_cpp(cpp: dict[str, Any]) -> None:
 def test_super_share_rejects_second_strike_le_first() -> None:
     with pytest.raises(LibraryException, match=r"second strike .* higher"):
         SuperSharePayoff(100.0, 100.0, 1.0)
+
+
+# --- FloatingTypePayoff -------------------------------------------------
+
+
+def test_floating_call_with_strike() -> None:
+    """Call payoff: max(price - strike, 0)."""
+    fp = FloatingTypePayoff(OptionType.Call)
+    assert fp.name() == "FloatingType"
+    tolerance.exact(fp.call(120.0, 95.0), 25.0)
+    tolerance.exact(fp.call(80.0, 95.0), 0.0)
+
+
+def test_floating_put_with_strike() -> None:
+    """Put payoff: max(strike - price, 0)."""
+    fp = FloatingTypePayoff(OptionType.Put)
+    tolerance.exact(fp.call(80.0, 105.0), 25.0)
+    tolerance.exact(fp.call(120.0, 105.0), 0.0)
+
+
+def test_floating_call_strikeless_raises() -> None:
+    """C++ parity: ``operator()(price)`` raises ``floating payoff not
+    handled`` — the strike is unset until exercise."""
+    fp = FloatingTypePayoff(OptionType.Call)
+    with pytest.raises(LibraryException, match="floating payoff not handled"):
+        fp(100.0)
+
+
+# --- PercentageStrikePayoff --------------------------------------------
+
+
+def test_percentage_strike_call_below_one() -> None:
+    """Call: ``price * max(1 - moneyness, 0)``. Moneyness < 1 → ITM.
+
+    TIGHT (not EXACT) — IEEE-754 ``1.0 - 0.80`` ≠ exact 0.20 (ULP-off).
+    """
+    pp = PercentageStrikePayoff(OptionType.Call, 0.80)
+    assert pp.name() == "PercentageStrike"
+    tolerance.tight(pp(100.0), 100.0 * 0.20)
+
+
+def test_percentage_strike_call_above_one_zero() -> None:
+    """Call: ``price * max(1 - 1.20, 0) = 0``."""
+    pp = PercentageStrikePayoff(OptionType.Call, 1.20)
+    tolerance.exact(pp(100.0), 0.0)
+
+
+def test_percentage_strike_put_above_one() -> None:
+    """Put: ``price * max(moneyness - 1, 0)``. Moneyness > 1 → ITM.
+
+    TIGHT (not EXACT) — ``1.20 - 1.0`` ≠ exact 0.20 (ULP-off).
+    """
+    pp = PercentageStrikePayoff(OptionType.Put, 1.20)
+    tolerance.tight(pp(100.0), 100.0 * 0.20)
+
+
+def test_percentage_strike_put_below_one_zero() -> None:
+    """Put: ``price * max(0.80 - 1, 0) = 0``."""
+    pp = PercentageStrikePayoff(OptionType.Put, 0.80)
+    tolerance.exact(pp(100.0), 0.0)
+
+
+def test_percentage_strike_description_includes_moneyness() -> None:
+    """Description inherits from StrikedTypePayoff."""
+    pp = PercentageStrikePayoff(OptionType.Call, 0.80)
+    assert "0.8" in pp.description()

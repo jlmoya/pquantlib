@@ -1,0 +1,47 @@
+{
+  "analytic_continuous_geometric_asian": {
+    "call_npv": 7.4959637159537209,
+    "call_delta": 0.55605156257772093,
+    "call_gamma": 0.021907331265466311,
+    "call_vega": 19.127073452577715,
+    "call_rho": 20.306614412932326,
+    "call_dividend_rho": -27.802578128886047
+  },
+  "analytic_discrete_geometric_asian": {
+    "call_npv": 8.0082036774367573,
+    "call_delta": 0.56127962731393699,
+    "call_gamma": 0.020660112104548999
+  },
+  "analytic_barrier": {
+    "down_in_call": 8.4346241706403937,
+    "up_in_call": 13.406827727675457,
+    "down_out_call": 7.550514425206698,
+    "up_out_call": 2.5780353111696201,
+    "down_in_put": 10.486836479124401,
+    "up_in_put": 6.9919459359512715,
+    "down_out_put": 2.6013772361185334,
+    "up_out_put": 6.0959922222896488
+  },
+  "analytic_binary_barrier": {
+    "cash_down_in_call": 3.3629666731703196,
+    "cash_up_in_call": 4.5505421987685244,
+    "cash_down_out_call": 1.2035166613045856,
+    "cash_up_out_call": 0.015941135706381261,
+    "cash_down_in_put": 4.9272232240468341,
+    "cash_up_in_put": 3.6645043770341577,
+    "cash_down_out_put": 0.018587686485399688,
+    "cash_up_out_put": 1.2813065334980756,
+    "asset_down_in_call": 41.697659598006588,
+    "asset_up_out_put": 9.2924805820474816
+  },
+  "stulz": {
+    "min_call_npv": 5.8530910643037064,
+    "min_put_npv": 11.500349295500364,
+    "max_call_npv": 18.828747293867714,
+    "max_put_npv": 3.4273739628138369
+  },
+  "analytic_continuous_floating_lookback": {
+    "call_npv": 22.515402210052244,
+    "put_npv": 23.963864650354282
+  }
+}
