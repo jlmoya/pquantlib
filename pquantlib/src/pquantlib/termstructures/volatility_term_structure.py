@@ -45,11 +45,13 @@ class VolatilityTermStructure(TermStructure):
         reference_date: Date | None = None,
         calendar: Calendar | None = None,
         day_counter: DayCounter | None = None,
+        settlement_days: int | None = None,
     ) -> None:
         super().__init__(
             reference_date=reference_date,
             calendar=calendar,
             day_counter=day_counter,
+            settlement_days=settlement_days,
         )
         self._business_day_convention: BusinessDayConvention = business_day_convention
 
