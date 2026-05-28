@@ -114,6 +114,16 @@ class DiscretizedAsset(ABC):
         """Setter helper (mirrors C++ ``Array& values()`` writable accessor)."""
         self._values = v
 
+    def set_method(self, method: Lattice) -> None:
+        """Setter helper for the held Lattice.
+
+        Used by ``TreeLattice1D.initialize`` to install ``self`` as the
+        driving lattice. Mirrors the C++ idiom of writing
+        ``asset.method_ = this`` directly inside the lattice's
+        ``initialize``.
+        """
+        self._method = method
+
     # -- high-level interface --------------------------------------------
 
     def initialize(self, method: Lattice, t: float) -> None:
