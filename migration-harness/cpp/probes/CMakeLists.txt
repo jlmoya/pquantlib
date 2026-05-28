@@ -233,3 +233,8 @@ target_link_libraries(cluster_l6a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     via the AnalyticHestonEngine add_on_term hook). ===
 add_executable(cluster_l6b_probe cluster_l6b/probe.cpp)
 target_link_libraries(cluster_l6b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L6-C cluster: DoubleBarrierOption + AnalyticDoubleBarrierEngine
+#     (Ikeda-Kunitomo 1992 closed-form series for KnockIn/KnockOut). ===
+add_executable(cluster_l6c_probe cluster_l6c/probe.cpp)
+target_link_libraries(cluster_l6c_probe PRIVATE ${QUANTLIB_LIBRARY})
