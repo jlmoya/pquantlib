@@ -206,6 +206,13 @@ target_link_libraries(l5a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(cluster_l5b_probe cluster_l5b/probe.cpp)
 target_link_libraries(cluster_l5b_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# === L5-C cluster: Monte Carlo framework (Path / MultiPath / Brownian
+#     bridge / PathGenerator / McSimulation) + simple MC engines
+#     (MCEuropeanEngine + MCDiscreteArithmeticAPEngine with geometric
+#     control variate via AnalyticDiscreteGeometricAveragePriceAsianEngine). ===
+add_executable(cluster_l5c_probe cluster_l5c/probe.cpp)
+target_link_libraries(cluster_l5c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # === L5-D cluster: 1-D Finite-Difference Black-Scholes framework +
 #     FdBlackScholesVanillaEngine (closes the Phase 3 carve-out for
 #     VanillaOption::impliedVolatility on American options). ===
