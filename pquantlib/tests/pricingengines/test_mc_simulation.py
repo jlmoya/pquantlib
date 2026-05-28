@@ -94,7 +94,7 @@ def test_calculate_with_required_samples_runs_to_target_count() -> None:
     process = _make_bsm()
     discount = math.exp(-0.05 * 1.0)
     engine = _ToyMcEuropeanEngine(process, 100.0, discount, seed=42)
-    engine.calculate(required_tolerance=None, required_samples=10000, max_samples=None)
+    engine.run_mc(required_tolerance=None, required_samples=10000, max_samples=None)
     npv = engine.sample_accumulator().mean()
     err = engine.error_estimate()
     assert engine.sample_accumulator().samples() == 10000
@@ -106,12 +106,12 @@ def test_calculate_with_required_tolerance_converges() -> None:
     process = _make_bsm()
     discount = math.exp(-0.05 * 1.0)
     engine = _ToyMcEuropeanEngine(process, 100.0, discount, seed=42)
-    engine.calculate(
+    engine.run_mc(
         required_tolerance=0.05, required_samples=None, max_samples=100_000
     )
     err = engine.error_estimate()
     assert err <= 0.05
-    # Error <= 0.05 means we ran ~16k+ samples (~ (0.20/0.05)^2 * 1023 ≈ 16k).
+    # Error <= 0.05 means we ran ~16k+ samples (~ (0.20/0.05)^2 * 1023 ~= 16k).
     assert engine.sample_accumulator().samples() >= 1023
 
 
@@ -120,7 +120,7 @@ def test_calculate_with_neither_target_raises() -> None:
     discount = math.exp(-0.05 * 1.0)
     engine = _ToyMcEuropeanEngine(process, 100.0, discount, seed=42)
     with pytest.raises(LibraryException, match="neither tolerance nor number"):
-        engine.calculate(required_tolerance=None, required_samples=None, max_samples=None)
+        engine.run_mc(required_tolerance=None, required_samples=None, max_samples=None)
 
 
 def test_value_with_samples_starts_from_min_default() -> None:
@@ -129,7 +129,7 @@ def test_value_with_samples_starts_from_min_default() -> None:
     discount = math.exp(-0.05 * 1.0)
     engine = _ToyMcEuropeanEngine(process, 100.0, discount, seed=42)
     # Use a generous tolerance that 1023 samples should satisfy immediately.
-    engine.calculate(required_tolerance=1.0, required_samples=None, max_samples=None)
+    engine.run_mc(required_tolerance=1.0, required_samples=None, max_samples=None)
     assert engine.sample_accumulator().samples() >= 1023
 
 
@@ -138,6 +138,6 @@ def test_value_with_max_samples_raises_on_unreachable_tolerance() -> None:
     discount = math.exp(-0.05 * 1.0)
     engine = _ToyMcEuropeanEngine(process, 100.0, discount, seed=42)
     with pytest.raises(LibraryException, match="max number of samples"):
-        engine.calculate(
+        engine.run_mc(
             required_tolerance=1e-6, required_samples=None, max_samples=2000
         )

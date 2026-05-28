@@ -99,7 +99,7 @@ class McSimulation[PathT](ABC):
 
     # --- driver -----------------------------------------------------------
 
-    def calculate(
+    def run_mc(
         self,
         required_tolerance: float | None,
         required_samples: int | None,
@@ -108,6 +108,9 @@ class McSimulation[PathT](ABC):
         """Run the MC simulation per the requested termination criterion.
 
         # C++ parity: ``McSimulation::calculate`` (mcsimulation.hpp:158-206).
+        # Renamed in the Python port to avoid clashing with
+        # ``PricingEngine.calculate`` when an engine multi-inherits
+        # ``GenericEngine`` and ``McSimulation``.
         """
         qassert.require(
             required_tolerance is not None or required_samples is not None,
