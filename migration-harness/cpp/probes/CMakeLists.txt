@@ -218,3 +218,8 @@ target_link_libraries(cluster_l5c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     VanillaOption::impliedVolatility on American options). ===
 add_executable(cluster_l5d_probe cluster_l5d/probe.cpp)
 target_link_libraries(cluster_l5d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L5-E cluster: exotic instruments + analytic engines
+#     (asian/barrier/basket/lookback closed-form pricing). ===
+add_executable(cluster_l5e_probe cluster_l5e/probe.cpp)
+target_link_libraries(cluster_l5e_probe PRIVATE ${QUANTLIB_LIBRARY})

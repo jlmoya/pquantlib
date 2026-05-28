@@ -160,7 +160,69 @@ class DiscreteAveragingAsianOption(OneAssetOption):
         args.fixing_dates = list(self._fixing_dates)
 
 
+class ContinuousAveragingAsianOptionArguments(OptionArguments):
+    """Engine arguments for continuous-averaging Asian options.
+
+    # C++ parity: ``ContinuousAveragingAsianOption::arguments``
+    # (asianoption.hpp, v1.42.1).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.average_type: AverageType | None = None
+        self.start_date: Date = Date()
+
+    def validate(self) -> None:
+        super().validate()
+        qassert.require(self.average_type is not None, "no average type given")
+
+
+class ContinuousAveragingAsianOption(OneAssetOption):
+    """Continuous-averaging Asian option (one asset).
+
+    # C++ parity: ``ContinuousAveragingAsianOption(averageType, payoff,
+    # exercise)`` (unseasoned) and ``(averageType, startDate, payoff,
+    # exercise)`` (seasoned). The Python port collapses these into one
+    # constructor with an optional ``start_date``.
+    """
+
+    def __init__(
+        self,
+        average_type: AverageType,
+        payoff: StrikedTypePayoff,
+        exercise: Exercise,
+        start_date: Date | None = None,
+    ) -> None:
+        super().__init__(payoff, exercise)
+        self._average_type: AverageType = average_type
+        self._start_date: Date = start_date if start_date is not None else Date()
+
+    def average_type(self) -> AverageType:
+        return self._average_type
+
+    def start_date(self) -> Date:
+        return self._start_date
+
+    def is_expired(self) -> bool:
+        # C++ parity: ``ContinuousAveragingAsianOption::isExpired`` would
+        # consult ``Settings.evaluationDate``. PQuantLib defers that to a
+        # follow-up (same carve-out as VanillaOption.is_expired).
+        return False
+
+    def setup_arguments(self, args: PricingEngineArguments) -> None:
+        super().setup_arguments(args)
+        if not isinstance(args, ContinuousAveragingAsianOptionArguments):
+            raise TypeError(
+                "expected ContinuousAveragingAsianOptionArguments; got "
+                f"{type(args).__name__}"
+            )
+        args.average_type = self._average_type
+        args.start_date = self._start_date
+
+
 __all__ = [
+    "ContinuousAveragingAsianOption",
+    "ContinuousAveragingAsianOptionArguments",
     "DiscreteAveragingAsianOption",
     "DiscreteAveragingAsianOptionArguments",
 ]
