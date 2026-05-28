@@ -243,3 +243,10 @@ target_link_libraries(cluster_l6c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     + inflation-period helper for the Phase 7 inflation cluster). ===
 add_executable(l7a_foundations_probe l7a/foundations_probe.cpp)
 target_link_libraries(l7a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L7-C cluster: inflation cashflows + pricers (InflationCoupon,
+#     ZeroInflationCashFlow, CPICashFlow, CPICoupon, YoYInflationCoupon,
+#     CappedFloored* variants, InflationCouponPricer, CPICouponPricer,
+#     YoYInflationCouponPricer + Black/Bachelier variants). ===
+add_executable(cluster_l7c_probe cluster_l7c/probe.cpp)
+target_link_libraries(cluster_l7c_probe PRIVATE ${QUANTLIB_LIBRARY})

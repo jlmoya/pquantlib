@@ -1,0 +1,64 @@
+{
+  "lagged_fixing": {
+    "date_2021_06_15": {
+      "flat": 107,
+      "as_index": 107,
+      "linear": 107.23333333333333
+    },
+    "date_2022_08_20": {
+      "flat": 114,
+      "linear": 114.30645161290323
+    },
+    "date_2020_04_01_lag0_linear_eq_start": 101.5
+  },
+  "indexed_cashflow": {
+    "notional": 1000000,
+    "base_fixing": 102.5,
+    "index_fixing": 114.5,
+    "bond_style_amount": 1117073.1707317075,
+    "swap_style_amount": 117073.17073170742
+  },
+  "zero_inflation_cashflow": {
+    "notional": 500000,
+    "base_fixing": 107,
+    "index_fixing": 113,
+    "growth_only_amount": 28037.383177570096,
+    "bond_style_amount": 528037.38317757007
+  },
+  "cpi_cashflow": {
+    "notional": 750000,
+    "base_fixing": 100,
+    "index_fixing": 113,
+    "growth_only_amount": 97499.999999999927
+  },
+  "cpi_coupon": {
+    "nominal": 200000,
+    "base_cpi": 100,
+    "fixed_rate": 0.025000000000000001,
+    "accrual_period": 1,
+    "index_fixing": 113,
+    "index_ratio_at_end": 1.1299999999999999,
+    "rate": 0.028249999999999997,
+    "amount": 5649.9999999999991
+  },
+  "yoy_inflation_coupon": {
+    "nominal": 100000,
+    "gearing": 1.5,
+    "spread": 0.0050000000000000001,
+    "accrual_period": 1,
+    "index_fixing": 0.029999999999999999,
+    "rate": 0.049999999999999996,
+    "amount": 5000
+  },
+  "black_pricer": {
+    "forward": 0.025000000000000001,
+    "strike": 0.02,
+    "std_dev": 0.0050000000000000001,
+    "black_call": 0.0050000000000000018,
+    "black_put": -0,
+    "bachelier_call": 0.0054165773529384325,
+    "bachelier_put": 0.00041657735293843136,
+    "unit_displaced_call": 0.0054440969252640336,
+    "unit_displaced_put": 0.0004440969252641112
+  }
+}
