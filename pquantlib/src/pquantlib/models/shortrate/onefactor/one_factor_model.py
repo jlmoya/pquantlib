@@ -8,11 +8,11 @@ implement ``dynamics()`` (returning a ``ShortRateDynamics`` over a
 ``ShortRateModel``.
 
 Trees: the C++ ``tree(grid)`` builds a TrinomialTree over the process
-and wraps it in a ``ShortRateTree`` lattice. Both classes depend on
-the TreeLattice / TrinomialTree machinery that is deferred to L4-F
-(or later). The base class declares ``tree(grid)`` and the concrete
-short-rate models override it to raise ``LibraryException`` with a
-clear "tree not implemented" message.
+and wraps it in a ``ShortRateTree`` lattice. The base implementation
+(landed in L5-B) returns a plain ``ShortRateTree`` over
+``dynamics().process``. Concrete short-rate models that need numerical
+curve-fitting (BlackKarasinski) override ``tree(grid)`` to install
+their ``phi`` fitter on the returned lattice.
 
 Dynamics: ``ShortRateDynamics`` is a thin pair ``(variable(t, r),
 short_rate(t, x))`` plus a backing ``StochasticProcess1D``. It
@@ -26,11 +26,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from pquantlib.exceptions import LibraryException
+from pquantlib.methods.lattices.trinomial_tree import TrinomialTree
 from pquantlib.models.model import ShortRateModel
+from pquantlib.models.shortrate.short_rate_tree import ShortRateTree
 
 if TYPE_CHECKING:
     from pquantlib.processes.stochastic_process_1d import StochasticProcess1D
+    from pquantlib.time.time_grid import TimeGrid
 
 
 class ShortRateDynamics(ABC):
@@ -101,18 +103,17 @@ class OneFactorModel(ShortRateModel):
         """
         ...
 
-    def tree(self, grid: object) -> object:
-        """Build a recombining trinomial tree lattice over ``grid``.
+    def tree(self, grid: TimeGrid) -> ShortRateTree:
+        """Build a recombining trinomial-tree lattice over ``grid``.
 
         # C++ parity: ``OneFactorModel::tree(const TimeGrid&)`` in
         # onefactormodel.cpp:89-95 — builds ``TrinomialTree`` over
-        # ``dynamics()->process()`` and wraps in a ShortRateTree.
+        # ``dynamics()->process()`` and wraps it in a ShortRateTree.
 
-        DEFERRED in pquantlib L4-B per cluster scope: TrinomialTree /
-        TreeLattice1D / ShortRateTree are L4-F (or later) work. Callers
-        currently use ``discount`` / ``discount_bond`` / ``discount_bond_option``
-        analytical paths instead.
+        Concrete short-rate models that need numerical curve-fitting
+        (e.g. BlackKarasinski) override this method to supply their
+        ``phi`` fitter to ``ShortRateTree``.
         """
-        raise LibraryException(
-            "OneFactorModel.tree: TrinomialTree lattice not yet ported (L4-B carve-out)"
-        )
+        dyn = self.dynamics()
+        trinomial = TrinomialTree(dyn.process, grid)
+        return ShortRateTree(trinomial, dyn, grid)
