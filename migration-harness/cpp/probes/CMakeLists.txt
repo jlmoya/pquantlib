@@ -238,3 +238,8 @@ target_link_libraries(cluster_l6b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     (Ikeda-Kunitomo 1992 closed-form series for KnockIn/KnockOut). ===
 add_executable(cluster_l6c_probe cluster_l6c/probe.cpp)
 target_link_libraries(cluster_l6c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L7-A cluster: inflation foundations (region indexes + seasonality
+#     + inflation-period helper for the Phase 7 inflation cluster). ===
+add_executable(l7a_foundations_probe l7a/foundations_probe.cpp)
+target_link_libraries(l7a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})

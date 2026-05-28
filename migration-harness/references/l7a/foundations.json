@@ -1,0 +1,168 @@
+{
+  "zero_indexes": {
+    "EUHICP": {
+      "name": "EU HICP",
+      "family_name": "HICP",
+      "region_name": "EU",
+      "region_code": "EU",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "FRHICP": {
+      "name": "France HICP",
+      "family_name": "HICP",
+      "region_name": "France",
+      "region_code": "FR",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "UKRPI": {
+      "name": "UK RPI",
+      "family_name": "RPI",
+      "region_name": "UK",
+      "region_code": "UK",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "GBP"
+    },
+    "UKHICP": {
+      "name": "UK HICP",
+      "family_name": "HICP",
+      "region_name": "UK",
+      "region_code": "UK",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "GBP"
+    },
+    "USCPI": {
+      "name": "USA CPI",
+      "family_name": "CPI",
+      "region_name": "USA",
+      "region_code": "US",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "USD"
+    }
+  },
+  "yoy_indexes": {
+    "YYEUHICP": {
+      "name": "EU YY_HICP",
+      "family_name": "YY_HICP",
+      "region_name": "EU",
+      "region_code": "EU",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR",
+      "interpolated": false,
+      "ratio": false
+    },
+    "YYFRHICP": {
+      "name": "France YY_HICP",
+      "family_name": "YY_HICP",
+      "region_name": "France",
+      "region_code": "FR",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR",
+      "interpolated": false,
+      "ratio": false
+    },
+    "YYUKRPI": {
+      "name": "UK YY_RPI",
+      "family_name": "YY_RPI",
+      "region_name": "UK",
+      "region_code": "UK",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "GBP",
+      "interpolated": false,
+      "ratio": false
+    },
+    "YYUSCPI": {
+      "name": "USA YY_CPI",
+      "family_name": "YY_CPI",
+      "region_name": "USA",
+      "region_code": "US",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "USD",
+      "interpolated": false,
+      "ratio": false
+    }
+  },
+  "inflation_period": {
+    "monthly_2020_05_15": {
+      "frequency": 12,
+      "start_serial": 43952,
+      "end_serial": 43982
+    },
+    "quarterly_2021_07_20": {
+      "frequency": 4,
+      "start_serial": 44378,
+      "end_serial": 44469
+    },
+    "semiannual_2019_11_30": {
+      "frequency": 2,
+      "start_serial": 43647,
+      "end_serial": 43830
+    },
+    "annual_2022_03_01": {
+      "frequency": 1,
+      "start_serial": 44562,
+      "end_serial": 44926
+    },
+    "every_fourth_month_2020_08_10": {
+      "frequency": 3,
+      "start_serial": 43952,
+      "end_serial": 44074
+    }
+  },
+  "seasonality": {
+    "base_date_serial": 43831,
+    "frequency": 12,
+    "factors": [1, 1.0049999999999999, 1.01, 1.0149999999999999, 1.02, 1.0249999999999999, 1, 0.995, 0.98999999999999999, 0.98499999999999999, 0.97999999999999998, 0.97499999999999998],
+    "samples": [
+      {
+        "label": "2020_jan_01",
+        "date_serial": 43831,
+        "factor": 1
+      },
+      {
+        "label": "2020_jun_15",
+        "date_serial": 43997,
+        "factor": 1.0249999999999999
+      },
+      {
+        "label": "2020_dec_31",
+        "date_serial": 44196,
+        "factor": 0.97499999999999998
+      },
+      {
+        "label": "2021_apr_10",
+        "date_serial": 44296,
+        "factor": 1.0149999999999999
+      },
+      {
+        "label": "2022_feb_28",
+        "date_serial": 44620,
+        "factor": 1.0049999999999999
+      },
+      {
+        "label": "2019_jul_20",
+        "date_serial": 43666,
+        "factor": 1
+      }
+    ]
+  }
+}
