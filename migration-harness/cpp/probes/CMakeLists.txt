@@ -223,3 +223,8 @@ target_link_libraries(cluster_l5d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     (asian/barrier/basket/lookback closed-form pricing). ===
 add_executable(cluster_l5e_probe cluster_l5e/probe.cpp)
 target_link_libraries(cluster_l5e_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L6-C cluster: DoubleBarrierOption + AnalyticDoubleBarrierEngine
+#     (Ikeda-Kunitomo 1992 closed-form series for KnockIn/KnockOut). ===
+add_executable(cluster_l6c_probe cluster_l6c/probe.cpp)
+target_link_libraries(cluster_l6c_probe PRIVATE ${QUANTLIB_LIBRARY})
