@@ -107,6 +107,15 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
 - Final test count: **1883/0/0**. pyright + ruff clean.
 
-### Phase 6 — modernization + final closure (not yet started)
+### Phase 6 — high-impact carve-outs + final closure (closed)
 
-Pending. Python 3.14 modernization sweep (PEP 695 generics where missing, match-case, frozen+slots dataclasses, type statements); remaining high-impact carve-outs (LongstaffSchwartz American MC, Heston/G2/Bates MC engines, DoubleBarrier family); `pquantlib-final` tag with comprehensive carve-out documentation.
+- [`phase6-design.md`](phase6-design.md) — binding spec (closed; outcome appendix at top).
+- [`phase6-plan.md`](phase6-plan.md) — executable plan.
+- [`phase6-completion.md`](phase6-completion.md) — closure summary, 3-cluster contribution table, scope decision (modernization sweep deleted after audit), final closure tooling.
+- **L6-A** LongstaffSchwartz American MC (closes Phase 5 carve-out) — +41 tests.
+- **L6-B** BatesEngine (closes Phase 4 carve-out) — +14 tests.
+- **L6-C** DoubleBarrierOption + AnalyticDoubleBarrierEngine (closes Phase 5 carve-out) — +20 tests.
+- Tags: `pquantlib-phase6-complete` @ `998fed3`, **`pquantlib-final`** (final closure).
+- Final test count: **1958/0/0**. pyright + ruff clean.
+- **`docs/carve-outs.md`** — comprehensive per-category carve-out documentation.
+- **`pquantlib-samples/`** — 4 end-to-end sample programs.

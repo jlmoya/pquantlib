@@ -1,5 +1,7 @@
 # Phase 6 — High-impact carve-outs + final closure (executable plan)
 
+**Status:** **closed** — all 3 clusters landed on `main`; tag `pquantlib-phase6-complete` @ `998fed3` on 2026-05-28. **1958/0/0** tests. Final closure: `pquantlib-final` tag. See [`phase6-completion.md`](phase6-completion.md).
+
 **Goal:** Land Phase 6's ~12 high-impact carve-out closures + final closure tooling. Tag `pquantlib-final` post-merge.
 
 **Predecessor:** `pquantlib-phase5-complete` @ `d322fca` — 1883/0/0, pyright + ruff clean.

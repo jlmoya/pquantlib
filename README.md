@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase5--complete-green)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-1883%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--final-blue)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-1958%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -63,6 +63,9 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | 5 L5-A (pilot) | `pquantlib-phase5-l5-A-complete` | Foundations: Phase 1 Sobol + Burley2020 + GammaFunction Lanczos + AkimaCubic carry-overs closed; Tree[T] + Lattice + DiscretizedAsset hierarchy + 3 cross-cluster Protocols | 1614/0/0 | 2026-05-28 |
 | 5 L5-B/C/D/E (parallel) | _(merged into Phase 5 tag)_ | L5-B (TrinomialTree + BlackScholesLattice + TreeSwaption/CapFloorEngine + **BlackKarasinski** — closes Phase 4 carve-outs), L5-C (MC framework + MCEuropeanEngine + MCAsianEngine), L5-D (FD framework + **FdBlackScholesVanillaEngine + VanillaOption.implied_volatility** — closes Phase 3 carve-out), L5-E (6 exotic instrument families + 6 analytic engines + **BivariateCumulativeNormalDistribution** — closes Phase 1 carve-out). 4 parallel cluster subagents, ~50 min wall-clock. | +269 → 1883/0/0 | 2026-05-28 |
 | **5 complete** | **`pquantlib-phase5-complete`** | **Full L5 layer** — tree/lattice + MC + FD + exotic instruments. 1883 tests across ~50 classes. Closed 5 distinct phases of carry-overs (Phase 1 Sobol/GammaFunction/Akima/Bivariate; Phase 3 VanillaOption.implied_volatility; Phase 4 BlackKarasinski/TreeSwaption/TreeCapFloor). | **1883/0/0** | **2026-05-28** |
+| 6 L6-A/B/C (parallel) | _(merged into Phase 6 + final tags)_ | L6-A (LongstaffSchwartz American MC — closes Phase 5 carve-out), L6-B (BatesEngine — closes Phase 4 carve-out via add_on_term hook), L6-C (DoubleBarrierOption + AnalyticDoubleBarrierEngine Ikeda-Kunitomo 1992 — closes Phase 5 carve-out). Modernization sweep deleted after audit (codebase already modern from day 1). 3 parallel cluster subagents, ~30 min wall-clock. | +75 → 1958/0/0 | 2026-05-28 |
+| **6 complete** | **`pquantlib-phase6-complete`** | **High-impact Phase 4+5 carve-outs closed** + final closure tooling (`docs/carve-outs.md` + 4 sample programs). 1958 tests; closes Phase 4 BatesEngine + Phase 5 American MC + DoubleBarrier. | **1958/0/0** | **2026-05-28** |
+| **Project complete** | **`pquantlib-final`** | **End of planned migration.** ~340 classes ported across ~1958 tests (54.2% of jquantlib-final). Vanilla pricing + calibration end-to-end + American MC + analytic exotics covered. See `docs/carve-outs.md` for comprehensive carve-out documentation. | **1958/0/0** | **2026-05-28** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -73,7 +76,9 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** `d322fca merge: L5-E` (Phase 5 closed via `pquantlib-phase5-complete` tag). See [`docs/migration/phase5-completion.md`](docs/migration/phase5-completion.md) for the closure summary.
+**Current tip on `main`:** Phase 6 closed via `pquantlib-phase6-complete` + final `pquantlib-final` tag. See [`docs/migration/phase6-completion.md`](docs/migration/phase6-completion.md) for the closure summary + [`docs/carve-outs.md`](docs/carve-outs.md) for the comprehensive carve-out catalog.
+
+**Sample programs**: Run `uv run python -m pquantlib_samples.{vanilla_swap_pricing,heston_calibration,american_option_mc,double_barrier_analytic}` for end-to-end demos.
 
 ## What's available today (Phase 1 L1 + Phase 2 L2 + Phase 3 L3 + Phase 4 L4 + Phase 5 L5)
 

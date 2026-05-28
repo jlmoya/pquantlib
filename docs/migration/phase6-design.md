@@ -1,7 +1,7 @@
 # Phase 6 — High-impact carve-outs + final closure (design)
 
 **Date:** 2026-05-28
-**Status:** drafted, awaiting ack to start
+**Status:** **closed** — tagged `pquantlib-phase6-complete` @ `998fed3` on 2026-05-28. **1958/0/0** pytest, pyright + ruff clean. Closure summary at [`phase6-completion.md`](phase6-completion.md). **Final closure tag**: `pquantlib-final`.
 **Predecessor:** `pquantlib-phase5-complete` @ `d322fca` — 1883/0/0, pyright + ruff clean
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
 
