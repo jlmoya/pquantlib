@@ -10,6 +10,7 @@ from pquantlib.methods.montecarlo.gaussian_sequence_generator import (
     UniformRandomSequenceGenerator,
     make_pseudo_random_rsg,
 )
+from pquantlib.methods.montecarlo.monte_carlo_model import MonteCarloModel
 from pquantlib.methods.montecarlo.multi_path import MultiPath
 from pquantlib.methods.montecarlo.multi_path_generator import (
     MultiPathGenerator,
@@ -27,6 +28,7 @@ __all__ = [
     "BrownianBridge",
     "GaussianSequenceGeneratorProtocol",
     "InverseCumulativeNormalRsg",
+    "MonteCarloModel",
     "MultiPath",
     "MultiPathGenerator",
     "MultiPathSample",
