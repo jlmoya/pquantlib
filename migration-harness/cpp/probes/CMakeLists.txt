@@ -198,3 +198,10 @@ target_link_libraries(cluster_l4e_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     methods/protocols.py used by lattices and MC/FD engines.) ===
 add_executable(l5a_foundations_probe l5a/foundations_probe.cpp)
 target_link_libraries(l5a_foundations_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L5-C cluster: Monte Carlo framework (Path / MultiPath / Brownian
+#     bridge / PathGenerator / McSimulation) + simple MC engines
+#     (MCEuropeanEngine + MCDiscreteArithmeticAPEngine with geometric
+#     control variate via AnalyticDiscreteGeometricAveragePriceAsianEngine). ===
+add_executable(cluster_l5c_probe cluster_l5c/probe.cpp)
+target_link_libraries(cluster_l5c_probe PRIVATE ${QUANTLIB_LIBRARY})
