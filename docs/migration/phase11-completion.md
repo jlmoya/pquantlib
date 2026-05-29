@@ -12,7 +12,9 @@ Living document — updated incrementally as each wave closes.
 |---|---|---|---|---|
 | W1 | `pquantlib-phase11-w1-complete` @ `07712fa` | +123 | 2775 | 2026-05-29 |
 | W2 | `pquantlib-phase11-w2-complete` @ `d345bde` | +100 | 2875 | 2026-05-29 |
-| W3 | `pquantlib-phase11-w3-complete` @ `ea41029` | +229 | **3104** | 2026-05-29 |
+| W3 | `pquantlib-phase11-w3-complete` @ `ea41029` | +229 | 3104 | 2026-05-29 |
+| W4 | `pquantlib-phase11-w4-complete` @ `eb901ae` | +68 | **3172** | 2026-05-29 |
+| W5 | **PAUSED at restart checkpoint** — W5-B/C on branches (not merged), W5-A WIP. See [`phase11-w5-resume-checkpoint.md`](phase11-w5-resume-checkpoint.md). | — | 3172 (main) | 2026-05-29 |
 
 ## W1 — Specialty model completion
 
