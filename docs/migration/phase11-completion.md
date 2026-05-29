@@ -11,7 +11,8 @@ Living document — updated incrementally as each wave closes.
 | Wave | Tag | Tests delta | Cumulative | Date |
 |---|---|---|---|---|
 | W1 | `pquantlib-phase11-w1-complete` @ `07712fa` | +123 | 2775 | 2026-05-29 |
-| W2 | `pquantlib-phase11-w2-complete` @ `d345bde` | +100 | **2875** | 2026-05-29 |
+| W2 | `pquantlib-phase11-w2-complete` @ `d345bde` | +100 | 2875 | 2026-05-29 |
+| W3 | `pquantlib-phase11-w3-complete` @ `ea41029` | +229 | **3104** | 2026-05-29 |
 
 ## W1 — Specialty model completion
 

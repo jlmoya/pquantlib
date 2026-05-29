@@ -28,10 +28,10 @@ Pin: `v1.42.1` @ `099987f0ca2c11c505dc4348cdb9ce01a598e1e5` (2026-04-16).
 
 ## Current state
 
-- **Phase:** **Phase 11 in progress** — multi-wave full C++ closure. W1 + W2 closed (latest tag `pquantlib-phase11-w2-complete` @ `d345bde`). W2 added ZabrInterpolation + ZabrInterpolatedSmileSection + XabrCube generalization + ConvexMonotoneInterpolation + LocalBootstrap + CmsMarket + AbcdCalibration + Kahale deep coverage.
+- **Phase:** **Phase 11 in progress** — multi-wave full C++ closure. W1 + W2 + W3 closed (latest tag `pquantlib-phase11-w3-complete` @ `ea41029`). W3 added experimental/credit/* (~30 classes: foundation types + copulas + correlation + 5 loss models + Basket/SyntheticCDO/CDO engines + NthToDefault/CDSOption/RiskyAssetSwap).
 - **Branch:** `main`. No active feature branches between waves.
 - **Workspace:** uv-managed 4-package monorepo. Dependencies: numpy, scipy, pytest, pyright, ruff. No new deps in Phase 11.
-- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **currently 2875/0/0**.
+- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **currently 3104/0/0**.
 - **L1 layer (Phase 1):** foundations, time core, day counters, 8 first-math modules, copulas + distributions + statistics, currencies, Solver1D + integrals, deterministic RNGs, optimization scaffolding, interpolations + matrix utils.
 - **L2 layer (Phase 2):** quotes, termstructures core + 4 cross-cluster Protocols, Index + IndexManager, Compounding + InterestRate, YieldTermStructure + concrete curves, InterestRateIndex hierarchy + 8 ibor concretes + 2 swap indexes + 7 rate helpers, cashflows + CashFlows aggregator + Duration, volatility termstructures (Black/Local Constant/Curve/Surface).
 - **L3 layer (Phase 3):** Settings.evaluation_date observable; Payoff + Exercise + Option + Instrument + PricingEngine + GenericEngine + BlackFormula + 3 cross-cluster Protocols; Bond + 4 concretes + DiscountingBondEngine + BondForward; Swap + VanillaSwap + OIS + ZeroCoupon + make_vanilla_swap + make_ois + DiscountingSwapEngine; StochasticProcess + GBSM family + VanillaOption + EuropeanOption + AnalyticEuropeanEngine + BinomialVanillaEngine + BlackCalculator; Forward + Position + FxForward + ForwardRateAgreement + DiscountingFwdEngine.
