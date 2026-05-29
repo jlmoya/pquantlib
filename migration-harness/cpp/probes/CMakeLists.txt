@@ -314,3 +314,9 @@ target_link_libraries(cluster_l10a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     inversion of the Gaussian1dSwaptionEngine NPV). ===
 add_executable(cluster_l10b_probe cluster_l10b/probe.cpp)
 target_link_libraries(cluster_l10b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L10-C cluster: interpolator tail + ZABR family
+#     (HymanFilteredCubic + ChebyshevInterpolation + MultiCubicSpline +
+#     AbcdInterpolation + zabr_volatility + ZabrSmileSection). ===
+add_executable(cluster_l10c_probe cluster_l10c/probe.cpp)
+target_link_libraries(cluster_l10c_probe PRIVATE ${QUANTLIB_LIBRARY})
