@@ -303,7 +303,12 @@ class Gaussian1dSwaptionVolatility(SwaptionVolatilityStructure):
         # ShiftedLognormal (the Black formula's lognormal branch).
         return VolatilityType.ShiftedLognormal
 
-    def smile_section(self, fixing_date: Date, tenor: Period) -> _Gaussian1dSmileSection:
+    def smile_section(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        option_expiry: Period | Date | float,
+        swap_tenor: Period | float,
+        extrapolate: bool = False,
+    ) -> _Gaussian1dSmileSection:
         """Build a smile section at ``(fixing_date, tenor)``.
 
         # C++ parity: gaussian1dswaptionvolatility.cpp:38-43.
@@ -313,7 +318,22 @@ class Gaussian1dSwaptionVolatility(SwaptionVolatilityStructure):
         overload so we use the base index as-is. In practice all
         callers pass tenor == swap_index_base.tenor().
         """
-        _ = tenor  # documented divergence — see Gaussian1dModel module docstring
+        _ = swap_tenor, extrapolate  # documented divergence — see Gaussian1dModel module docstring
+        # Convert option_expiry to a fixing Date.
+        from pquantlib.time.date import Date as _Date  # noqa: PLC0415
+
+        if isinstance(option_expiry, Period):
+            fixing_date = self.option_date_from_tenor(option_expiry)
+        elif isinstance(option_expiry, _Date):
+            fixing_date = option_expiry
+        else:
+            # Time-overload: not used by the model callers; raise to
+            # surface incorrect usage.
+            raise TypeError(
+                "Gaussian1dSwaptionVolatility.smile_section requires a "
+                "Date or Period option_expiry; time-Float overload not "
+                "supported."
+            )
         return _Gaussian1dSmileSection(
             fixing_date=fixing_date,
             swap_index=self._swap_index_base,

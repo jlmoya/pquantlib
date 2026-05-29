@@ -20,6 +20,7 @@ C++ helper ``swapLength(Period)`` converts (Months / Years) → Time
 from __future__ import annotations
 
 from abc import abstractmethod
+from typing import TYPE_CHECKING
 
 from pquantlib import qassert
 from pquantlib.daycounters.day_counter import DayCounter
@@ -30,6 +31,9 @@ from pquantlib.time.calendar import Calendar
 from pquantlib.time.date import Date
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
+
+if TYPE_CHECKING:
+    from pquantlib.termstructures.volatility.smile_section import SmileSection
 
 _MONTHS_PER_YEAR: int = 12
 
@@ -193,6 +197,62 @@ class SwaptionVolatilityStructure(VolatilityTermStructure):
         else:
             t = float(option_expiry)
         return v * v * t
+
+    # --- smile-section default surface ---------------------------------
+
+    def smile_section(
+        self,
+        option_expiry: Period | Date | float,
+        swap_tenor: Period | float,
+        extrapolate: bool = False,
+    ) -> SmileSection:
+        """Return a ``SmileSection`` at ``(option_expiry, swap_tenor)``.
+
+        # C++ parity: ``SwaptionVolatilityStructure::smileSection``
+        # (swaptionvolstructure.cpp). The base wraps the
+        # vol-as-of-strike call in a ``FlatSmileSection`` for structures
+        # that don't have a smile (e.g. ``SwaptionConstantVolatility``
+        # or the matrix interpolators). Subclasses may override (e.g.
+        # ``SwaptionVolatilityCube.smile_section_impl``).
+        """
+        # Convert expiry to (Date, time).
+        from pquantlib.termstructures.volatility.flat_smile_section import (  # noqa: PLC0415
+            FlatSmileSection,
+        )
+
+        if isinstance(option_expiry, Period):
+            option_date = self.option_date_from_tenor(option_expiry)
+            t = self.time_from_reference(option_date)
+        elif isinstance(option_expiry, Date):
+            option_date = option_expiry
+            t = self.time_from_reference(option_date)
+        else:
+            option_date = None
+            t = float(option_expiry)
+        length = (
+            self.swap_length(swap_tenor) if isinstance(swap_tenor, Period) else swap_tenor
+        )
+        # Flat smile evaluates ``_volatility_impl(t, length, atm)`` once
+        # and treats it as strike-independent. This is correct for
+        # ``SwaptionConstantVolatility`` and surface-level matrix
+        # interpolators that lack a true smile.
+        # We need an atm to pick a vol; use the ATM forward = 0.0 query
+        # point (constant-vol surfaces don't depend on strike so the
+        # value is the same).
+        vol = self._volatility_impl(t, length, 0.0)
+        shift = self._shift_impl(t, length) if (
+            self.volatility_type() == VolatilityType.ShiftedLognormal
+        ) else 0.0
+        _ = extrapolate
+        return FlatSmileSection(
+            volatility=vol,
+            exercise_date=option_date,
+            exercise_time=t,
+            day_counter=self.day_counter(),
+            reference_date=self.reference_date(),
+            volatility_type=self.volatility_type(),
+            shift=shift,
+        )
 
     def shift(
         self,
