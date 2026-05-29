@@ -53,13 +53,13 @@ C++: `ql/models/volatility/{constantestimator,garch,garmanklass,parkinson,simple
 
 **Access:** Use `numpy` directly: `np.diff(np.log(prices)).std() * np.sqrt(252)` for annualized Parkinson-style estimators; GARCH via `arch` package.
 
-### Specialty short-rate models
+### Specialty short-rate models — **partially CLOSED** by Phase 10 L10-B
 
 C++: `ql/models/shortrate/onefactormodels/{gaussian1dmodel,gsr,markovfunctional}.hpp`.
 
-**Why deferred:** Highly specialized variants used by quant teams with specific calibration regimes. Heston / HW / Vasicek / CIR / ExtendedCIR / G2 / BlackKarasinski cover the vast majority of use cases.
+**Status:** `Gaussian1dModel` abstract + `Gsr` concrete + `GsrProcess` + `Gaussian1dSwaptionVolatility` all ported in `pquantlib-phase10-complete`. Gaussian1d + GSR cover the Tier-1 specialty-short-rate use cases.
 
-**Access:** none — direct port required for these specific models.
+**Remaining (future-cluster candidates):** `MarkovFunctional` (542 LOC; second Gaussian1dModel concrete with bootstrap-vs-swaption-strip calibration — its own dedicated cluster). Plus `Gaussian1dGsrProcess` companion + `Gaussian1dCapFloorEngine` + `Gaussian1dFloatFloatSwaptionEngine` + `Gaussian1dNonStandardSwaptionEngine` (Gaussian1d-driven engines on top of the model). `Gaussian1dSmileSection` IborIndex ctor (depends on Gaussian1dCapFloorEngine).
 
 ### Specialty Heston variants
 
@@ -201,9 +201,9 @@ If you need a carved-out feature:
 ## Statistics
 
 - **C++ v1.42.1 surface**: ~2300 .hpp files.
-- **PQuantLib ported**: ~437 classes across ~2464 tests (after Phase 7 inflation + Phase 8 piecewise/credit/capfloor-vol + Phase 9 cubic/post-L8-ergonomics/SABR-cube opt-in extensions).
-- **Test parity with `jquantlib-final`**: 2464 / 3610 = **68.3%**.
+- **PQuantLib ported**: ~454 classes across ~2652 tests (after Phase 7 inflation + Phase 8 piecewise/credit/capfloor-vol + Phase 9 cubic/post-L8-ergonomics/SABR-cube + Phase 10 vol-tail/Gaussian1d/interpolator-tail/ZABR opt-in extensions).
+- **Test parity with `jquantlib-final`**: 2652 / 3610 = **73.5%**.
 
-PQuantLib covers the **vanilla + American + analytic-exotic pricing + calibration** surface end-to-end, with substantial coverage of specialty short-rate models (Vasicek, HullWhite, CIR, ExtendedCIR, G2++, BlackKarasinski), equity stochastic-vol (Heston, Bates), and the full Monte Carlo / Finite-Difference / Tree pricing infrastructure. Phase 7 added the full inflation cluster (Tier-1 indexes/curves/cashflows/instruments/vol). Phase 8 added piecewise inflation + IterativeBootstrap + Tier-1 credit (CDS pricing + hazard-rate term structures + MidPoint/Integral engines) + capfloor/optionlet/swaption vol surfaces (incl. OptionletStripper1 + SwaptionVolatilityMatrix). Phase 9 added cubic/bicubic spline interpolators (closing the L1-E cubic-family carve-out) + post-L8 ergonomics (PiecewiseYieldCurve + 3 yield traits + IsdaCdsEngine + MakeCDS + implied_hazard_rate + conventional_spread + PiecewiseDefaultCurve bootstrap wiring) + the full SABR swaption smile cube (5-class SmileSection family + Hagan 2002 SABR closed-form + SabrInterpolation scipy least-squares fitter + Sabr/Interpolated SwaptionVolatilityCube).
+PQuantLib covers the **vanilla + American + analytic-exotic pricing + calibration** surface end-to-end, with substantial coverage of specialty short-rate models (Vasicek, HullWhite, CIR, ExtendedCIR, G2++, BlackKarasinski, **Gsr**), equity stochastic-vol (Heston, Bates), and the full Monte Carlo / Finite-Difference / Tree pricing infrastructure. Phase 7 added the full inflation cluster (Tier-1 indexes/curves/cashflows/instruments/vol). Phase 8 added piecewise inflation + IterativeBootstrap + Tier-1 credit (CDS pricing + hazard-rate term structures + MidPoint/Integral engines) + capfloor/optionlet/swaption vol surfaces (incl. OptionletStripper1 + SwaptionVolatilityMatrix). Phase 9 added cubic/bicubic spline interpolators + post-L8 ergonomics (PiecewiseYieldCurve + 3 yield traits + IsdaCdsEngine + MakeCDS + implied_hazard_rate + conventional_spread + PiecewiseDefaultCurve bootstrap wiring) + the full SABR swaption smile cube (5-class SmileSection family + Hagan 2002 SABR closed-form + SabrInterpolation scipy least-squares fitter + Sabr/Interpolated SwaptionVolatilityCube). Phase 10 closed the vol surface tail (KahaleSmileSection + AtmSmileSection + AtmAdjustedSmileSection + SabrInterpolatedSmileSection + OptionletStripper2 + SabrInterpolation Halton multi-start + HaltonRsg) + the Gaussian1d short-rate cluster (Gaussian1dModel + Gsr + GsrProcess + Gaussian1dSwaptionVolatility) + the interpolator tail (HymanFilteredCubic + ChebyshevInterpolation + MultiCubicSpline + AbcdInterpolation) + the ZABR family closed-form (zabr_volatility + ZabrSmileSection).
 
-Remaining specialty domains (MarketModels, ZABR, experimental credit basket/CDO, specialty short-rate variants, Gaussian1dSwaptionVolatility, CmsMarket/CmsMarketCalibration, OptionletStripper2, KahaleSmileSection) defer to dedicated future work or QuantLib-Python wrapping. Post-Phase-9 backlog (none blocking): SabrInterpolatedSmileSection composition wrapper (~1 hr), Halton multi-start sampling for SabrInterpolation (~1 hr), Hyman-1983 monotonic cubic alternative (~3 hr), MultiCubicSpline (~4 hr), ChebyshevInterpolation (~2 hr), BootstrapError / LocalBootstrap (~2 hr each).
+Remaining specialty domains (MarketModels, MarkovFunctional, experimental credit basket/CDO, CmsMarket/CmsMarketCalibration, ZABR FD modes, Gaussian1d-driven engines) defer to dedicated future work or QuantLib-Python wrapping. Post-Phase-10 backlog (none blocking): ZabrInterpolation 5-param fitter + ZabrInterpolatedSmileSection (~3 hr), XabrSwaptionVolatilityCube template generalisation (~3 hr), KahaleSmileSection.core_smile deep-iteration testing (~2 hr), Gaussian1d engines (~6 hr each), Hyman-1983 alt monotonic cubic semantics, ConvexMonotoneInterpolation (Hagan-West 2009), BootstrapError / LocalBootstrap alt bootstrap algorithms.

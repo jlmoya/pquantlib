@@ -1,9 +1,10 @@
 # Phase 10 — Vol surface tail + Gaussian1d short-rate + ZABR / interpolator tail (design)
 
 **Date:** 2026-05-29
-**Status:** drafted; run-to-completion per user directive ("Phase 10 in its totality")
+**Status:** **CLOSED** — tagged `pquantlib-phase10-complete` @ `d3746e4` — 2652/0/0
 **Predecessor:** `pquantlib-phase9-complete` @ `37e67e0` — 2464/0/0, pyright + ruff clean
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
+**Completion summary:** [`phase10-completion.md`](phase10-completion.md)
 
 ## Scope
 

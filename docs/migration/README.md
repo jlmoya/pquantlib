@@ -107,6 +107,16 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
 - Final test count: **1883/0/0**. pyright + ruff clean.
 
+### Phase 10 — Vol surface tail + Gaussian1d short-rate + interpolator tail / ZABR (closed; opt-in extension beyond pquantlib-final)
+
+- [`phase10-design.md`](phase10-design.md) — binding spec (closed).
+- [`phase10-plan.md`](phase10-plan.md) — executable plan.
+- [`phase10-completion.md`](phase10-completion.md) — closure summary, 3-cluster contribution table, merge reconciliations, divergences, follow-up carve-outs.
+- **L10-A parallel** (+77 tests): KahaleSmileSection + AtmSmileSection + AtmAdjustedSmileSection + SabrInterpolatedSmileSection + OptionletStripper2 + SabrInterpolation Halton multi-start + HaltonRsg (closes Phase 9 vol-tail residuals + L1-D HaltonRsg carry-over).
+- **L10-B parallel** (+41 tests): Gaussian1dModel abstract + Gsr concrete + GsrProcess + Gaussian1dSwaptionVolatility (closes Tier-1 specialty short-rate; MarkovFunctional deferred).
+- **L10-C parallel** (+70 tests): HymanFilteredCubic + ChebyshevInterpolation + MultiCubicSpline + AbcdInterpolation + zabr_volatility + ZabrSmileSection (closes L1-E interpolator tail + ZABR family closed-form).
+- Tag: `pquantlib-phase10-complete` @ `d3746e4`. Test count: **2652/0/0**.
+
 ### Phase 9 — Cubic/Bicubic + post-L8 ergonomics + SABR cube (closed; opt-in extension beyond pquantlib-final)
 
 - [`phase9-design.md`](phase9-design.md) — binding spec (closed).
