@@ -31,12 +31,18 @@ Notes:
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 
 from pquantlib import qassert
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.patterns.observer import Observable
+from pquantlib.payoffs import OptionType
+from pquantlib.pricingengines.black_formula import (
+    bachelier_black_formula,
+    black_formula,
+)
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.time.date import Date
 
@@ -217,3 +223,81 @@ class SmileSection(Observable, ABC):
         if self._floating:
             self._refresh_floating()
         self.notify_observers()
+
+    # --- pricing helpers (require atm_level) --------------------------------
+    #
+    # The C++ base provides four pricing helpers that use the smile's
+    # variance plus the appropriate Black / Bachelier closed form. They
+    # require ``atm_level()`` to be a real number (not NaN).
+
+    def option_price(
+        self,
+        strike: float,
+        option_type: int = 1,
+        discount: float = 1.0,
+    ) -> float:
+        """Black or Bachelier option price using the smile's variance.
+
+        # C++ parity: SmileSection::optionPrice (smilesection.cpp:72-86).
+
+        ``option_type`` is 1 for Call, -1 for Put — matches the
+        ``OptionType`` integer encoding.
+        """
+        atm = self.atm_level()
+        qassert.require(
+            not math.isnan(atm),
+            "smile section must provide atm level to compute option price",
+        )
+        ot = OptionType(option_type)
+        std_dev = math.sqrt(self.variance(strike))
+        if self._volatility_type == VolatilityType.ShiftedLognormal:
+            # Mirror the C++ epsilon-strike escape hatch: at strike =
+            # -shift the lognormal model's std_dev would be undefined,
+            # so we use std_dev = 0.2 as a placeholder (the C++ uses
+            # the literal 0.2 too, smilesection.cpp:82-83).
+            if abs(strike + self._shift) < 1.0e-16:
+                std_dev = 0.2
+            return black_formula(ot, strike, atm, std_dev, discount, self._shift)
+        return bachelier_black_formula(ot, strike, atm, std_dev, discount)
+
+    def digital_option_price(
+        self,
+        strike: float,
+        option_type: int = 1,
+        discount: float = 1.0,
+        gap: float = 1.0e-5,
+    ) -> float:
+        """Digital option price via call-spread approximation.
+
+        # C++ parity: SmileSection::digitalOptionPrice (smilesection.cpp:88-97).
+        """
+        if self._volatility_type == VolatilityType.ShiftedLognormal:
+            lower_bound = -self._shift
+        else:
+            lower_bound = float("-inf")
+        kl = max(strike - gap / 2.0, lower_bound)
+        kr = kl + gap
+        sign = 1.0 if option_type == 1 else -1.0
+        return sign * (
+            self.option_price(kl, option_type, discount)
+            - self.option_price(kr, option_type, discount)
+        ) / gap
+
+    def density(self, strike: float, discount: float = 1.0, gap: float = 1.0e-4) -> float:
+        """Risk-neutral density of the underlying at ``strike``.
+
+        # C++ parity: SmileSection::density (smilesection.cpp:99-105).
+
+        Computed as the (centered) finite difference of the digital
+        call price wrt strike.
+        """
+        if self._volatility_type == VolatilityType.ShiftedLognormal:
+            lower_bound = -self._shift
+        else:
+            lower_bound = float("-inf")
+        kl = max(strike - gap / 2.0, lower_bound)
+        kr = kl + gap
+        return (
+            self.digital_option_price(kl, 1, discount, gap)
+            - self.digital_option_price(kr, 1, discount, gap)
+        ) / gap

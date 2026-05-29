@@ -295,3 +295,9 @@ target_link_libraries(cluster_l9a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     PiecewiseDefaultCurve bootstrap wiring + MakeCDS factory. ===
 add_executable(cluster_l9b_probe cluster_l9b/probe.cpp)
 target_link_libraries(cluster_l9b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L9-C cluster: SABR formula + smile sections + swaption vol cube
+#     (sabrVolatility + SabrSmileSection + InterpolatedSmileSection +
+#     SpreadedSmileSection + SabrSwaptionVolatilityCube). ===
+add_executable(cluster_l9c_probe cluster_l9c/probe.cpp)
+target_link_libraries(cluster_l9c_probe PRIVATE ${QUANTLIB_LIBRARY})

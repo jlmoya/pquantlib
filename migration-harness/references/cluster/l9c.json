@@ -1,0 +1,63 @@
+{
+  "sabr_formula": {
+    "alpha": 0.04,
+    "beta": 0.5,
+    "nu": 0.4,
+    "rho": -0.1,
+    "forward": 0.05,
+    "expiry": 5.0,
+    "vol_atm": 0.19013039103878204,
+    "vol_strike_3pct": 0.25260655135966043,
+    "vol_strike_4pct": 0.21223614841885946,
+    "vol_strike_6pct": 0.18317166212335512,
+    "vol_strike_7pct": 0.18534906848705129,
+    "vol_atm_normal": 0.0094468910725391091,
+    "vol_strike_4pct_normal": 0.0094444902492464566
+  },
+  "sabr_smile_section": {
+    "exercise_time": 5,
+    "atm_level": 0.050000000000000003,
+    "alpha": 0.040000000000000001,
+    "beta": 0.5,
+    "nu": 0.40000000000000002,
+    "rho": -0.10000000000000001,
+    "vol_atm": 0.19013039103878204,
+    "vol_strike_4pct": 0.21223614841885946,
+    "vol_strike_6pct": 0.18317166212335512,
+    "variance_atm": 0.18074782798280087
+  },
+  "interpolated_smile_section": {
+    "strikes": [0.03, 0.04, 0.05, 0.06, 0.07],
+    "vols": [0.22, 0.20, 0.18, 0.20, 0.22],
+    "exercise_time": 1,
+    "atm_level": 0.050000000000000003,
+    "vol_at_pillar_strike_5pct": 0.17999999999999999,
+    "vol_at_pillar_strike_3pct": 0.22,
+    "linear_vol_at_strike_45bp": 0.19,
+    "linear_vol_at_strike_55bp": 0.19
+  },
+  "spreaded_smile_section": {
+    "exercise_time": 2,
+    "atm_level": 0.050000000000000003,
+    "base_vol": 0.17999999999999999,
+    "spread": 0.005,
+    "spreaded_vol_at_strike_5pct": 0.185,
+    "spreaded_vol_at_strike_3pct": 0.185
+  },
+  "cube_sabr_slice": {
+    "alpha": 0.03,
+    "beta": 0.6,
+    "nu": 0.3,
+    "rho": 0.0,
+    "forward": 0.04,
+    "expiry": 3.0,
+    "strikes": [0.03, 0.035, 0.04, 0.045, 0.05],
+    "sabr_vols": [
+      0.12735477462504774,
+      0.11655175279437358,
+      0.1111887802447392,
+      0.11053348303444817,
+      0.11292639285809865
+    ]
+  }
+}
