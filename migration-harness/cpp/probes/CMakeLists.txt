@@ -389,3 +389,13 @@ target_link_libraries(cluster_w3c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     and probes Basket/OneFactorGaussianCopula directly from C++. ===
 add_executable(cluster_w3d_probe cluster_w3d/probe.cpp)
 target_link_libraries(cluster_w3d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W4-C cluster: barrier specialties + variance options.
+#     PartialTimeBarrierOption + AnalyticPartialTimeBarrierOptionEngine
+#     (Heynen-Kat 1994); BinomialDoubleBarrierEngine[CRR] cross-checked
+#     against AnalyticDoubleBarrierEngine (Ikeda-Kunitomo); SoftBarrier
+#     option + AnalyticSoftBarrierEngine (Hart-Ross 1994); VarianceOption
+#     + IntegralHestonVarianceOptionEngine (Bailey-Swarztrauber
+#     oscillatory integral). ===
+add_executable(cluster_w4c_probe cluster_w4c/probe.cpp)
+target_link_libraries(cluster_w4c_probe PRIVATE ${QUANTLIB_LIBRARY})
