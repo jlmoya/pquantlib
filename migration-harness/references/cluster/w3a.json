@@ -1,0 +1,114 @@
+{
+  "default_event": {
+    "date_serial": 45306,
+    "currency_code": "USD",
+    "seniority_idx": 1,
+    "default_type_idx": 1,
+    "restructuring_type_idx": 0,
+    "is_restructuring": false,
+    "is_default": true,
+    "has_settled": true,
+    "settlement_date_serial": 45311,
+    "recovery_rate_snrfor": 0.40000000000000002
+  },
+  "default_prob_key": {
+    "currency_code": "USD",
+    "seniority_idx": 1,
+    "size": 3
+  },
+  "default_event_matches_key": true,
+  "default_event_eur_matches_usd_key": false,
+  "issuer": {
+    "curve_survival_t1": 0.98019867330675525,
+    "curve_survival_t5": 0.90483741803595952
+  },
+  "pool": {
+    "size": 2,
+    "has_acme": true,
+    "has_unknown": false,
+    "time_acme": 2.5,
+    "time_globex": 0,
+    "names_first": "AcmeCorp",
+    "names_second": "Globex"
+  },
+  "isda_conv_recoveries": {
+    "secdom": 0.65000000000000002,
+    "snrfor": 0.40000000000000002,
+    "sublt2": 0.20000000000000001,
+    "jrsubt2": 0.20000000000000001,
+    "preft1": 0.14999999999999999
+  },
+  "recovery_rate_quote": {
+    "value": 0.41999999999999998,
+    "seniority_idx": 1,
+    "is_valid": true
+  },
+  "constant_recovery_model_real_ctor": 0.37,
+  "constant_recovery_model_quote_ctor": 0.55000000000000004,
+  "loss_dist_probabilities": {
+    "p0": 0.3024,
+    "p1": 0.44040000000000001,
+    "p2": 0.21440000000000001,
+    "p3": 0.040399999999999998,
+    "p4": 0.0024000000000000007,
+    "at_least_2": 0.25719999999999998
+  },
+  "loss_dist_binomial": {
+    "p_n0": 0.40960000000000008,
+    "p_n1": 0.40960000000000019,
+    "p_n2": 0.15360000000000004,
+    "at_least_2": 0.18080000000000007
+  },
+  "loss_dist_homogeneous": {
+    "n_buckets": 10,
+    "x_0": 0,
+    "x_1": 1,
+    "dx_0": 1,
+    "density_0": 0.3024,
+    "density_1": 0.44040000000000001,
+    "cumulative_0": 0.3024,
+    "cumulative_2": 0.95720000000000005,
+    "excess_0": 1,
+    "excess_2": 0.25719999999999998,
+    "prob_n0": 0.3024,
+    "prob_n1": 0.44040000000000001,
+    "prob_n2": 0.21440000000000001,
+    "prob_n4": 0.0024000000000000007,
+    "excess_prob_n0": 1,
+    "excess_prob_n2": 0.25719999999999998,
+    "volume": 1,
+    "size_field": 4
+  },
+  "loss_dist_binomial_dist": {
+    "n_buckets": 10,
+    "prob_n0": 0.32768000000000008,
+    "prob_n1": 0.40959999999999996,
+    "prob_n2": 0.20480000000000001,
+    "prob_n5": 0.00032000000000000008,
+    "excess_prob_n0": 1,
+    "excess_prob_n3": 0.057919999999999999,
+    "volume": 1.9762625833649862e-323,
+    "size_field": 5
+  },
+  "distribution_basics": {
+    "size": 5,
+    "x_0": 0,
+    "x_3": 3,
+    "dx_0": 1,
+    "dx_4": 1,
+    "density_0": 0.33333333333333331,
+    "density_2": 0.33333333333333331,
+    "cumulative_0": 0.33333333333333331,
+    "cumulative_4": 0.99999999999999989,
+    "expected_value": 1.8333333333333333,
+    "locate_2_3": 2,
+    "average_0": 0.375,
+    "average_2": 2.6000000000000001
+  },
+  "loss": {
+    "l1_time": 2.5,
+    "l1_amount": 100,
+    "l1_lt_l2": true,
+    "l1_eq_l3": true
+  }
+}

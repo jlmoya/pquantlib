@@ -360,3 +360,10 @@ target_link_libraries(cluster_w1a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     KahaleSmileSection.core_smile deep-iter (Phase 11 W2-B). ===
 add_executable(cluster_w2b_probe cluster_w2b/probe.cpp)
 target_link_libraries(cluster_w2b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W3-A pilot: experimental/credit foundation types — DefaultType +
+#     AtomicDefault + Restructuring + DefaultEvent + DefaultProbKey +
+#     Issuer + Pool + RecoveryRateQuote + ConstantRecoveryModel +
+#     LossDist family + Distribution + Loss. Foundation for W3-B/C/D. ===
+add_executable(cluster_w3a_probe cluster_w3a/probe.cpp)
+target_link_libraries(cluster_w3a_probe PRIVATE ${QUANTLIB_LIBRARY})
