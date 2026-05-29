@@ -389,3 +389,10 @@ target_link_libraries(cluster_w3c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     and probes Basket/OneFactorGaussianCopula directly from C++. ===
 add_executable(cluster_w3d_probe cluster_w3d/probe.cpp)
 target_link_libraries(cluster_w3d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W4-B cluster: compound + chooser + extensible options +
+#     Kirk spread engine + AnalyticPdfHeston + continuous Asian
+#     Levy/Vecer engines. Closed-form exotic options under BSM and
+#     PDF-/PDE-based engines under Heston and Asian PDE. ===
+add_executable(cluster_w4b_probe cluster_w4b/probe.cpp)
+target_link_libraries(cluster_w4b_probe PRIVATE ${QUANTLIB_LIBRARY})

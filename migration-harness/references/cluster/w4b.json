@@ -1,0 +1,35 @@
+{
+  "compound": {
+    "call_on_call": 11.330533988218153,
+    "put_on_call": 0.74320602457325891,
+    "call_on_put": 4.2877697626876952,
+    "put_on_put": 1.353513802150546
+  },
+  "simple_chooser": {
+    "npv": 5.8432286089509224
+  },
+  "holder_extensible": {
+    "call_npv": 9.4062908098481941,
+    "put_npv": -0.14387713688663445
+  },
+  "writer_extensible": {
+    "call_npv": 7.7789436971270707,
+    "put_npv": 11.112457311267596
+  },
+  "kirk_spread": {
+    "call_npv": 11.446471020899498,
+    "put_npv": 6.2026181434030585
+  },
+  "analytic_pdf_heston": {
+    "pdf_npv": 8.9399737345241466,
+    "classic_heston_npv": 8.9399737415174076
+  },
+  "asian_levy": {
+    "call_npv": 3.3412306569465722,
+    "put_npv": 2.5209319114218909
+  },
+  "asian_vecer": {
+    "call_npv": 5.1757477080291201,
+    "put_npv": 3.7345274712962979
+  }
+}
