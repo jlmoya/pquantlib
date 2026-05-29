@@ -321,6 +321,12 @@ target_link_libraries(cluster_l10b_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(cluster_l10c_probe cluster_l10c/probe.cpp)
 target_link_libraries(cluster_l10c_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# === W1-B cluster: Gaussian1d engines (Gaussian1dCapFloorEngine +
+#     Gaussian1dFloatFloatSwaptionEngine +
+#     Gaussian1dNonstandardSwaptionEngine). ===
+add_executable(cluster_w1b_probe cluster_w1b/probe.cpp)
+target_link_libraries(cluster_w1b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # === W1-C cluster: Bates variant models + analytic engines
 #     (BatesDetJumpModel + BatesDoubleExpModel + BatesDoubleExpDetJumpModel +
 #     AnalyticBatesDetJumpEngine + AnalyticBatesDoubleExpEngine +

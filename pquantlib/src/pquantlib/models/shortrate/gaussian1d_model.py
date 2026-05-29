@@ -43,18 +43,21 @@ Python notes:
   keyed by ``(swap_index.name(), fixing_serial, tenor_repr)``.
 - C++ ``zerobondOption(...)`` (option on a zero-bond) uses cubic
   interpolation over a 1-D state grid + a closed-form polynomial
-  integral (``gaussianShiftedPolynomialIntegral``). This is NOT
-  ported in L10-B — it's only used by the
-  ``Gaussian1dCapFloorEngine`` and ``Gaussian1dSwaptionEngine``
-  internals, both of which are deferred. Re-add if a concrete engine
-  is ported.
+  integral (``gaussianShiftedPolynomialIntegral``). The polynomial
+  integral helpers were ported in Phase 11 W1-B (used by the
+  Gaussian1d cap/floor + float-float-swaption + non-standard-swaption
+  engines that landed there). The ``zerobondOption`` method itself
+  remains deferred — none of the W1-B engines call it; they call the
+  polynomial-integral helpers directly with payoff-replication
+  coefficients from a per-state cubic spline.
 - C++ ``gaussianPolynomialIntegral`` / ``gaussianShiftedPolynomialIntegral``
-  are static utilities used only by ``zerobondOption``; deferred
-  along with it.
+  are static utilities — ported as static methods on
+  :class:`Gaussian1dModel` in Phase 11 W1-B.
 """
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -401,6 +404,99 @@ class Gaussian1dModel(TermStructureConsistentModel, LazyObject, ABC):
             dcf = swap_index.day_counter().year_fraction(dj_minus_1, dj)
             annuity += disc * dcf
         return annuity
+
+    # --- shifted-polynomial Gaussian integral ----------------------------
+
+    @staticmethod
+    def gaussian_polynomial_integral(
+        a: float,  # quartic coef
+        b: float,  # cubic coef
+        c: float,  # quadratic coef
+        d: float,  # linear coef
+        e: float,  # constant
+        y0: float,
+        y1: float,
+    ) -> float:
+        r"""Integral over [y0, y1] of (a*y^4 + b*y^3 + c*y^2 + d*y + e)*phi(y)/2 dy.
+
+        # C++ parity: ``Gaussian1dModel::gaussianPolynomialIntegral`` in
+        # gaussian1dmodel.cpp:207-238.
+
+        Used by the cubic-interpolated payoff replication in the
+        Gaussian1d engines (cap/floor + swaption variants). Substitutes
+        ``x = y / sqrt(2)`` and writes the integrals in closed form in
+        terms of ``erf`` and ``exp``.
+
+        The C++ ``GAUSS1D_ENABLE_NTL`` arbitrary-precision codepath is
+        not ported — the standard-precision branch is what every
+        downstream test uses.
+        """
+        # # C++ parity: substitutions (gaussian1dmodel.cpp:226-228).
+        sqrt2 = math.sqrt(2.0)
+        aa = 4.0 * a
+        ba = 2.0 * sqrt2 * b
+        ca = 2.0 * c
+        da = sqrt2 * d
+        x0 = y0 / sqrt2
+        x1 = y1 / sqrt2
+        sqrtpi = math.sqrt(math.pi)
+        term_x1 = (
+            0.125 * (3.0 * aa + 2.0 * ca + 4.0 * e) * math.erf(x1)
+            - (1.0 / (4.0 * sqrtpi))
+            * math.exp(-x1 * x1)
+            * (
+                2.0 * aa * x1 * x1 * x1
+                + 3.0 * aa * x1
+                + 2.0 * ba * (x1 * x1 + 1.0)
+                + 2.0 * ca * x1
+                + 2.0 * da
+            )
+        )
+        term_x0 = (
+            0.125 * (3.0 * aa + 2.0 * ca + 4.0 * e) * math.erf(x0)
+            - (1.0 / (4.0 * sqrtpi))
+            * math.exp(-x0 * x0)
+            * (
+                2.0 * aa * x0 * x0 * x0
+                + 3.0 * aa * x0
+                + 2.0 * ba * (x0 * x0 + 1.0)
+                + 2.0 * ca * x0
+                + 2.0 * da
+            )
+        )
+        return term_x1 - term_x0
+
+    @staticmethod
+    def gaussian_shifted_polynomial_integral(
+        a: float,  # quartic coef
+        b: float,  # cubic coef
+        c: float,  # quadratic coef
+        d: float,  # linear coef
+        e: float,  # constant
+        h: float,  # shift
+        x0: float,
+        x1: float,
+    ) -> float:
+        r"""Integral of the *shifted* polynomial under standard normal density.
+
+        # C++ parity: ``Gaussian1dModel::gaussianShiftedPolynomialIntegral``
+        # in gaussian1dmodel.cpp:240-247.
+
+        Computes ``∫_{x0}^{x1} P(y - h) * phi(y) dy`` where
+        ``P(t) = a t^4 + b t^3 + c t^2 + d t + e``. Expanding the
+        substitution into the unshifted basis ``a' t^4 + b' t^3 +
+        c' t^2 + d' t + e'`` and delegating to
+        :meth:`gaussian_polynomial_integral`.
+        """
+        return Gaussian1dModel.gaussian_polynomial_integral(
+            a,
+            -4.0 * a * h + b,
+            6.0 * a * h * h - 3.0 * b * h + c,
+            -4.0 * a * h * h * h + 3.0 * b * h * h - 2.0 * c * h + d,
+            a * h * h * h * h - b * h * h * h + c * h * h - d * h + e,
+            x0,
+            x1,
+        )
 
     # --- y-grid utility -------------------------------------------------
 
