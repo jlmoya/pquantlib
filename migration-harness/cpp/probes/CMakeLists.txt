@@ -321,7 +321,6 @@ target_link_libraries(cluster_l10b_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(cluster_l10c_probe cluster_l10c/probe.cpp)
 target_link_libraries(cluster_l10c_probe PRIVATE ${QUANTLIB_LIBRARY})
 
-<<<<<<< HEAD
 # === W1-B cluster: Gaussian1d engines (Gaussian1dCapFloorEngine +
 #     Gaussian1dFloatFloatSwaptionEngine +
 #     Gaussian1dNonstandardSwaptionEngine). ===
@@ -343,6 +342,13 @@ target_link_libraries(cluster_w1c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     calibration is documented as a Phase-11 W5 follow-up. ===
 add_executable(cluster_w1d_probe cluster_w1d/probe.cpp)
 target_link_libraries(cluster_w1d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === Phase 11 W2-A cluster: ZABR fitter + smile composition +
+#     XABR/ZABR swaption volatility cube generalization
+#     (ZabrInterpolation + ZabrInterpolatedSmileSection +
+#     XabrSwaptionVolatilityCube + ZabrSwaptionVolatilityCube). ===
+add_executable(cluster_w2a_probe cluster_w2a/probe.cpp)
+target_link_libraries(cluster_w2a_probe PRIVATE ${QUANTLIB_LIBRARY})
 
 # === W1-A cluster: MarkovFunctional model + adapter process
 #     (Gaussian1dGsrProcess wrapper + MarkovFunctional swaption-strip
