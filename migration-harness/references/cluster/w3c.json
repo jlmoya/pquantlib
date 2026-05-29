@@ -1,0 +1,37 @@
+{
+  "factor_spreaded_hazard_rate_curve": {
+    "h_t1": 0.040000000000000001,
+    "h_t5": 0.040000000000000001,
+    "survival_t1": 0.96078257879155848,
+    "survival_t5": 0.81870152342632507
+  },
+  "spreaded_hazard_rate_curve": {
+    "h_t1": 0.029999999999999999,
+    "h_t5": 0.029999999999999999,
+    "survival_t1": 0.97044033656246709,
+    "survival_t5": 0.86068493010625124
+  },
+  "basket": {
+    "size": 5,
+    "basket_notional": 5000000,
+    "attachment_amount": 0,
+    "detachment_amount": 500000,
+    "tranche_notional": 500000,
+    "attachment_ratio": 0,
+    "detachment_ratio": 0.10000000000000001
+  },
+  "synthetic_cdo_integral": {
+    "npv": -124168.8671652348,
+    "premium_value": 86219.990295790354,
+    "protection_value": 210388.85746102515,
+    "fair_premium": 0.12200700599666926,
+    "remaining_notional": 500000,
+    "leverage_factor": 1
+  },
+  "synthetic_cdo_midpoint": {
+    "npv": -124965.33313953767,
+    "premium_value": 86215.853280214986,
+    "protection_value": 211181.18641975266,
+    "fair_premium": 0.12247236348365122
+  }
+}
