@@ -44,8 +44,9 @@ from pquantlib.time.date import Date
 # ISDA conventional recovery-rate defaults indexed by Seniority IntEnum
 # value. Mirrors C++ RecoveryRateQuote::IsdaConvRecoveries
 # (recoveryratequote.cpp:24). Kept in this module to break an import cycle
-# with recovery_rate_quote.py (which itself uses Seniority).
-_ISDA_CONV_RECOVERIES: dict[Seniority, float] = {
+# with recovery_rate_quote.py (which itself uses Seniority). Exposed as
+# the module-public ISDA_CONV_RECOVERIES below.
+ISDA_CONV_RECOVERIES: dict[Seniority, float] = {
     Seniority.SecDom: 0.65,  # SECDOM
     Seniority.SnrFor: 0.40,  # SNRFOR
     Seniority.SubLT2: 0.20,  # SUBLT2
@@ -60,7 +61,7 @@ def make_isda_conv_map() -> dict[Seniority, float]:
     # C++ parity: ql/experimental/credit/recoveryratequote.cpp:32 — the
     # C++ ``makeIsdaConvMap()`` free function returns a copy each call.
     """
-    return dict(_ISDA_CONV_RECOVERIES)
+    return dict(ISDA_CONV_RECOVERIES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -526,7 +527,7 @@ class BankruptcyEvent(DefaultEvent):
             and recovery_rates is not None
         ):
             qassert.require(
-                len(recovery_rates) == len(_ISDA_CONV_RECOVERIES),
+                len(recovery_rates) == len(ISDA_CONV_RECOVERIES),
                 "Bankruptcy event should have settled for all seniorities.",
             )
         base = DefaultEvent.from_map(
