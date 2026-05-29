@@ -289,3 +289,9 @@ target_link_libraries(cluster_l8c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     closes the L1-E carve-out for cubic-family interpolators). ===
 add_executable(cluster_l9a_probe cluster_l9a/probe.cpp)
 target_link_libraries(cluster_l9a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L9-B cluster: post-L8 ergonomics — IsdaCdsEngine + implied_hazard_rate
+#     + conventional_spread + PiecewiseYieldCurve + yield traits +
+#     PiecewiseDefaultCurve bootstrap wiring + MakeCDS factory. ===
+add_executable(cluster_l9b_probe cluster_l9b/probe.cpp)
+target_link_libraries(cluster_l9b_probe PRIVATE ${QUANTLIB_LIBRARY})

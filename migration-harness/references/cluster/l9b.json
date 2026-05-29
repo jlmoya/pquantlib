@@ -1,0 +1,18 @@
+{
+  "isda_engine": {
+    "lambda":          0.02,
+    "spread":          0.02,
+    "recovery":        0.40000000000000002,
+    "notional":        10000000,
+    "discount_rate":   0.03,
+    "npv":             -363433.8976264447,
+    "fair_spread":     0.011886256620549884,
+    "coupon_leg_npv":  -896403.07023093628,
+    "default_leg_npv": 532413.75401835085
+  },
+  "implied_hazard_rate": {
+    "target_npv": -363343.23299626412,
+    "hazard":     0.020000000000976726
+  },
+  "conventional_spread_midpoint": 0.019999999999454052
+}
