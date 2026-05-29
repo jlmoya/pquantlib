@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+
 from pquantlib import qassert
 from pquantlib.experimental.credit.default_probability_key import DefaultProbKey
 from pquantlib.experimental.credit.one_factor_copula_protocol import (
