@@ -314,11 +314,35 @@ class SuperSharePayoff(StrikedTypePayoff):
         return 0.0
 
 
+@final
+class NullPayoff(Payoff):
+    """Marker payoff used when the engine bypasses ``args.payoff``.
+
+    # C++ parity: ql/instruments/payoffs.{hpp,cpp} ``NullPayoff``.
+
+    Calling ``__call__`` raises — the engine MUST compute the payoff
+    directly. Used by exotic multi-asset instruments (Everest, Pagoda)
+    where the payoff is path-dependent on the basket and not on a
+    single terminal price.
+    """
+
+    def name(self) -> str:
+        return "Null"
+
+    def description(self) -> str:
+        return self.name()
+
+    def __call__(self, price: float) -> float:
+        qassert.require(False, "null payoff cannot be evaluated")
+        return 0.0  # unreachable
+
+
 __all__ = [
     "AssetOrNothingPayoff",
     "CashOrNothingPayoff",
     "FloatingTypePayoff",
     "GapPayoff",
+    "NullPayoff",
     "OptionType",
     "Payoff",
     "PercentageStrikePayoff",
