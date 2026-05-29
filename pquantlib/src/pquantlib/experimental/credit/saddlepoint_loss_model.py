@@ -35,13 +35,13 @@ from pquantlib import qassert
 from pquantlib.experimental.credit.constant_loss_latent_model import (
     ConstantLossLatentModel,
 )
-from pquantlib.experimental.credit.default_loss_model import DefaultLossModel
+from pquantlib.experimental.credit.default_loss_model import DefaultLossModelBase
 from pquantlib.math.distributions.cumulative_normal_distribution import (
     CumulativeNormalDistribution,
 )
 
 
-class SaddlepointLossModel(DefaultLossModel):
+class SaddlepointLossModel(DefaultLossModelBase):
     """Lugannani-Rice saddlepoint loss-distribution model.
 
     Constructor takes a ``ConstantLossLatentModel`` (carries the copula

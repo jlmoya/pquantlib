@@ -1,31 +1,59 @@
-"""DefaultLossModel — abstract base for tranche-loss models.
+"""Tranche-loss-model interfaces.
 
 # C++ parity: ql/experimental/credit/defaultlossmodel.hpp @ v1.42.1.
 
-The C++ class is an Observable abstract base coupled to ``Basket`` via
-a friend relationship. Each subclass exposes the same protected
-interface (``expectedTrancheLoss(d)``, ``probOverLoss(d, loss_fraction)``,
-``percentile(d, perctl)``, ``expectedShortfall(d, perctl)``, etc.) and
-the Basket invokes them after setting itself as the "current basket".
+This module hosts BOTH the W3-B abstract base (basket-agnostic, explicit-args
+interface used by the concrete loss models) AND the W3-C structural Protocol
+(basket-coupled `(d: Date) -> float` interface used by the CDO engines /
+Basket).
 
-The Python port replaces the basket coupling with a basket-agnostic
-interface: each call takes the live (remaining) basket state directly
-as arguments. The downstream W3-C basket layer will wrap the loss
-models and forward live state to them as needed.
-
-# C++ parity divergence: the C++ method takes only ``const Date& d`` and
-# pulls every other input from ``basket_->...``; the Python method takes
-# all inputs as explicit args. The basket integration lives in W3-C.
+W3-B concretes inherit from :class:`DefaultLossModelBase`. W3-C consumers
+parametrise against :class:`DefaultLossModel` (Protocol). A small adapter
+in W3-C `Basket.expected_tranche_loss` bridges the two by reading the live
+basket state and forwarding it to W3-B's explicit-args concretes.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pquantlib.patterns.observer import Observable
 
+if TYPE_CHECKING:
+    from pquantlib.time.date import Date
 
-class DefaultLossModel(Observable, ABC):
+
+@runtime_checkable
+class DefaultLossModel(Protocol):
+    """Structural Protocol for basket-coupled loss models (W3-C interface).
+
+    Implementers expose ``set_basket(basket)`` + ``expected_tranche_loss(d)``.
+    Used by ``Basket.set_loss_model`` and the CDO engines.
+
+    The W3-B concrete models (`GaussianLHPLossModel`, `BinomialLossModel`,
+    etc.) inherit from :class:`DefaultLossModelBase` and expose the richer
+    basket-agnostic interface; an adapter on :class:`Basket` bridges between
+    them.
+    """
+
+    def set_basket(self, basket: object) -> None:
+        """Receive a back-reference to the owning ``Basket``.
+
+        # C++ parity: ``DefaultLossModel::setBasket`` (friend access from
+        # Basket::performCalculations).
+        """
+        ...
+
+    def expected_tranche_loss(self, d: Date) -> float:
+        """Expected tranche loss at date ``d``.
+
+        # C++ parity: ``DefaultLossModel::expectedTrancheLoss``.
+        """
+        ...
+
+
+class DefaultLossModelBase(Observable, ABC):
     """Abstract base for tranche-loss models.
 
     All five W3-B concrete models inherit from this class and override

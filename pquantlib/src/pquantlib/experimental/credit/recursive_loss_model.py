@@ -30,10 +30,10 @@ from pquantlib import qassert
 from pquantlib.experimental.credit.constant_loss_latent_model import (
     ConstantLossLatentModel,
 )
-from pquantlib.experimental.credit.default_loss_model import DefaultLossModel
+from pquantlib.experimental.credit.default_loss_model import DefaultLossModelBase
 
 
-class RecursiveLossModel(DefaultLossModel):
+class RecursiveLossModel(DefaultLossModelBase):
     """Andersen-Sidenius-Basu (2003) recursive loss-distribution model.
 
     Constructor takes a ``ConstantLossLatentModel`` (which carries the

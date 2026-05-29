@@ -34,7 +34,7 @@ from __future__ import annotations
 import numpy as np
 
 from pquantlib import qassert
-from pquantlib.experimental.credit.default_loss_model import DefaultLossModel
+from pquantlib.experimental.credit.default_loss_model import DefaultLossModelBase
 from pquantlib.math.distributions.bivariate_normal_distribution import (
     BivariateCumulativeNormalDistribution,
 )
@@ -49,7 +49,7 @@ from pquantlib.math.distributions.inverse_cumulative_normal import (
 _QL_EPSILON: float = 2.2204460492503131e-16
 
 
-class GaussianLHPLossModel(DefaultLossModel):
+class GaussianLHPLossModel(DefaultLossModelBase):
     """Vasicek large-homogeneous-pool Gaussian one-factor loss model.
 
     # C++ parity: gaussianlhplossmodel.hpp/.cpp.

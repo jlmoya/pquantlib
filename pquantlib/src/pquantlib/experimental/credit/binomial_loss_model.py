@@ -26,10 +26,10 @@ from pquantlib import qassert
 from pquantlib.experimental.credit.constant_loss_latent_model import (
     ConstantLossLatentModel,
 )
-from pquantlib.experimental.credit.default_loss_model import DefaultLossModel
+from pquantlib.experimental.credit.default_loss_model import DefaultLossModelBase
 
 
-class BinomialLossModel(DefaultLossModel):
+class BinomialLossModel(DefaultLossModelBase):
     """Adjusted-binomial loss-distribution model.
 
     Constructor takes a ``ConstantLossLatentModel`` and the per-pool

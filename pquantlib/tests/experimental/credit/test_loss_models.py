@@ -23,7 +23,7 @@ from pquantlib.experimental.credit.binomial_loss_model import (
 from pquantlib.experimental.credit.constant_loss_latent_model import (
     ConstantLossLatentModel,
 )
-from pquantlib.experimental.credit.default_loss_model import DefaultLossModel
+from pquantlib.experimental.credit.default_loss_model import DefaultLossModelBase
 from pquantlib.experimental.credit.gaussian_lhp_loss_model import (
     GaussianLHPLossModel,
 )
@@ -45,14 +45,14 @@ from pquantlib.testing import tolerance
 
 def test_default_loss_model_is_abstract() -> None:
     with pytest.raises(TypeError):
-        _ = DefaultLossModel()  # pyright: ignore[reportAbstractUsage]
+        _ = DefaultLossModelBase()  # pyright: ignore[reportAbstractUsage]
 
 
 def test_default_loss_model_default_methods_raise_not_implemented() -> None:
     """Subclass that overrides only expected_tranche_loss — the other
     methods should raise NotImplementedError by default."""
 
-    class _MinimalModel(DefaultLossModel):
+    class _MinimalModel(DefaultLossModelBase):
         def expected_tranche_loss(
             self,
             remaining_notional: float,
