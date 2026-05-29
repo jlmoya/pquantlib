@@ -1,0 +1,54 @@
+{
+  "setup": {
+    "eval_date_serial": 45308,
+    "nominal_rate": 0.03
+  },
+  "constant_cpi_volatility": {
+    "vol": 0.17999999999999999,
+    "observation_lag_months": 2,
+    "vol_at_1y_strike_3pct": 0.17999999999999999,
+    "vol_at_5y_strike_0pct": 0.17999999999999999
+  },
+  "constant_yoy_optionlet_volatility": {
+    "vol": 0.0050000000000000001,
+    "observation_lag_months": 3,
+    "vol_at_1y_strike_2_5pct": 0.0050000000000000001,
+    "vol_at_5y_strike_0pct": 0.0050000000000000001,
+    "total_variance_1y_2_5pct": 3.1301369863013701e-05,
+    "total_variance_5y_2_5pct": 0.00013130136986301371
+  },
+  "zero_coupon_inflation_swap": {
+    "nominal": 1000000,
+    "start_serial": 43845,
+    "maturity_serial": 47498,
+    "fixed_rate": 0.025000000000000001,
+    "observation_lag_months": 3,
+    "day_count_year_fraction": 10.000104798263342,
+    "expected_fixed_amount": 280087.85673035483,
+    "fair_rate": 0.024999734759164838,
+    "fixed_leg_npv": 233949.04330489354,
+    "inflation_leg_npv": -233946.27644392059,
+    "npv": 2.7668609729444142
+  },
+  "yoy_inflation_black_cap_5y_2_5pct": {
+    "nominal": 1000000,
+    "strike": 0.025000000000000001,
+    "vol": 0.20000000000000001,
+    "yoy_rate": 0.025,
+    "nominal_rate": 0.03,
+    "leg_size": 5,
+    "npv": 15376.779872651632
+  },
+  "yoy_inflation_bachelier_cap_5y_2_5pct": {
+    "vol": 0.0050000000000000001,
+    "npv": 15462.845175691948
+  },
+  "yoy_inflation_unit_displaced_black_cap_5y_2_5pct": {
+    "vol": 0.20000000000000001,
+    "npv": 630447.97477871692
+  },
+  "yoy_inflation_black_floor_5y_2_5pct": {
+    "vol": 0.20000000000000001,
+    "npv": 15376.779872651632
+  }
+}

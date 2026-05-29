@@ -255,3 +255,10 @@ target_link_libraries(cluster_l7b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     YoYInflationCouponPricer + Black/Bachelier variants). ===
 add_executable(cluster_l7c_probe cluster_l7c/probe.cpp)
 target_link_libraries(cluster_l7c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L7-D cluster: inflation instruments + vol surfaces + YoY cap/floor
+#     engines (ZCIIS / YYIIS / CPISwap / YoYInflationCapFloor + CPI/YoY
+#     vol surface abstracts + Constant variants + Bachelier/Black/UnitDisplaced
+#     YoY cap/floor engines). ===
+add_executable(cluster_l7d_probe cluster_l7d/probe.cpp)
+target_link_libraries(cluster_l7d_probe PRIVATE ${QUANTLIB_LIBRARY})

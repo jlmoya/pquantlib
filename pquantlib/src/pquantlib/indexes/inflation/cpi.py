@@ -55,6 +55,29 @@ class InterpolationType(IntEnum):
 _ONE_DAY: Period = Period(1, TimeUnit.Days)
 
 
+def is_interpolated(interp: InterpolationType) -> bool:
+    """True iff the interpolation is ``Linear``.
+
+    # C++ parity: ``detail::CPI::isInterpolated``. ``AsIndex`` resolves to
+    # the index's own ``interpolated()`` flag, which in v1.42.1 is always
+    # ``False`` for ``ZeroInflationIndex``; we therefore report ``False``
+    # for ``AsIndex`` here.
+    """
+    return interp == InterpolationType.Linear
+
+
+def effective_interpolation_type(interp: InterpolationType) -> InterpolationType:
+    """Collapse ``AsIndex`` to ``Flat``.
+
+    # C++ parity: ``detail::CPI::effectiveInterpolationType`` in
+    # ``inflationindex.cpp``. v1.42.1 treats ``AsIndex`` as ``Flat`` because
+    # the index-side ``interpolated`` flag is fixed false.
+    """
+    if interp == InterpolationType.AsIndex:
+        return InterpolationType.Flat
+    return interp
+
+
 def lagged_fixing(
     index: ZeroInflationIndex,
     d: Date,
