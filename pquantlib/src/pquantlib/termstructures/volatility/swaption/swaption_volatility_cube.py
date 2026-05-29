@@ -196,10 +196,11 @@ class SwaptionVolatilityCube(SwaptionVolatilityDiscrete):
     ) -> SmileSection:
         """Subclass: return the SmileSection at ``(option_time, swap_length)``."""
 
-    def smile_section(
+    def smile_section(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         option_expiry: Period | Date | float,
         swap_tenor: Period | float,
+        extrapolate: bool = False,
     ) -> SmileSection:
         """Return the smile section at ``(option_expiry, swap_tenor)``.
 
@@ -207,6 +208,7 @@ class SwaptionVolatilityCube(SwaptionVolatilityDiscrete):
         # via the ``using ::smileSection;`` declaration in the cube
         # header).
         """
+        _ = extrapolate
         if isinstance(option_expiry, Period):
             t = self.time_from_reference(self.option_date_from_tenor(option_expiry))
         elif isinstance(option_expiry, Date):
