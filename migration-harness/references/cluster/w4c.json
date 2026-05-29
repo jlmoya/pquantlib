@@ -1,0 +1,19 @@
+{
+  "partial_time_downout_call_start": 0,
+  "partial_time_downout_call_endb1": 11.729105768376785,
+  "partial_time_downout_call_endb2": 11.646542121477852,
+  "partial_time_upout_call_start": 2.3252573385092714,
+  "partial_time_downin_call_start": 0.76402932057456852,
+  "partial_time_upin_call_start": 5.7011273553440986,
+  "partial_time_upout_put_start": 11.346883604239443,
+  "double_barrier_analytic_knockout_call": 0.52714855095406654,
+  "double_barrier_binomial_crr_knockout_call_400": 0.58875102639607102,
+  "double_barrier_analytic_knockin_call": 10.596613377104074,
+  "double_barrier_binomial_crr_knockin_call_400": 10.528923238495443,
+  "soft_barrier_downin_call": 3.258210700715654,
+  "soft_barrier_downout_call": 8.1146985103837181,
+  "soft_barrier_upin_call_high_band": 37.692121040764995,
+  "soft_barrier_downin_put": 17.202009405302501,
+  "variance_option_heston_call_npv": -3.9092514184170208,
+  "variance_option_heston_call_npv_strike005": -4.7323444129322683
+}
