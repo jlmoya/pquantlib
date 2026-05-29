@@ -414,3 +414,11 @@ target_link_libraries(cluster_w4b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     oscillatory integral). ===
 add_executable(cluster_w4c_probe cluster_w4c/probe.cpp)
 target_link_libraries(cluster_w4c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W5-A cluster: ExtOU + Kluge process FD infrastructure.
+#     Glued1dMesher; FdmExtendedOrnsteinUhlenbeckOp; FdmExtOUJumpOp;
+#     FdmKlugeExtOUOp; FdmExtOUJumpSolver; FdmKlugeExtOUSolver;
+#     FdmSimple2dExtOUSolver; FdmSimple3dExtOUJumpSolver;
+#     FdmExpExtOUInnerValueCalculator; FdmSpreadPayoffInnerValue. ===
+add_executable(cluster_w5a_probe cluster_w5a/probe.cpp)
+target_link_libraries(cluster_w5a_probe PRIVATE ${QUANTLIB_LIBRARY})
