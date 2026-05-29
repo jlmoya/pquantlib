@@ -28,10 +28,10 @@ Pin: `v1.42.1` @ `099987f0ca2c11c505dc4348cdb9ce01a598e1e5` (2026-04-16).
 
 ## Current state
 
-- **Phase:** **Phase 10 complete** — vol surface tail + Gaussian1d short-rate + interpolator tail / ZABR (opt-in extensions beyond `pquantlib-final`). Tagged `pquantlib-phase10-complete` @ `d3746e4`. Closes Phase 9 vol-tail + Tier-1 specialty short-rate + L1-E interpolator tail + ZABR family + L1-D HaltonRsg carve-outs.
-- **Branch:** `main`. No active feature branches.
-- **Workspace:** uv-managed 4-package monorepo. Dependencies: numpy, scipy, pytest, pyright, ruff. No new deps in Phase 10.
-- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **currently 2652/0/0**.
+- **Phase:** **Phase 11 in progress** — multi-wave full C++ closure. W1 closed (tag `pquantlib-phase11-w1-complete` @ `07712fa`). Specialty models: MarkovFunctional + Gaussian1d engines + Bates variants + Heston SLV (MC full + FDM scaffold) + GjrGarch + PiecewiseTimeDependentHeston.
+- **Branch:** `main`. No active feature branches between waves.
+- **Workspace:** uv-managed 4-package monorepo. Dependencies: numpy, scipy, pytest, pyright, ruff. No new deps in Phase 11.
+- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **currently 2775/0/0**.
 - **L1 layer (Phase 1):** foundations, time core, day counters, 8 first-math modules, copulas + distributions + statistics, currencies, Solver1D + integrals, deterministic RNGs, optimization scaffolding, interpolations + matrix utils.
 - **L2 layer (Phase 2):** quotes, termstructures core + 4 cross-cluster Protocols, Index + IndexManager, Compounding + InterestRate, YieldTermStructure + concrete curves, InterestRateIndex hierarchy + 8 ibor concretes + 2 swap indexes + 7 rate helpers, cashflows + CashFlows aggregator + Duration, volatility termstructures (Black/Local Constant/Curve/Surface).
 - **L3 layer (Phase 3):** Settings.evaluation_date observable; Payoff + Exercise + Option + Instrument + PricingEngine + GenericEngine + BlackFormula + 3 cross-cluster Protocols; Bond + 4 concretes + DiscountingBondEngine + BondForward; Swap + VanillaSwap + OIS + ZeroCoupon + make_vanilla_swap + make_ois + DiscountingSwapEngine; StochasticProcess + GBSM family + VanillaOption + EuropeanOption + AnalyticEuropeanEngine + BinomialVanillaEngine + BlackCalculator; Forward + Position + FxForward + ForwardRateAgreement + DiscountingFwdEngine.
