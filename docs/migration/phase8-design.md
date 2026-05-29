@@ -1,9 +1,10 @@
 # Phase 8 — Piecewise inflation + credit + capfloor-vol surfaces (design)
 
 **Date:** 2026-05-28
-**Status:** drafted, awaiting ack to start
+**Status:** **CLOSED** — tagged `pquantlib-phase8-complete` @ `efdfac3` — 2303/0/0
 **Predecessor:** `pquantlib-phase7-complete` @ `b7ac1a6` — 2109/0/0, pyright + ruff clean
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
+**Completion summary:** [`phase8-completion.md`](phase8-completion.md)
 
 ## Scope
 

@@ -19,21 +19,21 @@ C++: `ql/instruments/{cpicapfloor,cpiswap,cpibond}.hpp`, `ql/cashflows/{cpicoupo
 
 **Access**: none — direct port required.
 
-### Credit
+### Credit — **CLOSED** by Phase 8 L8-B (Tier-1 CDS pricing)
 
 C++: `ql/instruments/creditdefaultswap.hpp`, `ql/termstructures/credit/*` (11 files), `ql/pricingengines/credit/*`, `ql/experimental/credit/*` (~30 files), `ql/instruments/makecds.hpp`.
 
-**Why deferred:** Same as inflation. CDS pricing + hazard-rate term structures are a self-contained domain that benefits from a dedicated phase with appropriate market data + reference values.
+**Status:** Tier-1 vanilla CDS pricing is now ported. `pquantlib-phase8-complete` ships DefaultProbabilityTermStructure + 3 intermediates + FlatHazardRate + 3 interpolated curves + probability traits + PiecewiseDefaultCurve scaffold + Spread/UpfrontCdsHelper + CreditDefaultSwap + Claim + MidPoint/Integral CDS engines.
 
-**Access**: scipy.stats can be used to bootstrap survival probability from CDS spreads for users with their own CDS implementation.
+**Remaining (post-phase-8 follow-ups):** `IsdaCdsEngine` (ISDA-standard convention), `MakeCDS` factory, `implied_hazard_rate` + `conventional_spread` Brent wrappers, `FaceValueAccrualClaim` (accrual-rebate convention), Quanto CDS, all of `ql/experimental/credit/*` (CDO, basket CDS, CDS-on-CDS). `PiecewiseDefaultCurve` iterative bootstrap is a ~1-hour wiring follow-up against the L8-A `IterativeBootstrap[TS, Traits]` generic.
 
-### Capfloor / optionlet / swaption volatility surfaces
+### Capfloor / optionlet / swaption volatility surfaces — **CLOSED** by Phase 8 L8-C
 
 C++: `ql/termstructures/volatility/capfloor/*` (5 files), `ql/termstructures/volatility/optionlet/*` (11 files), `ql/termstructures/volatility/swaption/*` (13 files).
 
-**Why deferred:** L4-E ports the analytic swaption + capfloor engines that consume a flat vol; users with a single vol can use them. Full vol cube/surface deserialization, SABR-fitted interpolation, etc. are a dedicated cluster.
+**Status:** Term-vol + flat-vol + 1-D + 2-D bilinear surfaces are now ported. `pquantlib-phase8-complete` ships CapFloorTermVolatilityStructure family (4 classes) + OptionletVolatilityStructure family (7 classes incl. OptionletStripper1) + SwaptionVolatilityStructure family (5 classes incl. SwaptionVolatilityMatrix). `BlackSwaptionEngine` / `BlackCapFloorEngine` can now consume a surface-based vol structure.
 
-**Access:** `BlackSwaptionEngine` / `BlackCapFloorEngine` accept a flat vol Quote in the current port; provide a constant-vol stand-in for the surface.
+**Remaining (Phase 9 SABR candidate):** Full SABR swaption vol cube — `SabrSwaptionVolatilityCube` + `InterpolatedSwaptionVolatilityCube` + `SwaptionVolCube{1,2}` + `SmileSection*` family + `SpreadedSmileSection` + `InterpolatedSmileSection` cubic-strike paths. Plus `Gaussian1dSwaptionVolatility`, `CmsMarket`, `CmsMarketCalibration`, `OptionletStripper2` (caplet variance curve + spread).
 
 ### MarketModels (LIBOR Market Model)
 
@@ -199,9 +199,9 @@ If you need a carved-out feature:
 ## Statistics
 
 - **C++ v1.42.1 surface**: ~2300 .hpp files.
-- **PQuantLib ported**: ~340 classes across ~1958 tests.
-- **Test parity with `jquantlib-final`**: 1958 / 3610 = **54.2%**.
+- **PQuantLib ported**: ~415 classes across ~2303 tests (after Phase 7 inflation + Phase 8 piecewise/credit/capfloor-vol opt-in extensions).
+- **Test parity with `jquantlib-final`**: 2303 / 3610 = **63.8%**.
 
-PQuantLib covers the **vanilla + American + analytic-exotic pricing + calibration** surface end-to-end, with substantial coverage of specialty short-rate models (Vasicek, HullWhite, CIR, ExtendedCIR, G2++, BlackKarasinski), equity stochastic-vol (Heston, Bates), and the full Monte Carlo / Finite-Difference / Tree pricing infrastructure.
+PQuantLib covers the **vanilla + American + analytic-exotic pricing + calibration** surface end-to-end, with substantial coverage of specialty short-rate models (Vasicek, HullWhite, CIR, ExtendedCIR, G2++, BlackKarasinski), equity stochastic-vol (Heston, Bates), and the full Monte Carlo / Finite-Difference / Tree pricing infrastructure. Phase 7 added the full inflation cluster (Tier-1 indexes/curves/cashflows/instruments/vol). Phase 8 added piecewise inflation + IterativeBootstrap + Tier-1 credit (CDS pricing + hazard-rate term structures + MidPoint/Integral engines) + capfloor/optionlet/swaption vol surfaces (incl. OptionletStripper1 + SwaptionVolatilityMatrix).
 
-Specialty domains (MarketModels, full inflation, full credit, capfloor-vol surfaces, specialty short-rate variants) defer to dedicated future work or QuantLib-Python wrapping.
+Remaining specialty domains (MarketModels, full SABR swaption cube, experimental credit basket/CDO, specialty short-rate variants) defer to dedicated future work or QuantLib-Python wrapping. Post-Phase-8 surface backlog (none blocking): `IsdaCdsEngine`, `MakeCDS`, `implied_hazard_rate` Brent wrappers, `PiecewiseDefaultCurve` iterative bootstrap wiring, concrete `PiecewiseYieldCurve` (using L8-A `IterativeBootstrap`), cubic/bicubic spline interpolators (would unlock C++-default cubic on cap/floor surfaces).

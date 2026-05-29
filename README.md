@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase7--complete-green)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-2109%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--phase8--complete-green)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-2303%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -67,6 +67,7 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | **6 complete** | **`pquantlib-phase6-complete`** | **High-impact Phase 4+5 carve-outs closed** + final closure tooling (`docs/carve-outs.md` + 4 sample programs). 1958 tests; closes Phase 4 BatesEngine + Phase 5 American MC + DoubleBarrier. | **1958/0/0** | **2026-05-28** |
 | **Project complete** | **`pquantlib-final`** | **End of planned migration.** ~340 classes ported across ~1958 tests (54.2% of jquantlib-final). Vanilla pricing + calibration end-to-end + American MC + analytic exotics covered. See `docs/carve-outs.md` for comprehensive carve-out documentation. | **1958/0/0** | **2026-05-28** |
 | 7 inflation (opt-in extension) | `pquantlib-phase7-complete` | Inflation Tier-1 carve-out closed: 5 region indexes + termstructure abstracts + Seasonality + Interpolated curves + inflation cashflows + pricers + ZeroCouponInflationSwap + YearOnYearInflationSwap + CPISwap + YoYInflationCapFloor + vol surfaces + 3 YoY analytic engines (Bachelier/Black/UnitDisplaced). L7-B Piecewise + helpers deferred to L7-Bb follow-up. 4 clusters; ~32 classes; +151 tests. | **2109/0/0** | **2026-05-28** |
+| 8 piecewise inflation + credit + capfloor-vol (opt-in extension) | `pquantlib-phase8-complete` | **L8-A** Piecewise{Zero,YoY}InflationCurve + IterativeBootstrap (closes L7-Bb + L2-B); **L8-B** Tier-1 credit (DefaultProbabilityTermStructure family + FlatHazardRate + 3 interpolated curves + probability traits + PiecewiseDefaultCurve scaffold + Spread/UpfrontCdsHelper + CreditDefaultSwap + Claim + MidPoint/Integral CDS engines); **L8-C** capfloor/optionlet/swaption vol surfaces (CapFloorTermVolatilityStructure family + OptionletVolatilityStructure family + OptionletStripper1 + SwaptionVolatilityStructure family + SwaptionVolatilityMatrix; closes Phase 2 capfloor-vol). 3 parallel-no-pilot clusters, ~60 min wall-clock. ~40 classes; +194 tests. | **2303/0/0** | **2026-05-28** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -77,7 +78,7 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** Phase 6 closed via `pquantlib-phase6-complete` + final `pquantlib-final` tag. See [`docs/migration/phase6-completion.md`](docs/migration/phase6-completion.md) for the closure summary + [`docs/carve-outs.md`](docs/carve-outs.md) for the comprehensive carve-out catalog.
+**Current tip on `main`:** Phase 8 closed via `pquantlib-phase8-complete` (opt-in extension beyond `pquantlib-final` — piecewise inflation + Tier-1 credit + capfloor-vol surfaces). See [`docs/migration/phase8-completion.md`](docs/migration/phase8-completion.md) for the closure summary + [`docs/carve-outs.md`](docs/carve-outs.md) for the comprehensive carve-out catalog.
 
 **Sample programs**: Run `uv run python -m pquantlib_samples.{vanilla_swap_pricing,heston_calibration,american_option_mc,double_barrier_analytic}` for end-to-end demos.
 

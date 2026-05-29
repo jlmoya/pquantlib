@@ -107,6 +107,16 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
 - Final test count: **1883/0/0**. pyright + ruff clean.
 
+### Phase 8 — Piecewise inflation + credit + capfloor-vol surfaces (closed; opt-in extension beyond pquantlib-final)
+
+- [`phase8-design.md`](phase8-design.md) — binding spec (closed).
+- [`phase8-plan.md`](phase8-plan.md) — executable plan.
+- [`phase8-completion.md`](phase8-completion.md) — closure summary, 3-cluster contribution table, merge reconciliations, divergences, follow-up carve-outs.
+- **L8-A** (+38 tests): PiecewiseZero/YoYInflationCurve + IterativeBootstrap[TS, Traits] + Zero/YoYInflationTraits + ZeroCouponInflationSwap/YearOnYearInflationSwap helpers (closes L7-Bb + L2-B carve-outs).
+- **L8-B** (+58 tests): DefaultProbabilityTermStructure family (4 abstracts + 3 interpolated curves + FlatHazardRate) + probability traits + PiecewiseDefaultCurve scaffold + Spread/UpfrontCdsHelper + CreditDefaultSwap + Claim + MidPoint/Integral CDS engines (closes Tier-1 credit cluster).
+- **L8-C** (+98 tests): CapFloorTermVolatilityStructure family + OptionletVolatilityStructure family + OptionletStripper1 + SwaptionVolatilityStructure family + SwaptionVolatilityMatrix (closes Phase 2 capfloor-vol surface carve-out).
+- Tag: `pquantlib-phase8-complete` @ `efdfac3`. Test count: **2303/0/0**.
+
 ### Phase 7 — Inflation cluster (closed; opt-in extension beyond pquantlib-final)
 
 - [`phase7-design.md`](phase7-design.md) — binding spec (closed).
