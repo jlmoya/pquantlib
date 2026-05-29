@@ -289,3 +289,9 @@ target_link_libraries(cluster_l8c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     closes the L1-E carve-out for cubic-family interpolators). ===
 add_executable(cluster_l9a_probe cluster_l9a/probe.cpp)
 target_link_libraries(cluster_l9a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L9-C cluster: SABR formula + smile sections + swaption vol cube
+#     (sabrVolatility + SabrSmileSection + InterpolatedSmileSection +
+#     SpreadedSmileSection + SabrSwaptionVolatilityCube). ===
+add_executable(cluster_l9c_probe cluster_l9c/probe.cpp)
+target_link_libraries(cluster_l9c_probe PRIVATE ${QUANTLIB_LIBRARY})
