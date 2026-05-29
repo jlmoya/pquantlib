@@ -301,3 +301,10 @@ target_link_libraries(cluster_l9b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     SpreadedSmileSection + SabrSwaptionVolatilityCube). ===
 add_executable(cluster_l9c_probe cluster_l9c/probe.cpp)
 target_link_libraries(cluster_l9c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L10-B cluster: Gaussian1d short-rate cluster — Gaussian1dModel
+#     abstract + GSR concrete + Gaussian1dSwaptionVolatility (model +
+#     GsrProcess via gsrprocesscore + swaption-vol back-out via Newton
+#     inversion of the Gaussian1dSwaptionEngine NPV). ===
+add_executable(cluster_l10b_probe cluster_l10b/probe.cpp)
+target_link_libraries(cluster_l10b_probe PRIVATE ${QUANTLIB_LIBRARY})
