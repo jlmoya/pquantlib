@@ -107,6 +107,16 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
 - Final test count: **1883/0/0**. pyright + ruff clean.
 
+### Phase 9 — Cubic/Bicubic + post-L8 ergonomics + SABR cube (closed; opt-in extension beyond pquantlib-final)
+
+- [`phase9-design.md`](phase9-design.md) — binding spec (closed).
+- [`phase9-plan.md`](phase9-plan.md) — executable plan.
+- [`phase9-completion.md`](phase9-completion.md) — closure summary, 3-cluster contribution table, merge reconciliations, divergences, follow-up carve-outs.
+- **L9-A pilot** (+40 tests): CubicInterpolation + CubicNaturalSpline + MonotonicCubicNaturalSpline + BicubicSpline + Interpolation2D abstract + opt-in `interpolator=` kwarg on L8-C CapFloorTermVolCurve/Surface (closes L1-E cubic-family carve-out).
+- **L9-B parallel** (+41 tests): PiecewiseYieldCurve + Discount/ZeroYield/ForwardRate traits + PiecewiseDefaultCurve bootstrap wiring + IsdaCdsEngine + implied_hazard_rate + conventional_spread + MakeCDS factory (closes post-L8 credit/bootstrap ergonomics).
+- **L9-C parallel** (+80 tests): SABR closed-form (Hagan 2002) + SabrInterpolation (scipy least-squares) + SmileSection abstract + Flat/Interpolated/Sabr/Spreaded SmileSection + SwaptionVolatilityCube abstract + SabrSwaptionVolatilityCube + InterpolatedSwaptionVolatilityCube (closes Phase-8 SABR cube + smile-section family carve-out).
+- Tag: `pquantlib-phase9-complete` @ `7784e94`. Test count: **2464/0/0**.
+
 ### Phase 8 — Piecewise inflation + credit + capfloor-vol surfaces (closed; opt-in extension beyond pquantlib-final)
 
 - [`phase8-design.md`](phase8-design.md) — binding spec (closed).

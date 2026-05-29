@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase8--complete-green)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-2303%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--phase9--complete-green)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-2464%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -68,6 +68,7 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | **Project complete** | **`pquantlib-final`** | **End of planned migration.** ~340 classes ported across ~1958 tests (54.2% of jquantlib-final). Vanilla pricing + calibration end-to-end + American MC + analytic exotics covered. See `docs/carve-outs.md` for comprehensive carve-out documentation. | **1958/0/0** | **2026-05-28** |
 | 7 inflation (opt-in extension) | `pquantlib-phase7-complete` | Inflation Tier-1 carve-out closed: 5 region indexes + termstructure abstracts + Seasonality + Interpolated curves + inflation cashflows + pricers + ZeroCouponInflationSwap + YearOnYearInflationSwap + CPISwap + YoYInflationCapFloor + vol surfaces + 3 YoY analytic engines (Bachelier/Black/UnitDisplaced). L7-B Piecewise + helpers deferred to L7-Bb follow-up. 4 clusters; ~32 classes; +151 tests. | **2109/0/0** | **2026-05-28** |
 | 8 piecewise inflation + credit + capfloor-vol (opt-in extension) | `pquantlib-phase8-complete` | **L8-A** Piecewise{Zero,YoY}InflationCurve + IterativeBootstrap (closes L7-Bb + L2-B); **L8-B** Tier-1 credit (DefaultProbabilityTermStructure family + FlatHazardRate + 3 interpolated curves + probability traits + PiecewiseDefaultCurve scaffold + Spread/UpfrontCdsHelper + CreditDefaultSwap + Claim + MidPoint/Integral CDS engines); **L8-C** capfloor/optionlet/swaption vol surfaces (CapFloorTermVolatilityStructure family + OptionletVolatilityStructure family + OptionletStripper1 + SwaptionVolatilityStructure family + SwaptionVolatilityMatrix; closes Phase 2 capfloor-vol). 3 parallel-no-pilot clusters, ~60 min wall-clock. ~40 classes; +194 tests. | **2303/0/0** | **2026-05-28** |
+| 9 cubic/bicubic + post-L8 ergonomics + SABR cube (opt-in extension) | `pquantlib-phase9-complete` | **L9-A pilot** Cubic + Bicubic spline interpolators (CubicNaturalSpline + MonotonicCubicNaturalSpline + BicubicSpline via scipy delegation; opt-in `interpolator=` kwarg on L8-C surfaces; closes L1-E cubic-family); **L9-B** post-L8 ergonomics (PiecewiseYieldCurve + Discount/ZeroYield/ForwardRate traits + PiecewiseDefaultCurve bootstrap wiring + IsdaCdsEngine + implied_hazard_rate + conventional_spread + MakeCDS); **L9-C** SABR swaption smile cube (sabr_volatility + sabr_normal_volatility (Hagan 2002) + SabrInterpolation + SmileSection abstract + Flat/Interpolated/Sabr/Spreaded SmileSection + SwaptionVolatilityCube + SabrSwaptionVolatilityCube + InterpolatedSwaptionVolatilityCube; closes Phase-8 SABR). Pilot + 2-parallel, ~90 min wall-clock. ~22 classes; +161 tests. | **2464/0/0** | **2026-05-28** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
@@ -78,7 +79,7 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** Phase 8 closed via `pquantlib-phase8-complete` (opt-in extension beyond `pquantlib-final` — piecewise inflation + Tier-1 credit + capfloor-vol surfaces). See [`docs/migration/phase8-completion.md`](docs/migration/phase8-completion.md) for the closure summary + [`docs/carve-outs.md`](docs/carve-outs.md) for the comprehensive carve-out catalog.
+**Current tip on `main`:** Phase 9 closed via `pquantlib-phase9-complete` (opt-in extension beyond `pquantlib-final` — cubic/bicubic interpolators + post-L8 ergonomics + SABR swaption smile cube). See [`docs/migration/phase9-completion.md`](docs/migration/phase9-completion.md) for the closure summary + [`docs/carve-outs.md`](docs/carve-outs.md) for the comprehensive carve-out catalog.
 
 **Sample programs**: Run `uv run python -m pquantlib_samples.{vanilla_swap_pricing,heston_calibration,american_option_mc,double_barrier_analytic}` for end-to-end demos.
 

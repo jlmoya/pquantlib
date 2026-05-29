@@ -1,9 +1,10 @@
 # Phase 9 — Cubic/Bicubic + Post-L8 ergonomics + SABR cube (design)
 
 **Date:** 2026-05-28
-**Status:** drafted; run-to-completion per user directive ("Phase 9 in its totality")
+**Status:** **CLOSED** — tagged `pquantlib-phase9-complete` @ `7784e94` — 2464/0/0
 **Predecessor:** `pquantlib-phase8-complete` @ `dec05fb` — 2303/0/0, pyright + ruff clean
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
+**Completion summary:** [`phase9-completion.md`](phase9-completion.md)
 
 ## Scope
 
