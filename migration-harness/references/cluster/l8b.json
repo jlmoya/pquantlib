@@ -1,0 +1,61 @@
+{
+  "setup": {
+    "eval_date_serial": 46188
+  },
+  "flat_hazard_rate": {
+    "lambda": 0.02,
+    "survival_t05": 0.99004983374916811,
+    "survival_t1":  0.98019867330675525,
+    "survival_t2":  0.96078943915232318,
+    "survival_t5":  0.90483741803595952,
+    "default_t05":  0.0099501662508318933,
+    "default_t5":   0.095162581964040482,
+    "hazard_t5":    0.02,
+    "default_density_t5": 0.01809674836071919
+  },
+  "interpolated_survival_probability": {
+    "sp_at_node1y": 0.97999999999999998,
+    "sp_at_node2y": 0.94999999999999996,
+    "sp_at_node5y": 0.84999999999999998,
+    "sp_mid_0_1":   0.98994949366116658
+  },
+  "interpolated_hazard_rate": {
+    "hazard_t05": 0.02,
+    "hazard_t15": 0.025000000000000001,
+    "hazard_t3":  0.029999999999999999,
+    "sp_t1":      0.98019867330675525,
+    "sp_t2":      0.95599748183309996,
+    "sp_t5":      0.87372788048113126
+  },
+  "interpolated_default_density": {
+    "density_at_1y": 0.012,
+    "density_at_05": 0.010999999999999999,
+    "sp_t1":         0.98899999999999999,
+    "sp_t2":         0.97550409836065577
+  },
+  "face_value_claim": {
+    "amount_N10M_R40": 6000000
+  },
+  "cds_engine": {
+    "lambda":          0.02,
+    "spread":          0.02,
+    "recovery":        0.40000000000000002,
+    "notional":        10000000,
+    "discount_rate":   0.03,
+    "schedule_size":   22,
+    "first_coupon_date_serial": 46188,
+    "midpoint": {
+      "npv":             -363343.23299626412,
+      "fair_spread":     0.011887537110645611,
+      "coupon_leg_npv":  -896320.95354609145,
+      "default_leg_npv": 532422.30196368659,
+      "coupon_leg_bps":  -4481.6047677304578
+    },
+    "integral": {
+      "npv":             -364765.77376661228,
+      "fair_spread":     0.011862602229685604,
+      "coupon_leg_npv":  -897072.42331532983,
+      "default_leg_npv": 531751.23096257681
+    }
+  }
+}

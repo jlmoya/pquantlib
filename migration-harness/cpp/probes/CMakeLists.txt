@@ -262,3 +262,10 @@ target_link_libraries(cluster_l7c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     YoY cap/floor engines). ===
 add_executable(cluster_l7d_probe cluster_l7d/probe.cpp)
 target_link_libraries(cluster_l7d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L8-B cluster: credit cluster — default-probability term structures
+#     (FlatHazardRate + InterpolatedSurvivalProbability/HazardRate/DefaultDensity
+#     curves + abstracts) + Claim + CreditDefaultSwap + MidPoint/Integral
+#     CDS engines. ===
+add_executable(cluster_l8b_probe cluster_l8b/probe.cpp)
+target_link_libraries(cluster_l8b_probe PRIVATE ${QUANTLIB_LIBRARY})
