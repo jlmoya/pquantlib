@@ -1,0 +1,39 @@
+{
+  "gaussian1d_capfloor": {
+    "cap_strike": 0.025,
+    "cap_notional": 1000000.0,
+    "gsr_sigma": 0.01,
+    "gsr_reversion": 0.05,
+    "flat_rate": 0.03,
+    "integration_points": 64,
+    "stddevs": 7.0,
+    "cap_npv": 38521.070110767367,
+    "start_serial": 46251,
+    "end_serial": 48078
+  },
+  "gaussian1d_capfloor_zerovol": {
+    "strike": 0.01,
+    "cap_npv": 91777.647643252683,
+    "deterministic_intrinsic": 91774.879592489422
+  },
+  "gaussian1d_floatfloat_swaption": {
+    "nominal": 1000000,
+    "spread2": -0.0050,
+    "gsr_sigma": 0.01,
+    "gsr_reversion": 0.05,
+    "integration_points": 32,
+    "stddevs": 5.0,
+    "exercise_serial": 47983,
+    "ff_npv": 10.036965557060494
+  },
+  "gaussian1d_nonstandard_swaption": {
+    "fixed_rate": 0.03,
+    "initial_notional": 1000000.0,
+    "gsr_sigma": 0.01,
+    "gsr_reversion": 0.05,
+    "integration_points": 32,
+    "stddevs": 5.0,
+    "exercise_serial": 47983,
+    "ns_npv": 23312.786869354888
+  }
+}
