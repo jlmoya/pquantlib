@@ -1,29 +1,39 @@
-"""CapFloorTermVolSurface — 2-D bilinear ATM cap/floor vol surface.
+"""CapFloorTermVolSurface — 2-D ATM cap/floor vol surface.
 
 # C++ parity: ql/termstructures/volatility/capfloor/capfloortermvolsurface.{hpp,cpp}
 # (v1.42.1).
 
 A grid of (option_tenor x strike) ATM cap/floor vols. Strikes form the
 x-axis, times form the y-axis. The C++ port hard-wires
-``BicubicSpline`` as the interpolator; PQuantLib uses bilinear because
-the bicubic spline is in the L1 carve-out (deferred — see
-``phase1-completion.md``). At node points the two interpolations
-agree (the spline passes through pillars); intermediate-strike values
-on locally linear smiles also agree; off-node time values diverge in
-the cubic-spline corrections. Tests assert TIGHT at nodes and
-LOOSE / custom for the few intermediate points where bilinear and
-bicubic measurably differ.
+``BicubicSpline`` as the interpolator. The Python port defaults to
+``BilinearInterpolation`` for backward compatibility with the L8-C
+landing; pass ``interpolator=BicubicSpline`` (from L9-A) to recover
+the C++ default. At node points the two interpolations agree (both
+pass through pillars); intermediate values on locally linear smiles
+also agree; off-node values diverge in the cubic-spline corrections.
+Existing L8-C tests assert TIGHT at nodes (preserved by both
+interpolators).
+
+**Interpolator opt-in (L9-A).** C++ uses a templated
+``Interpolator = Bilinear`` parameter so callers can substitute
+``BicubicSpline``. PQuantLib exposes the same via an ``interpolator``
+kwarg accepting any class with a 3-arg ``(xs, ys, z)`` constructor
+and a ``(x, y)`` ``__call__`` signature (default
+``BilinearInterpolation``). Pass ``BicubicSpline`` (from L9-A's
+``pquantlib.math.interpolations.bicubic_spline``) to match the C++
+default.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 
 from pquantlib import qassert
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.math.array import Array
 from pquantlib.math.interpolations.bilinear import BilinearInterpolation
 from pquantlib.math.matrix import Matrix
 from pquantlib.termstructures.volatility.capfloor.cap_floor_term_volatility_structure import (
@@ -34,9 +44,15 @@ from pquantlib.time.calendar import Calendar
 from pquantlib.time.date import Date
 from pquantlib.time.period import Period
 
+# Structural type for a 2-D interpolator: ``(xs, ys, z) -> callable
+# accepting (x, y[, *, allow_extrapolation])`` returning a float.
+# Matches both ``BilinearInterpolation`` (concrete) and
+# ``BicubicSpline`` (which inherits ``Interpolation2D``).
+_Interp2DFactory = Callable[[Array, Array, Matrix], Callable[..., float]]
+
 
 class CapFloorTermVolSurface(CapFloorTermVolatilityStructure):
-    """Cap/floor smile volatility surface (bilinear in (t, K))."""
+    """Cap/floor smile volatility surface — 2-D interpolation in (t, K)."""
 
     def __init__(
         self,
@@ -49,6 +65,7 @@ class CapFloorTermVolSurface(CapFloorTermVolatilityStructure):
         day_counter: DayCounter | None = None,
         reference_date: Date | None = None,
         settlement_days: int | None = None,
+        interpolator: _Interp2DFactory = BilinearInterpolation,
     ) -> None:
         dc = day_counter if day_counter is not None else Actual365Fixed()
         super().__init__(
@@ -97,10 +114,11 @@ class CapFloorTermVolSurface(CapFloorTermVolatilityStructure):
         self._option_dates: list[Date] = option_dates
         self._option_times: list[float] = option_times
 
-        # BilinearInterpolation expects z[y, x] indexing — y = time
-        # (rows), x = strike (columns). The input matrix already
-        # matches that layout, so we pass it through.
-        self._interpolation: BilinearInterpolation = BilinearInterpolation(
+        # 2-D interpolator expects z[y, x] indexing — y = time (rows),
+        # x = strike (columns). Both BilinearInterpolation and
+        # BicubicSpline follow that convention. The input matrix
+        # already matches it, so we pass it through.
+        self._interpolation: Callable[..., float] = interpolator(
             np.asarray(self._strikes, dtype=np.float64),
             np.asarray(option_times, dtype=np.float64),
             vols,
