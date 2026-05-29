@@ -262,6 +262,20 @@ class ZeroInflationIndex(InflationIndex):
         """
         return self._zero_inflation_ts
 
+    def set_zero_inflation_term_structure(self, ts: object | None) -> None:
+        """Install (or clear) the zero-inflation forecasting curve.
+
+        Used by ``ZeroCouponInflationSwapHelper`` to wire the curve being
+        bootstrapped into the index before computing the implied quote.
+
+        # C++ parity: the C++ helper clones the index and binds a
+        # ``Handle<ZeroInflationTermStructure>`` to the bootstrapping
+        # curve. Python uses in-place mutation of the index's slot since
+        # the helpers ensure single-curve binding during a bootstrap run.
+        """
+        self._zero_inflation_ts = ts
+        self.update()
+
     def maturity_date(self, fixing_date: Date) -> Date:
         """Return the end of the inflation period containing ``fixing_date``.
 
@@ -401,6 +415,16 @@ class YoYInflationIndex(InflationIndex):
 
     def yoy_inflation_term_structure(self) -> object | None:
         return self._yoy_inflation_ts
+
+    def set_yoy_inflation_term_structure(self, ts: object | None) -> None:
+        """Install (or clear) the YoY forecasting curve.
+
+        Used by ``YearOnYearInflationSwapHelper`` during bootstrap. See
+        :meth:`ZeroInflationIndex.set_zero_inflation_term_structure` for
+        the rationale.
+        """
+        self._yoy_inflation_ts = ts
+        self.update()
 
     def fixing(self, fixing_date: Date, forecast_todays_fixing: bool = False) -> float:
         """Look up the YoY fixing on ``fixing_date``.
