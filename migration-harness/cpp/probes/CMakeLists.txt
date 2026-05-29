@@ -301,3 +301,9 @@ target_link_libraries(cluster_l9b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     SpreadedSmileSection + SabrSwaptionVolatilityCube). ===
 add_executable(cluster_l9c_probe cluster_l9c/probe.cpp)
 target_link_libraries(cluster_l9c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L10-C cluster: interpolator tail + ZABR family
+#     (HymanFilteredCubic + ChebyshevInterpolation + MultiCubicSpline +
+#     AbcdInterpolation + zabr_volatility + ZabrSmileSection). ===
+add_executable(cluster_l10c_probe cluster_l10c/probe.cpp)
+target_link_libraries(cluster_l10c_probe PRIVATE ${QUANTLIB_LIBRARY})
