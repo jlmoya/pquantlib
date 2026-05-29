@@ -367,3 +367,10 @@ target_link_libraries(cluster_w2b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     LossDist family + Distribution + Loss. Foundation for W3-B/C/D. ===
 add_executable(cluster_w3a_probe cluster_w3a/probe.cpp)
 target_link_libraries(cluster_w3a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W3-B cluster: copulas (OneFactorGaussian/StudentCopula) + correlation
+#     (Correlation/Base/Compound structures) + latent models (Constant/
+#     Spot/RandomDefault/RandomLoss) + DefaultLossModel + 5 concrete loss
+#     models (GaussianLHP / Binomial / Recursive / Saddlepoint). ===
+add_executable(cluster_w3b_probe cluster_w3b/probe.cpp)
+target_link_libraries(cluster_w3b_probe PRIVATE ${QUANTLIB_LIBRARY})
