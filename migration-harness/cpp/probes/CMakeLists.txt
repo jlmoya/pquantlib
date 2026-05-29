@@ -321,7 +321,6 @@ target_link_libraries(cluster_l10b_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(cluster_l10c_probe cluster_l10c/probe.cpp)
 target_link_libraries(cluster_l10c_probe PRIVATE ${QUANTLIB_LIBRARY})
 
-<<<<<<< HEAD
 # === W1-B cluster: Gaussian1d engines (Gaussian1dCapFloorEngine +
 #     Gaussian1dFloatFloatSwaptionEngine +
 #     Gaussian1dNonstandardSwaptionEngine). ===
@@ -349,3 +348,8 @@ target_link_libraries(cluster_w1d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     calibration + numeraire tabulation + zerobondImpl/numeraireImpl). ===
 add_executable(cluster_w1a_probe cluster_w1a/probe.cpp)
 target_link_libraries(cluster_w1a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W2-B cluster: ConvexMonotoneInterpolation + AbcdCalibration +
+#     KahaleSmileSection.core_smile deep-iter (Phase 11 W2-B). ===
+add_executable(cluster_w2b_probe cluster_w2b/probe.cpp)
+target_link_libraries(cluster_w2b_probe PRIVATE ${QUANTLIB_LIBRARY})
