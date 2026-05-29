@@ -262,3 +262,10 @@ target_link_libraries(cluster_l7c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     YoY cap/floor engines). ===
 add_executable(cluster_l7d_probe cluster_l7d/probe.cpp)
 target_link_libraries(cluster_l7d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L8-A cluster: piecewise inflation curves + IterativeBootstrap
+#     (closes L7-Bb piecewise carve-out + L2-B bootstrap carve-out;
+#     PiecewiseZeroInflationCurve via L7-B's existing reference;
+#     PiecewiseYoYInflationCurve roundtrip + bootstrap-loop invariants). ===
+add_executable(cluster_l8a_probe cluster_l8a/probe.cpp)
+target_link_libraries(cluster_l8a_probe PRIVATE ${QUANTLIB_LIBRARY})
