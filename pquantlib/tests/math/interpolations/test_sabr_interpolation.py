@@ -201,3 +201,61 @@ def test_sabr_interpolation_default_params_apply_when_none() -> None:
     assert 0.0 <= fit.beta() <= 1.0
     assert 0.0 <= fit.nu() < 10.0
     assert -1.0 <= fit.rho() <= 1.0
+
+
+# --- L10-A: Halton multi-start ---------------------------------------
+
+
+def test_multi_start_at_max_guesses_1_is_back_compat() -> None:
+    """``max_guesses=1`` (default) reproduces single-start behaviour."""
+    strikes = [0.03, 0.04, 0.05, 0.06, 0.07]
+    vols = [0.30, 0.22, 0.20, 0.22, 0.30]
+    fit_default = SabrInterpolation(strikes, vols, 1.0, 0.05)
+    fit_explicit = SabrInterpolation(strikes, vols, 1.0, 0.05, max_guesses=1)
+    tolerance.exact(fit_default.alpha(), fit_explicit.alpha())
+    tolerance.exact(fit_default.beta(), fit_explicit.beta())
+    tolerance.exact(fit_default.nu(), fit_explicit.nu())
+    tolerance.exact(fit_default.rho(), fit_explicit.rho())
+
+
+def test_multi_start_does_not_make_fit_worse() -> None:
+    """Best-of-N RMS is no worse than single-start RMS."""
+    # Synthetic SABR vols on a 5-strike grid.
+    from pquantlib.math.interpolations.sabr_formula import sabr_volatility  # noqa: PLC0415
+    strikes = [0.03, 0.04, 0.05, 0.06, 0.07]
+    vols = [
+        sabr_volatility(k, 0.05, 1.0, 0.04, 0.5, 0.4, -0.1)
+        for k in strikes
+    ]
+    fit_single = SabrInterpolation(strikes, vols, 1.0, 0.05, max_guesses=1)
+    fit_multi = SabrInterpolation(strikes, vols, 1.0, 0.05, max_guesses=10)
+    # Multi-start can never produce a worse RMS than single (up to tol).
+    assert fit_multi.rms_error() <= fit_single.rms_error() + 1.0e-9
+
+
+def test_multi_start_with_seeded_results_are_reproducible() -> None:
+    """Same seed → same Halton multi-start trajectory."""
+    strikes = [0.03, 0.04, 0.05, 0.06, 0.07]
+    vols = [0.30, 0.25, 0.22, 0.25, 0.30]
+    fit_a = SabrInterpolation(
+        strikes, vols, 1.0, 0.05, max_guesses=5, multi_start_seed=123,
+    )
+    fit_b = SabrInterpolation(
+        strikes, vols, 1.0, 0.05, max_guesses=5, multi_start_seed=123,
+    )
+    tolerance.exact(fit_a.alpha(), fit_b.alpha())
+    tolerance.exact(fit_a.beta(), fit_b.beta())
+    tolerance.exact(fit_a.nu(), fit_b.nu())
+    tolerance.exact(fit_a.rho(), fit_b.rho())
+
+
+def test_multi_start_converged_flag_set() -> None:
+    """The ``converged`` flag is True when at least one restart converged."""
+    from pquantlib.math.interpolations.sabr_formula import sabr_volatility  # noqa: PLC0415
+    strikes = [0.03, 0.04, 0.05, 0.06, 0.07]
+    vols = [
+        sabr_volatility(k, 0.05, 1.0, 0.04, 0.5, 0.4, -0.1)
+        for k in strikes
+    ]
+    fit = SabrInterpolation(strikes, vols, 1.0, 0.05, max_guesses=5)
+    assert fit.converged()
