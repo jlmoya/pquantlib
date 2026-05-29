@@ -276,3 +276,10 @@ target_link_libraries(cluster_l8a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     CDS engines. ===
 add_executable(cluster_l8b_probe cluster_l8b/probe.cpp)
 target_link_libraries(cluster_l8b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L8-C cluster: capfloor + optionlet + swaption vol surfaces
+#     (CapFloorTermVolatilityStructure family + OptionletVolatilityStructure
+#     family + OptionletStripper1 + SwaptionVolatilityStructure family
+#     + SwaptionVolatilityMatrix). ===
+add_executable(cluster_l8c_probe cluster_l8c/probe.cpp)
+target_link_libraries(cluster_l8c_probe PRIVATE ${QUANTLIB_LIBRARY})
