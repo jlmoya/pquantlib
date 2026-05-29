@@ -4,7 +4,19 @@
 **Status:** drafted
 **Predecessor:** `pquantlib-phase10-complete` @ `d3746e4` — 2652/0/0, pyright + ruff clean
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
-**Target:** literal 1:1 with the C++ v1.42.1 surface — every portable .hpp ported, every deliberate carve-out reconsidered and either ported or formally re-justified.
+**Target:** functional 1:1 with the C++ v1.42.1 surface — every portable .hpp ported, every deliberate carve-out reconsidered and either ported or formally documented as **permanently-delegated** to a superior Python-ecosystem library.
+
+## Design philosophy (binding for Phase 11)
+
+**PQuantLib is a functional port, not a verbatim port.** Where the Python ecosystem already provides a superior implementation (`numpy`, `scipy`, `arch`, `mpmath`, etc.), PQuantLib delegates rather than re-implementing. This rule is **binding** for all of L1-L11:
+
+- Historical-vol estimators (`Parkinson`, `YangZhang`, `GarmanKlassEstimator`, `SimpleLocalEstimator`, `ConstantEstimator`) → users call `numpy` directly (`np.diff(np.log(prices)).std() * np.sqrt(252)` style).
+- `GARCHModel` → users call `arch.arch_model(...).fit()`.
+- Other items where a battle-tested ecosystem library is strictly better → delegate.
+
+These are **not carve-outs** in the gap sense; they are **permanent delegations by design**. `docs/carve-outs.md` Category 3 will be rewritten in W12 to make this explicit: a "Permanently-delegated" section that enumerates each item alongside its ecosystem-tooling replacement, so downstream projects know what to use.
+
+The rationale: numpy + scipy + arch are champions of the ecosystem. Re-implementing them in PQuantLib would create *worse* code than what users already have via direct ecosystem imports. Functional parity beats verbatim parity.
 
 ## Why this is a mega-phase
 
@@ -22,7 +34,7 @@ Single-shot dispatch isn't realistic. Phase 11 is structured as **12 sequential 
 
 | Wave | Theme | Est. classes | Intermediate tag |
 |---|---|---|---|
-| **W1** | Specialty model completion (Markov + Bates variants + Heston SLV + Gaussian1d engines) | ~25 | `pquantlib-phase11-w1-complete` |
+| **W1** | Specialty model completion (4 clusters: MarkovFunctional alone + Gaussian1d engines + Bates variants + Heston SLV/GjrGarch/time-dep-Heston) | ~25 | `pquantlib-phase11-w1-complete` |
 | **W2** | ZABR + smile + bootstrap + ergonomic follow-ups | ~15 | `pquantlib-phase11-w2-complete` |
 | **W3** | `experimental/credit/*` — basket CDS + CDO + synthetic-CDO + N-th-to-default | ~45 | `pquantlib-phase11-w3-complete` |
 | **W4** | `experimental/exoticoptions/*` + `experimental/barrieroption/*` + `experimental/varianceoption/*` | ~35 | `pquantlib-phase11-w4-complete` |
@@ -33,30 +45,38 @@ Single-shot dispatch isn't realistic. Phase 11 is structured as **12 sequential 
 | **W9** | `marketmodels/products/*` + `marketmodels/callability/*` | ~50 | `pquantlib-phase11-w9-complete` |
 | **W10** | `marketmodels/models/*` + `marketmodels/evolvers/*` | ~33 | `pquantlib-phase11-w10-complete` |
 | **W11** | `marketmodels/{driftcomputation,correlations,curvestates,pathwisegreeks,browniangenerators}/*` + `marketmodels/*.hpp` root | ~42 | `pquantlib-phase11-w11-complete` |
-| **W12** | Tooling-boundary closure + final audit + audit-driven gap fills | ~30 | `pquantlib-phase11-complete` (and `pquantlib-100-complete`) |
-| **Total** | — | **~460** | — |
+| **W12** | Final audit + audit-driven gap fills + permanently-delegated re-baseline in `docs/carve-outs.md` (no tooling-boundary porting per Phase-11 delegation philosophy) | ~5-15 | `pquantlib-phase11-complete` (and `pquantlib-100-complete`) |
+| **Total** | — | **~445** | — |
 
 The 460 estimate is conservative; actual count could reach 500+ if `experimental/*` headers map 1:1 to classes (some are `all.hpp` rejected up front; some are typedefs / tags).
 
 ## Wave-by-wave detail
 
-### W1 — Specialty model completion (~25 classes)
+### W1 — Specialty model completion (~25 classes, 4 clusters)
 
-**Short-rate:**
-- `MarkovFunctional` model (542 LOC; bootstrap-vs-swaption-strip calibration over a custom yield curve).
-- `Gaussian1dGsrProcess` (process companion — separate from `GsrProcess` already in L10-B).
+W1 is the **only wave with 4 parallel clusters** because `MarkovFunctional` is a sub-project on its own (542 LOC of bootstrap-vs-swaption-strip calibration). Splitting it into its own cluster gives a single subagent enough context-budget to port it correctly with proper probe coverage. The remaining ~14 specialty-model classes split cleanly across 3 other parallel clusters.
+
+**W1-A — MarkovFunctional (~3 classes)**
+- `MarkovFunctional` model proper.
+- `MarkovFunctionalSwaptionEngine`.
+- `Gaussian1dGsrProcess` (process companion to `GsrProcess` already in L10-B — Gaussian1d-style adapter).
+
+**W1-B — Gaussian1d engines (~3 classes)**
 - `Gaussian1dCapFloorEngine`.
 - `Gaussian1dFloatFloatSwaptionEngine`.
 - `Gaussian1dNonStandardSwaptionEngine`.
 
-**Equity stochastic-vol:**
+**W1-C — Bates variants (~5 classes)**
 - `BatesDetJumpModel`.
 - `BatesDoubleExpModel`.
 - `BatesDoubleExpDetJumpModel`.
-- `GjrGarchModel` + `AnalyticGjrGarchEngine`.
+- `AnalyticBatesDetJumpEngine` / `AnalyticBatesDoubleExpEngine` companion engines.
+
+**W1-D — Heston SLV + GjrGarch + time-dependent Heston (~4 classes)**
 - `HestonSlvFdmModel` (FDM stochastic local vol).
 - `HestonSlvMcModel` (MC stochastic local vol).
-- `PiecewiseTimeDependentHestonModel`.
+- `GjrGarchModel` + `AnalyticGjrGarchEngine`.
+- `PiecewiseTimeDependentHestonModel` + companion analytic engine.
 
 **Carve-outs (W1):** none — port the full short-rate + Heston specialty set.
 
@@ -280,19 +300,25 @@ The 460 estimate is conservative; actual count could reach 500+ if `experimental
 - `UtilityForReductionAlgorithms`.
 - `PiecewiseConstantCorrelation`.
 
-### W12 — Tooling-boundary closure + final audit (~30 classes)
+### W12 — Final audit + permanently-delegated re-baseline (~5-15 classes — exact count emerges from audit)
 
-**Tooling-boundary items** (per `docs/carve-outs.md` Category 3) — were *deliberately* replaced by numpy/scipy/arch package; Phase 11 ports them anyway for literal 1:1 with C++:
+W12 is **audit-only**. Per the binding Phase-11 delegation philosophy (above), tooling-boundary items are *not* ported:
 
-- `ConstantEstimator` (historical-vol constant estimator).
-- `GARCHModel` (`models/volatility/garch.hpp`).
-- `GarmanKlassSimpleSigma` + `GarmanKlassEstimator`.
-- `Parkinson` + `ParkinsonExtended`.
-- `SimpleLocalEstimator`.
-- `YangZhang`.
-- `HistoricalSyntheticInterestRateForwardCurve`.
+- Historical-vol estimators (`Parkinson`, `YangZhang`, `GarmanKlassEstimator`, `SimpleLocalEstimator`, `ConstantEstimator`, `ParkinsonExtended`, `GarmanKlassSimpleSigma`) — users call `numpy` directly.
+- `GARCHModel` — users call `arch.arch_model(...).fit()`.
+- `HistoricalSyntheticInterestRateForwardCurve` — users build via `numpy.polyfit` + `scipy.interpolate`.
 
-Plus any items surfaced by **final audit**: a programmatic `diff` of `ql/**/*.hpp` against our Python tree to identify any silent gaps (a `find ql -name '*.hpp' | check_corresponding_python_module` script).
+Instead of porting these, W12 **documents them permanently** in `docs/carve-outs.md` Category 3 with explicit ecosystem-tooling replacement guidance.
+
+**W12 work:**
+
+1. **W12-A — Audit script.** Write `migration-harness/check-coverage.sh`: walks `ql/**/*.hpp`, applies known consolidation rules (Thirty360 → 1 Python module, fwd-declarations skipped, `all.hpp` skipped), emits CSV of unported headers. Run it. Inspect the gap list.
+
+2. **W12-B — Audit-driven gap fills.** For each genuine gap surfaced by the audit (i.e., not a permanently-delegated item, not an `all.hpp`, not a fwd-decl, not already consolidated), port it. The exact class count emerges from the audit pass — estimate 5-15 based on prior phases' history of leaving minor stragglers.
+
+3. **W12-C — Permanently-delegated re-baseline in `docs/carve-outs.md`.** Rewrite Category 3 with a pinned "Permanently-delegated" section. Each entry: C++ class name + ecosystem-tooling replacement + example one-line usage. This is *not* a gap list; it's a guidance document so downstream projects know how to use the Python ecosystem instead of looking for a PQuantLib class that doesn't (and won't) exist.
+
+4. **W12-D — Final closure documentation.** Rewrite `phase11-completion.md` final section with the Phase-11 closure summary. Tag `pquantlib-phase11-complete` + `pquantlib-100-complete` pushed together.
 
 ## Tolerance discipline (per-wave)
 
@@ -328,20 +354,21 @@ Per-wave wall-clock estimate: 60-90 min agent time + ~15 min orchestrator overhe
 
 Phase 11 is **complete** when:
 
-1. Every `.hpp` in `ql/**/*.hpp` (excluding `all.hpp` aggregators) has a corresponding Python class or module, or a formal carve-out documented in `docs/carve-outs.md` with an explicit `cannot-be-ported-because-X` rationale.
-2. `find ql -name '*.hpp' | check_corresponding_python_module` (the audit script) reports zero unflagged gaps.
+1. Every `.hpp` in `ql/**/*.hpp` (excluding `all.hpp` aggregators) has a corresponding Python class/module **or** is documented in `docs/carve-outs.md` Category 3 as **permanently-delegated** to a specific ecosystem library (numpy / scipy / arch / mpmath / etc.) **or** has an explicit `cannot-be-ported-because-X` rationale.
+2. `migration-harness/check-coverage.sh` reports zero unflagged gaps (every header either has a Python counterpart, or maps to a Category-3 permanently-delegated entry, or has an explicit rationale).
 3. Triad passes: pytest + pyright + ruff all clean.
-4. Test-parity vs `jquantlib-final` ≥ 95% (target 100% conceptually; ≥ 95% acknowledges that some C++ classes have no JQuantLib counterpart and vice versa).
+4. Test count exceeds `jquantlib-final`'s 3610 — expected landing zone **~4500-5500** at ~5-8 tests per ported class.
 
-After all conditions: tag `pquantlib-100-complete` alongside `pquantlib-phase11-complete`.
+After all conditions: tag `pquantlib-100-complete` alongside `pquantlib-phase11-complete`. The "100" refers to **functional 100% coverage of the C++ surface**, where "functional" means every C++ class is either ported or has a Python-ecosystem replacement that downstream users can use directly.
 
 ## Decision log
 
 | Decision | Rationale |
 |---|---|
 | **Single Phase 11 with 12 internal waves** (vs Phases 11-22 each treated as separate phases) | User explicitly asked for "Phase 11 ... everything ... nothing left out". Each wave still gets its own intermediate tag for durability. |
-| **Wave order: specialty (W1-W2) → experimental (W3-W8) → marketmodels (W9-W11) → final closure (W12)** | Specialty depends only on existing core; experimental is grab-bag (any order works); marketmodels is the most self-contained heavy lift; W12 needs all of the above to do the gap-fill audit correctly. |
-| **Port the tooling-boundary items (GARCH, YangZhang, Parkinson, ...) in W12** | The user explicitly asked for "no carve-outs left." This overrides the prior design decision (Phase 5/6) to delegate these to numpy/arch. Documented carve-outs become real ports. |
+| **Wave order: specialty (W1-W2) → experimental (W3-W8) → marketmodels (W9-W11) → final audit (W12)** | Specialty depends only on existing core; experimental is grab-bag (any order works); marketmodels is the most self-contained heavy lift; W12 needs all of the above to do the gap-fill audit correctly. |
+| **Delegation philosophy is binding — do NOT port tooling-boundary items.** | PQuantLib is a *functional* port, not a verbatim port. Re-implementing `GARCHModel` / `Parkinson` / `YangZhang` / `GarmanKlass` etc. would create worse code than what numpy + scipy + arch already provide. These items are documented as **permanently-delegated** in `docs/carve-outs.md` Category 3, not as gaps. |
+| **W1 gets 4 parallel clusters instead of 3** | `MarkovFunctional` is 542 LOC of bootstrap-vs-swaption-strip calibration and needs its own context-budget cluster. Splitting it from the other ~14 specialty-model classes gives the subagent enough room for proper probe coverage. |
 | **Multi-wave structure preserves run-to-completion semantics** | Each wave is independently dispatched. If session boundaries hit mid-phase, intermediate `pquantlib-phase11-wN-complete` tags are durable. The full `pquantlib-phase11-complete` tag only lands after all 12 waves close. |
 | **Final audit script lives in `migration-harness/check-coverage.sh`** | Programmatic gap detection: walks `ql/**/*.hpp`, applies the consolidation rules (Thirty360 → 1 module; X-fwd headers → skip; all.hpp → skip), and emits a CSV of unported headers. Run at the end of W11; re-run after W12 to confirm zero gaps. |
 

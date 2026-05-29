@@ -25,14 +25,15 @@ Wave-level commit cadence: **3-5 feature commits per cluster + 1 merge commit pe
 
 ---
 
-## W1 — Specialty model completion
+## W1 — Specialty model completion (4 clusters — MarkovFunctional split out)
 
 **Clusters:**
-- **L11-W1-A** Markov + Gaussian1d engines (~10 classes): `MarkovFunctional` + `Gaussian1dGsrProcess` + `Gaussian1dCapFloorEngine` + `Gaussian1dFloatFloatSwaptionEngine` + `Gaussian1dNonStandardSwaptionEngine`.
-- **L11-W1-B** Bates family completion (~6 classes): `BatesDetJumpModel` + `BatesDoubleExpModel` + `BatesDoubleExpDetJumpModel` + engines.
-- **L11-W1-C** Heston SLV + GjrGarch + time-dependent Heston (~9 classes): `HestonSlvFdmModel` + `HestonSlvMcModel` + `GjrGarchModel` + `PiecewiseTimeDependentHestonModel` + 4 engines.
+- **L11-W1-A** MarkovFunctional alone (~3 classes): `MarkovFunctional` + `MarkovFunctionalSwaptionEngine` + `Gaussian1dGsrProcess`. **Solo cluster** because MarkovFunctional is 542 LOC of sophisticated bootstrap-vs-swaption-strip calibration; needs the full context-budget.
+- **L11-W1-B** Gaussian1d engines (~3 classes): `Gaussian1dCapFloorEngine` + `Gaussian1dFloatFloatSwaptionEngine` + `Gaussian1dNonStandardSwaptionEngine`.
+- **L11-W1-C** Bates variants (~5 classes): `BatesDetJumpModel` + `BatesDoubleExpModel` + `BatesDoubleExpDetJumpModel` + 2 analytic engines.
+- **L11-W1-D** Heston SLV + GjrGarch + time-dependent Heston (~4 classes): `HestonSlvFdmModel` + `HestonSlvMcModel` + `GjrGarchModel` + `PiecewiseTimeDependentHestonModel` + companion analytic engines.
 
-Target +60 tests.
+Target +80 tests (revised up from +60 to reflect 4 clusters and MarkovFunctional's higher density).
 
 Intermediate tag: `pquantlib-phase11-w1-complete`.
 
@@ -173,46 +174,56 @@ Intermediate tag: `pquantlib-phase11-w11-complete`.
 
 ---
 
-## W12 — Tooling-boundary closure + final audit + audit-driven gap fills
+## W12 — Final audit + permanently-delegated re-baseline (no tooling-boundary porting)
+
+Per the binding Phase-11 delegation philosophy, W12 does **not** port historical-vol estimators or GARCH. Those are permanently delegated to `numpy` / `arch`. W12 is audit-only.
 
 **Pre-W12 setup:** write the `migration-harness/check-coverage.sh` audit script. Walks `ql/**/*.hpp`, applies known consolidation rules, emits CSV of unported headers.
 
 **Clusters:**
-- **L11-W12-A** Historical vol estimators (~8 classes): `ConstantEstimator` + `Parkinson` + `ParkinsonExtended` + `GarmanKlassSimpleSigma` + `GarmanKlassEstimator` + `SimpleLocalEstimator` + `YangZhang`. **Reverses the L1-D / L5-A tooling-boundary carve-out** — implements the C++ math directly in Python (no scipy/arch delegation).
-- **L11-W12-B** GARCH model + historical synthetic forward curve (~5 classes): `GARCHModel` + `HistoricalSyntheticInterestRateForwardCurve` + supporting infrastructure.
-- **L11-W12-C** Audit-driven gap fills (~17 classes — exact count emerges from W12 audit pass): port whatever the audit script flags. Each port follows the standard cluster commit-batching discipline.
-- **L11-W12-D** Final closure docs + carve-out re-baseline: `docs/carve-outs.md` rewritten — every entry either marked CLOSED-by-PhaseN with a cluster reference, or marked permanently-not-in-scope with explicit rationale (e.g., "C++ test-suite items, not library code").
+- **L11-W12-A** Audit script + initial audit run (~0 classes, ~2 commits): write `check-coverage.sh`, run it, categorize the gap list into (a) genuine gaps to port, (b) permanently-delegated items, (c) test-suite-only items, (d) `all.hpp` aggregator misclassifications.
+- **L11-W12-B** Audit-driven gap fills (~5-15 classes — exact count emerges from W12-A): port whatever (a)-list items the audit surfaced. Standard cluster commit-batching.
+- **L11-W12-C** Permanently-delegated re-baseline in `docs/carve-outs.md`. Rewrite Category 3 with a pinned "Permanently-delegated" section. Each entry: C++ class name + one-line ecosystem-tooling replacement + example snippet. Examples:
+  - `Parkinson` → `np.diff(np.log(prices)).std() * np.sqrt(252) * 0.5 / np.log(2)`
+  - `YangZhang` → `arch.unitroot.YangZhang(...)` or composite numpy formula.
+  - `GARCHModel` → `arch.arch_model(returns, vol='GARCH', p=1, q=1).fit()`.
+  - `GarmanKlassEstimator` → custom numpy one-liner using OHLC arrays.
+- **L11-W12-D** Final closure docs + tags. Update `phase11-completion.md`, `CLAUDE.md`, `README.md`, `docs/migration/README.md`, `memory/phase_status.md`, `memory/MEMORY.md`. Tag `pquantlib-phase11-w12-complete` + `pquantlib-phase11-complete` + `pquantlib-100-complete` pushed together.
 
-Target +50 tests + 2 doc commits.
+Target +10 tests (only from W12-B gap-fills) + ~3 doc commits.
 
 **Final tags (pushed together):**
 - `pquantlib-phase11-w12-complete`
 - `pquantlib-phase11-complete`
-- **`pquantlib-100-complete`**
+- **`pquantlib-100-complete`** — denotes **functional** 100% coverage of the C++ surface (every C++ class either ported or has a documented ecosystem-tooling replacement).
 
 ---
 
 ## Total scope summary
 
-| Wave | Target tests | Cumulative pytest |
-|---|---|---|
-| baseline (post-Phase 10) | — | 2652 |
-| W1 | +60 | 2712 |
-| W2 | +30 | 2742 |
-| W3 | +120 | 2862 |
-| W4 | +90 | 2952 |
-| W5 | +80 | 3032 |
-| W6 | +100 | 3132 |
-| W7 | +100 | 3232 |
-| W8 | +130 | 3362 |
-| W9 | +130 | 3492 |
-| W10 | +90 | 3582 |
-| W11 | +120 | 3702 |
-| W12 | +50 | **3752** |
+The per-wave test deltas below are **estimates** based on prior phases' ~5-8 tests/class density. Actual landings will vary; the table is a sanity check, not a contract.
 
-Target Phase 11 closure: **~3752 / 0 / 0** pytest, pyright clean, ruff clean.
+| Wave | Est. classes | Target tests (5-8/class) | Cumulative pytest (mid-range) |
+|---|---|---|---|
+| baseline (post-Phase 10) | — | — | 2652 |
+| W1 | ~15 (4 clusters incl. MarkovFunctional solo) | +80 | 2732 |
+| W2 | ~15 | +90 | 2822 |
+| W3 | ~45 | +270 | 3092 |
+| W4 | ~35 | +210 | 3302 |
+| W5 | ~25 | +150 | 3452 |
+| W6 | ~46 | +275 | 3727 |
+| W7 | ~49 | +290 | 4017 |
+| W8 | ~67 | +400 | 4417 |
+| W9 | ~50 | +300 | 4717 |
+| W10 | ~33 | +200 | 4917 |
+| W11 | ~42 | +250 | 5167 |
+| W12 | ~10 (gap fills only) | +60 | **~5227** |
 
-vs `jquantlib-final` 3610 — this would put PQuantLib ahead of JQuantLib's final state on raw test count (because PQuantLib's experimental/* coverage exceeds JQuantLib's, which never got to experimental/*).
+Target Phase 11 closure: **~5000-5500 / 0 / 0** pytest, pyright clean, ruff clean.
+
+vs `jquantlib-final` 3610 — PQuantLib lands well ahead of JQuantLib's final state on raw test count because PQuantLib's experimental/* + LMM coverage exceeds JQuantLib's, which never got past the core layers.
+
+The wide range (~5000-5500 rather than a single number) acknowledges that experimental/* test density is unknown — could be higher or lower than the prior phases' baseline.
 
 ## Per-wave doc-sweep cadence
 
@@ -240,18 +251,18 @@ After each wave Wn:
 | Orchestrator merge + triad verification (12 waves × ~15 min) | ~3 hours |
 | Inter-wave doc-sweep micro-commits (12 × ~5 min) | ~1 hour |
 | Final 8-step doc-sweep + audit script run + final tag | ~1 hour |
-| **Total estimated wall-clock** | **~20 hours of orchestrated work** |
+| **Total estimated wall-clock** | **~18 hours of orchestrated work** (revised down 2 hr after dropping W12 tooling-boundary porting) |
 | **Estimated session count** | 2-4 sessions depending on conversation limits |
 
 ## Stopping criteria recap
 
 Phase 11 is complete when:
 
-1. Every class-bearing `.hpp` in `ql/` has a Python counterpart **or** a formally documented permanent carve-out (Item-not-in-C++-library, test-suite item, or fundamentally non-portable).
+1. Every class-bearing `.hpp` in `ql/` has a Python counterpart **or** is documented in `docs/carve-outs.md` Category 3 as **permanently-delegated** to a specific ecosystem library (numpy / scipy / arch / mpmath / etc.) **or** has a formally documented permanent carve-out (test-suite item, fundamentally non-portable).
 2. `migration-harness/check-coverage.sh` reports zero unflagged gaps.
 3. Triad clean.
-4. Test count > 3600 (matching/exceeding `jquantlib-final`).
-5. `docs/carve-outs.md` rewritten so every entry is either CLOSED-by-PhaseN or permanently-not-in-scope.
+4. Test count > 3610 (matching/exceeding `jquantlib-final`); realistic landing ~5000-5500.
+5. `docs/carve-outs.md` rewritten so every entry is either CLOSED-by-PhaseN, permanently-delegated, or permanently-not-in-scope.
 6. Three tags pushed: `pquantlib-phase11-w12-complete`, `pquantlib-phase11-complete`, `pquantlib-100-complete`.
 
 ---
