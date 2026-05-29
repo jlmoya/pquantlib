@@ -1,5 +1,7 @@
 # Phase 7 — Inflation cluster (executable plan)
 
+**Status:** **closed** — tagged `pquantlib-phase7-complete` @ `3a7228e` on 2026-05-28. **2109/0/0** tests. See [`phase7-completion.md`](phase7-completion.md).
+
 **Goal:** Land ~30 must-port inflation classes on `main`, behind tag `pquantlib-phase7-complete`. Closes the inflation Tier-1 carve-out from `docs/carve-outs.md`.
 
 **Predecessor:** `pquantlib-final` @ `45f4668` — 1958/0/0.

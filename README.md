@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--final-blue)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-1958%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--phase7--complete-green)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-2109%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -66,6 +66,7 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | 6 L6-A/B/C (parallel) | _(merged into Phase 6 + final tags)_ | L6-A (LongstaffSchwartz American MC — closes Phase 5 carve-out), L6-B (BatesEngine — closes Phase 4 carve-out via add_on_term hook), L6-C (DoubleBarrierOption + AnalyticDoubleBarrierEngine Ikeda-Kunitomo 1992 — closes Phase 5 carve-out). Modernization sweep deleted after audit (codebase already modern from day 1). 3 parallel cluster subagents, ~30 min wall-clock. | +75 → 1958/0/0 | 2026-05-28 |
 | **6 complete** | **`pquantlib-phase6-complete`** | **High-impact Phase 4+5 carve-outs closed** + final closure tooling (`docs/carve-outs.md` + 4 sample programs). 1958 tests; closes Phase 4 BatesEngine + Phase 5 American MC + DoubleBarrier. | **1958/0/0** | **2026-05-28** |
 | **Project complete** | **`pquantlib-final`** | **End of planned migration.** ~340 classes ported across ~1958 tests (54.2% of jquantlib-final). Vanilla pricing + calibration end-to-end + American MC + analytic exotics covered. See `docs/carve-outs.md` for comprehensive carve-out documentation. | **1958/0/0** | **2026-05-28** |
+| 7 inflation (opt-in extension) | `pquantlib-phase7-complete` | Inflation Tier-1 carve-out closed: 5 region indexes + termstructure abstracts + Seasonality + Interpolated curves + inflation cashflows + pricers + ZeroCouponInflationSwap + YearOnYearInflationSwap + CPISwap + YoYInflationCapFloor + vol surfaces + 3 YoY analytic engines (Bachelier/Black/UnitDisplaced). L7-B Piecewise + helpers deferred to L7-Bb follow-up. 4 clusters; ~32 classes; +151 tests. | **2109/0/0** | **2026-05-28** |
 
 Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)

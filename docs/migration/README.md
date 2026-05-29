@@ -107,6 +107,17 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
 - Final test count: **1883/0/0**. pyright + ruff clean.
 
+### Phase 7 — Inflation cluster (closed; opt-in extension beyond pquantlib-final)
+
+- [`phase7-design.md`](phase7-design.md) — binding spec (closed).
+- [`phase7-plan.md`](phase7-plan.md) — executable plan.
+- [`phase7-completion.md`](phase7-completion.md) — closure summary, 4-cluster contribution table, merge reconciliations (incl. L7-B subagent socket drop), carve-outs.
+- **L7-A pilot** (+60 tests): InflationIndex hierarchy + 5 region concretes (EUHICP/FRHICP/UKRPI/UKHICP/USCPI) + termstructure abstracts + Seasonality + 2 Protocols.
+- **L7-B partial** (+12 tests): InterpolatedZero/YoYInflationCurve — Piecewise + traits + helpers deferred to L7-Bb follow-up.
+- **L7-C** (+44 tests): InflationCoupon hierarchy + CPI/YoY coupons + pricers.
+- **L7-D** (+35 tests): inflation swaps + cap/floor instruments + vol surfaces + 3 YoY analytic engines.
+- Tag: `pquantlib-phase7-complete` @ `3a7228e`. Test count: **2109/0/0**.
+
 ### Phase 6 — high-impact carve-outs + final closure (closed)
 
 - [`phase6-design.md`](phase6-design.md) — binding spec (closed; outcome appendix at top).

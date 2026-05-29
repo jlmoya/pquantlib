@@ -1,7 +1,7 @@
 # Phase 7 — Inflation cluster (design)
 
 **Date:** 2026-05-28
-**Status:** drafted, awaiting ack to start
+**Status:** **closed** — tagged `pquantlib-phase7-complete` @ `3a7228e` on 2026-05-28. **2109/0/0** pytest, pyright + ruff clean. Closure summary at [`phase7-completion.md`](phase7-completion.md).
 **Predecessor:** `pquantlib-final` @ `45f4668` — 1958/0/0, pyright + ruff clean
 **C++ ground truth:** QuantLib v1.42.1 @ `099987f0`
 
