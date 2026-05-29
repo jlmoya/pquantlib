@@ -283,3 +283,9 @@ target_link_libraries(cluster_l8b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     + SwaptionVolatilityMatrix). ===
 add_executable(cluster_l8c_probe cluster_l8c/probe.cpp)
 target_link_libraries(cluster_l8c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L9-A cluster: cubic + bicubic interpolators
+#     (CubicNaturalSpline + MonotonicCubicNaturalSpline + BicubicSpline —
+#     closes the L1-E carve-out for cubic-family interpolators). ===
+add_executable(cluster_l9a_probe cluster_l9a/probe.cpp)
+target_link_libraries(cluster_l9a_probe PRIVATE ${QUANTLIB_LIBRARY})
