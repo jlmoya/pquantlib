@@ -1,11 +1,11 @@
-"""CapFloorTermVolCurve — 1-D linear-interp ATM cap/floor vol curve.
+"""CapFloorTermVolCurve — 1-D ATM cap/floor vol curve.
 
 # C++ parity: ql/termstructures/volatility/capfloor/capfloortermvolcurve.{hpp,cpp}
 # (v1.42.1).
 
-A vector of (option_tenor, vol) pillars. Vols are linearly interpolated
-on the *time* axis (year-fraction-from-reference of each tenor's
-advanced date). Strike is ignored (the curve is ATM-only).
+A vector of (option_tenor, vol) pillars. Vols are interpolated on the
+*time* axis (year-fraction-from-reference of each tenor's advanced
+date). Strike is ignored (the curve is ATM-only).
 
 PQuantLib divergences:
 
@@ -19,6 +19,14 @@ PQuantLib divergences:
 - C++ supports four constructors (Quote/vol x settlement-days/date);
   PQuantLib expects pre-resolved ``float`` vols and lets the caller
   thread Quotes if needed.
+- **Interpolator opt-in (L9-A).** C++ uses a templated
+  ``Interpolator = Linear`` parameter so callers can pass
+  ``Cubic`` etc. PQuantLib exposes the same via an ``interpolator``
+  kwarg accepting any ``type[Interpolation]`` (default
+  ``LinearInterpolation`` for backward compatibility). Pass
+  ``CubicNaturalSpline`` (from L9-A's
+  ``pquantlib.math.interpolations.cubic_interpolation``) to match
+  the C++ default of the analogous ``Cubic`` template instantiation.
 """
 
 from __future__ import annotations
@@ -31,6 +39,7 @@ import numpy as np
 from pquantlib import qassert
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.math.interpolations.interpolation import Interpolation
 from pquantlib.math.interpolations.linear import LinearInterpolation
 from pquantlib.termstructures.volatility.capfloor.cap_floor_term_volatility_structure import (
     CapFloorTermVolatilityStructure,
@@ -54,6 +63,7 @@ class CapFloorTermVolCurve(CapFloorTermVolatilityStructure):
         day_counter: DayCounter | None = None,
         reference_date: Date | None = None,
         settlement_days: int | None = None,
+        interpolator: type[Interpolation] = LinearInterpolation,
     ) -> None:
         dc = day_counter if day_counter is not None else Actual365Fixed()
         super().__init__(
@@ -87,7 +97,7 @@ class CapFloorTermVolCurve(CapFloorTermVolatilityStructure):
 
         self._option_dates: list[Date] = option_dates
         self._option_times: list[float] = option_times
-        self._interpolation: LinearInterpolation = LinearInterpolation(
+        self._interpolation: Interpolation = interpolator(
             np.asarray(option_times, dtype=np.float64),
             np.asarray(self._vols, dtype=np.float64),
         )
