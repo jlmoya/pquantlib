@@ -367,3 +367,11 @@ target_link_libraries(cluster_w2b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     LossDist family + Distribution + Loss. Foundation for W3-B/C/D. ===
 add_executable(cluster_w3a_probe cluster_w3a/probe.cpp)
 target_link_libraries(cluster_w3a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W3-D cluster: NthToDefault + IntegralNTDEngine + CdsOption +
+#     BlackCDSOptionEngine + RandomDefaultModel + RiskyAssetSwap +
+#     RiskyAssetSwapOption. NTD-basket + CDS-option + asset-swap-option
+#     family. Depends on W3-A pilot (Pool/Issuer/DefaultProbKey),
+#     and probes Basket/OneFactorGaussianCopula directly from C++. ===
+add_executable(cluster_w3d_probe cluster_w3d/probe.cpp)
+target_link_libraries(cluster_w3d_probe PRIVATE ${QUANTLIB_LIBRARY})
