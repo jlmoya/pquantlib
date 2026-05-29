@@ -320,3 +320,10 @@ target_link_libraries(cluster_l10b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     AbcdInterpolation + zabr_volatility + ZabrSmileSection). ===
 add_executable(cluster_l10c_probe cluster_l10c/probe.cpp)
 target_link_libraries(cluster_l10c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W1-C cluster: Bates variant models + analytic engines
+#     (BatesDetJumpModel + BatesDoubleExpModel + BatesDoubleExpDetJumpModel +
+#     AnalyticBatesDetJumpEngine + AnalyticBatesDoubleExpEngine +
+#     AnalyticBatesDoubleExpDetJumpEngine). ===
+add_executable(cluster_w1c_probe cluster_w1c/probe.cpp)
+target_link_libraries(cluster_w1c_probe PRIVATE ${QUANTLIB_LIBRARY})
