@@ -10,6 +10,8 @@ import pytest
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.exceptions import LibraryException
 from pquantlib.patterns.observable_settings import ObservableSettings
+from pquantlib.payoffs import OptionType
+from pquantlib.pricingengines.black_formula import black_formula
 from pquantlib.termstructures.volatility.flat_smile_section import FlatSmileSection
 from pquantlib.termstructures.volatility.smile_section import SmileSection
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
@@ -233,3 +235,51 @@ def test_smile_section_floating_mode_notifies_own_observers() -> None:
     smile.register_with(obs)
     s.evaluation_date = Date.from_ymd(15, Month.December, 2026)
     assert counts[0] == 1
+
+
+# --- option_price / digital_option_price / density (L9-C additions) -------
+
+
+def test_smile_section_option_price_call_atm_round_trips_black_formula() -> None:
+    """A flat-vol smile must produce the same option price as a direct
+    Black formula call on the same vol / forward / std-dev."""
+    smile = FlatSmileSection(
+        exercise_time=1.0, volatility=0.20, atm_level=100.0,
+    )
+    expected = black_formula(OptionType.Call, 100.0, 100.0, 0.20 * math.sqrt(1.0))
+    tolerance.tight(smile.option_price(100.0), expected)
+
+
+def test_smile_section_option_price_put_atm() -> None:
+    """ATM put = ATM call for a non-discounted, flat-vol smile."""
+    smile = FlatSmileSection(
+        exercise_time=1.0, volatility=0.20, atm_level=100.0,
+    )
+    call = smile.option_price(100.0, 1, 1.0)
+    put = smile.option_price(100.0, -1, 1.0)
+    tolerance.tight(call, put)
+
+
+def test_smile_section_option_price_requires_atm_level() -> None:
+    """When atm_level is NaN, option_price must raise."""
+    smile = FlatSmileSection(exercise_time=1.0, volatility=0.20)
+    with pytest.raises(LibraryException, match="atm level"):
+        smile.option_price(100.0)
+
+
+def test_smile_section_digital_option_price_smoke() -> None:
+    smile = FlatSmileSection(
+        exercise_time=1.0, volatility=0.20, atm_level=100.0,
+    )
+    # Should produce a number in [0, 1] (digital is bounded).
+    p = smile.digital_option_price(100.0, 1, 1.0)
+    assert 0.0 <= p <= 1.0
+
+
+def test_smile_section_density_smoke() -> None:
+    smile = FlatSmileSection(
+        exercise_time=1.0, volatility=0.20, atm_level=100.0,
+    )
+    d = smile.density(100.0)
+    # Density must be non-negative.
+    assert d >= 0.0
