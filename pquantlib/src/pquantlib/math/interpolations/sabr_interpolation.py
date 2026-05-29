@@ -23,9 +23,11 @@ Documented divergences from C++:
   well-behaved slices. Cross-validation against C++ via the L9-C probe
   is at LOOSE tier on recovered SABR parameters.
 * **Multi-start sampling.** C++ runs up to ``maxGuesses`` (default 50)
-  re-initialisations from a Halton-style low-discrepancy sequence; we
-  fit once from the user-supplied or default initial guess. This is
-  adequate for the realistic 5-strike slices used in Phase 9 testing.
+  re-initialisations from a Halton-style low-discrepancy sequence.
+  PQuantLib mirrors this via the L10-A ``max_guesses`` kwarg (default
+  1): when set above 1, additional starts are sampled from
+  :class:`HaltonRsg` over the *free* (non-fixed) parameter subspace and
+  the best-RMS fit is retained.
 * **Vega weighting.** The C++ ``weight()`` callback calls
   ``blackFormulaStdDevDerivative`` per (strike, vol) pair. PQuantLib
   implements the equivalent weighting; see the inline note on the
@@ -101,6 +103,14 @@ class SabrInterpolation:
         volatility_type: ``ShiftedLognormal`` (default) or ``Normal``.
         max_nfev: passed to ``scipy.optimize.least_squares``; matches
             the C++ ``maxIterations`` budget (default 100).
+        max_guesses: number of Halton-distributed initial guesses to
+            try. When set above 1 the constructor samples
+            ``max_guesses - 1`` additional starting points from
+            :class:`HaltonRsg` (over the free param subspace), runs the
+            optimisation from each, and keeps the lowest-RMS fit.
+            Default 1 = single-start (back-compat).
+        multi_start_seed: seed for the Halton multi-start RNG (default
+            42); only consulted when ``max_guesses > 1``.
     """
 
     def __init__(
@@ -121,6 +131,8 @@ class SabrInterpolation:
         shift: float = 0.0,
         volatility_type: VolatilityType = VolatilityType.ShiftedLognormal,
         max_nfev: int = 1000,
+        max_guesses: int = 1,
+        multi_start_seed: int = 42,
     ) -> None:
         qassert.require(len(strikes) >= 2, "SabrInterpolation needs at least 2 strikes")
         qassert.require(
@@ -159,7 +171,14 @@ class SabrInterpolation:
         self._rms_error: float = 0.0
         self._max_error: float = 0.0
         self._converged: bool = False
-        self._fit(max_nfev=max_nfev)
+        if max_guesses <= 1:
+            self._fit(max_nfev=max_nfev)
+        else:
+            self._fit_multi_start(
+                max_nfev=max_nfev,
+                max_guesses=max_guesses,
+                seed=multi_start_seed,
+            )
 
     # --- fit ---------------------------------------------------------
 
@@ -306,6 +325,105 @@ class SabrInterpolation:
             return
         self._rms_error = float(np.sqrt(np.mean(residuals * residuals)))
         self._max_error = float(np.max(np.abs(residuals)))
+
+    def _fit_multi_start(self, *, max_nfev: int, max_guesses: int, seed: int) -> None:
+        """Halton multi-start: run ``max_guesses`` fits, keep best RMS.
+
+        # C++ parity: ``XABRCoeffHolder::reset()`` + the outer loop in
+        # ``XABRInterpolationImpl::calculate`` that resamples and
+        # restarts the optimisation up to ``maxGuesses`` times. The
+        # underlying initial-guess sampler in C++ is a Halton-style
+        # low-discrepancy sequence over the unconstrained R^4 space;
+        # PQuantLib draws from the same low-discrepancy generator (via
+        # :class:`HaltonRsg`) but maps each sample directly into the
+        # bound-constrained search box used by ``trf``.
+        """
+        from pquantlib.math.randomnumbers.halton import HaltonRsg  # noqa: PLC0415
+
+        # Free-axis bounding box (per param):
+        #   alpha ∈ [eps, 0.5]   beta ∈ [eps, 1-eps]
+        #   nu    ∈ [eps, 10]    rho  ∈ [-eps2, eps2]
+        # We map a unit-cube Halton sample u ∈ [0,1)^free_dim into
+        # this box per axis. Beta is intentionally bracketed below 1
+        # to avoid the singular β=1 limit; alpha gets a generous
+        # upper bound (0.5 covers reasonable atm vol ranges); nu's
+        # 10 upper bound mirrors C++ ``QL_MAX_REAL``-clamped resamples
+        # in practice (typical fits hit nu in (0.1, 5)).
+        axes: list[tuple[float, float]] = []
+        if not self._is_fixed[0]:
+            axes.append((_EPS1, 0.5))
+        if not self._is_fixed[1]:
+            axes.append((_EPS1, 1.0 - _EPS1))
+        if not self._is_fixed[2]:
+            axes.append((_EPS1, 10.0))
+        if not self._is_fixed[3]:
+            axes.append((-_EPS2, _EPS2))
+
+        # First pass: the user-supplied (or default-rule) initial.
+        self._fit(max_nfev=max_nfev)
+        best_rms = self._rms_error
+        best_params = (self._alpha, self._beta, self._nu, self._rho)
+        best_converged = self._converged
+
+        if not axes:
+            return
+
+        rsg = HaltonRsg(
+            dimensionality=len(axes), seed=seed, random_start=True, random_shift=False,
+        )
+
+        for _ in range(max_guesses - 1):
+            sample = rsg.next_sequence().value
+            # Map sample to per-axis ranges + write back into the
+            # full 4-vector, leaving fixed params alone.
+            params = list(self._initial)
+            j = 0
+            for i, fixed in enumerate(self._is_fixed):
+                if fixed:
+                    continue
+                lo, hi = axes[j]
+                params[i] = lo + (hi - lo) * float(sample[j])
+                j += 1
+            # Reset the initial-guess buffer used by ``_fit`` then
+            # re-run the optimisation.
+            self._initial = params
+            try:
+                self._fit(max_nfev=max_nfev)
+            except Exception:
+                # Bad initial; skip this restart.
+                continue
+            if self._rms_error < best_rms:
+                best_rms = self._rms_error
+                best_params = (self._alpha, self._beta, self._nu, self._rho)
+                best_converged = self._converged
+
+        # Restore the best-found fit.
+        self._alpha, self._beta, self._nu, self._rho = best_params
+        self._rms_error = best_rms
+        self._converged = best_converged
+        # Refresh max_error from best_params.
+        residuals = self._residuals_at_full(best_params)
+        self._update_diagnostics(residuals)
+
+    def _residuals_at_full(
+        self, params: tuple[float, float, float, float],
+    ) -> np.ndarray:
+        """Evaluate residuals at full 4-vector (no free/fixed packing)."""
+        alpha, beta, nu, rho = params
+        alpha = max(alpha, _EPS1)
+        beta = min(max(beta, _EPS1), 1.0 - _EPS1)
+        nu = max(nu, _EPS1)
+        rho = min(max(rho, -_EPS2), _EPS2)
+        model_vols = np.empty_like(self._strikes)
+        for i, k in enumerate(self._strikes):
+            model_vols[i] = shifted_sabr_volatility(
+                float(k), self._forward, self._expiry_time,
+                alpha, beta, nu, rho, self._shift, self._volatility_type,
+            )
+        r = model_vols - self._volatilities
+        if self._vega_weighted:
+            r = r * self._vega_weights()
+        return r
 
     # --- public API --------------------------------------------------
 

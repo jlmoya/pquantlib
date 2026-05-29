@@ -1,0 +1,42 @@
+{
+  "atm_smile_section": {
+    "exercise_time": 2,
+    "atm_level": 0.070000000000000007,
+    "base_atm_level": 0.050000000000000003,
+    "vol_at_strike_5pct": 0.17999999999999999,
+    "vol_at_strike_3pct": 0.17999999999999999
+  },
+  "atm_adjusted_smile_section": {
+    "exercise_time": 2,
+    "target_atm": 0.059999999999999998,
+    "base_atm_level": 0.050000000000000003,
+    "atm_level": 0.059999999999999998,
+    "adjustment": -0.009999999999999995,
+    "vol_at_new_atm": 0.18338341933550273,
+    "vol_at_strike_6pct": 0.18338341933550273,
+    "base_vol_at_5pct": 0.18338341933550273
+  },
+  "sabr_interpolated_smile_section": {
+    "forward": 0.050000000000000003,
+    "expiry": 1,
+    "true_alpha": 0.040000000000000001,
+    "true_beta": 0.5,
+    "true_nu": 0.40000000000000002,
+    "true_rho": -0.10000000000000001,
+    "strikes": [0.03, 0.04, 0.05, 0.06, 0.07],
+    "input_vols": [0.24067676899249768, 0.20220325460628694, 0.18113442876774294, 0.17449793909843775, 0.17656585102386674],
+    "sabr_vol_at_5pct": 0.18113442876774294,
+    "sabr_vol_at_3pct": 0.24067676899249768,
+    "sabr_vol_at_6pct": 0.17449793909843775
+  },
+  "kahale_smile_section": {
+    "exercise_time": 2,
+    "atm_level": 0.050000000000000003,
+    "min_strike": -0,
+    "base_atm_level": 0.050000000000000003,
+    "base_call_price_5pct": 0.005158689711822438,
+    "base_call_price_3pct": 0.020402725760178136,
+    "base_call_price_7pct": 0.00063380313437754409,
+    "kahale_call_price_atm": 0.005158689711822438
+  }
+}

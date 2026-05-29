@@ -301,3 +301,9 @@ target_link_libraries(cluster_l9b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     SpreadedSmileSection + SabrSwaptionVolatilityCube). ===
 add_executable(cluster_l9c_probe cluster_l9c/probe.cpp)
 target_link_libraries(cluster_l9c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === L10-A cluster: vol surface tail (Atm / AtmAdjusted / Kahale /
+#     SabrInterpolated smile sections + OptionletStripper2 +
+#     SabrInterpolation Halton multi-start). ===
+add_executable(cluster_l10a_probe cluster_l10a/probe.cpp)
+target_link_libraries(cluster_l10a_probe PRIVATE ${QUANTLIB_LIBRARY})
