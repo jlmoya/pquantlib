@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -34,7 +35,7 @@ def _build_curve() -> InterpolatedYoYInflationCurve:
     full = _load_ref()
     ref = full["interpolated_yoy"]
     assert isinstance(ref, dict)
-    nodes = ref["nodes"]
+    nodes = cast(list[dict[str, float | int]], ref["nodes"])
     assert isinstance(nodes, list)
     dates = [Date(int(n["date_serial"])) for n in nodes]  # type: ignore[index, call-overload]
     rates = [float(n["rate"]) for n in nodes]  # type: ignore[index, call-overload]
@@ -67,7 +68,7 @@ def test_yoy_rate_at_intermediate_dates_matches_cpp() -> None:
     ref = _load_ref()["interpolated_yoy"]
     assert isinstance(ref, dict)
     curve = _build_curve()
-    samples = ref["samples"]
+    samples = cast(list[dict[str, float]], ref["samples"])
     assert isinstance(samples, list)
     for s in samples:
         d = Date(int(s["date_serial"]))  # type: ignore[index, call-overload]
@@ -81,7 +82,7 @@ def test_yoy_rate_at_anchor_nodes_returns_input_rate() -> None:
     ref = _load_ref()["interpolated_yoy"]
     assert isinstance(ref, dict)
     curve = _build_curve()
-    nodes = ref["nodes"]
+    nodes = cast(list[dict[str, float | int]], ref["nodes"])
     assert isinstance(nodes, list)
     for node in nodes:
         d = Date(int(node["date_serial"]))  # type: ignore[index, call-overload]
