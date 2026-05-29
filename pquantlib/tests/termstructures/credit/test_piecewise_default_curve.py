@@ -1,9 +1,14 @@
-"""Smoke tests for PiecewiseDefaultCurve scaffold.
+"""Tests for PiecewiseDefaultCurve — wired-up bootstrap.
 
 # C++ parity: ql/termstructures/credit/piecewisedefaultcurve.hpp.
 
-Bootstrap is deferred — these tests verify the constructor wiring + the
-``not-yet-implemented`` raises for the rate accessors.
+L9-B wires the L8-B scaffold with a full
+``IterativeBootstrap[DefaultProbabilityTermStructure, Traits]`` (from
+L8-A). Verifies:
+- constructor wiring + helper count + max_date.
+- HazardRate traits: 3-CDS roundtrip — implied_quote ≈ input quote
+  to LOOSE tolerance.
+- SurvivalProbability traits: same shape, log-linear underlying.
 """
 
 from __future__ import annotations
@@ -20,8 +25,12 @@ from pquantlib.termstructures.credit.default_probability_helpers import SpreadCd
 from pquantlib.termstructures.credit.piecewise_default_curve import (
     PiecewiseDefaultCurve,
 )
-from pquantlib.termstructures.credit.probability_traits import HazardRateTrait
+from pquantlib.termstructures.credit.probability_traits import (
+    HazardRateTrait,
+    SurvivalProbabilityTrait,
+)
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
+from pquantlib.testing.tolerance import loose
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendars.weekends_only import WeekendsOnly
 from pquantlib.time.compounding import Compounding
@@ -67,8 +76,6 @@ def test_piecewise_default_curve_constructs(
     curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
     assert curve.traits() is HazardRateTrait
     assert len(curve.instruments()) == 3
-    # max_date is the latest helper date.
-    assert curve.max_date() == max(h.latest_date() for h in helpers)
 
 
 def test_piecewise_default_curve_requires_at_least_one_helper(
@@ -79,19 +86,49 @@ def test_piecewise_default_curve_requires_at_least_one_helper(
         PiecewiseDefaultCurve(HazardRateTrait, d, [], Actual365Fixed())
 
 
-def test_piecewise_default_curve_survival_probability_deferred(
+def test_piecewise_default_curve_max_date_matches_helpers_before_bootstrap(
     helpers_and_curve: tuple[Date, list[SpreadCdsHelper]],
 ) -> None:
     d, helpers = helpers_and_curve
     curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
-    with pytest.raises(LibraryException, match="bootstrap is deferred"):
-        curve.survival_probability(1.0, extrapolate=True)
+    # Before bootstrap runs, max_date falls back to the latest helper.
+    assert curve.max_date() == max(h.latest_date() for h in helpers)
 
 
-def test_piecewise_default_curve_default_density_deferred(
+def test_piecewise_default_curve_hazard_rate_traits_roundtrip(
     helpers_and_curve: tuple[Date, list[SpreadCdsHelper]],
 ) -> None:
+    """Bootstrapped curve reproduces input CDS quotes (HazardRate)."""
     d, helpers = helpers_and_curve
     curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
-    with pytest.raises(LibraryException, match="bootstrap is deferred"):
-        curve.default_density(1.0, extrapolate=True)
+    # Trigger bootstrap.
+    _ = curve.survival_probability(1.0, extrapolate=True)
+    # All helpers should be re-priced to their input quote (0.02) by
+    # the bootstrapped curve to LOOSE tolerance.
+    for h in helpers:
+        implied = h.implied_quote()
+        loose(implied, 0.02)
+
+
+def test_piecewise_default_curve_survival_probability_traits_roundtrip(
+    helpers_and_curve: tuple[Date, list[SpreadCdsHelper]],
+) -> None:
+    """Bootstrapped curve reproduces input CDS quotes (SurvivalProbability)."""
+    d, helpers = helpers_and_curve
+    curve = PiecewiseDefaultCurve(SurvivalProbabilityTrait, d, helpers, Actual365Fixed())
+    _ = curve.survival_probability(1.0, extrapolate=True)
+    for h in helpers:
+        implied = h.implied_quote()
+        loose(implied, 0.02)
+
+
+def test_piecewise_default_curve_data_after_bootstrap(
+    helpers_and_curve: tuple[Date, list[SpreadCdsHelper]],
+) -> None:
+    """After bootstrap the curve exposes a non-trivial data grid."""
+    d, helpers = helpers_and_curve
+    curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
+    _ = curve.survival_probability(1.0, extrapolate=True)
+    assert len(curve.data()) == len(helpers) + 1
+    # Hazard rates should be positive.
+    assert all(x > 0 for x in curve.data())

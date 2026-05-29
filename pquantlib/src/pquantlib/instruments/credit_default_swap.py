@@ -21,14 +21,13 @@ flows through ``setup_arguments`` / ``fetch_results``.
 # C++ parity divergences:
 # - The C++ class supports an ``include_settlement_date_flows`` Settings
 #   override; the Python port reads it via the engine constructor only.
-# - ``impliedHazardRate`` + ``conventionalSpread`` (Brent root-finders
-#   over a FlatHazardRate) are NOT ported in this stage — they're deferred
-#   to a follow-up; the underlying MidPoint/Integral engines work without
-#   them.
 # - ``accrualRebate`` flow is implemented but the rebate calculation
 #   simplifies — we always pass through ``schedule.calendar().advance(
 #   trade_date, cash_settlement_days, ..., payment_convention)`` for the
 #   rebate date. Documented inline.
+# - L9-B closes the original ``impliedHazardRate`` /
+#   ``conventionalSpread`` carve-out — they're now available as methods
+#   on this class (Brent over FlatHazardRate, MidPoint or ISDA engine).
 """
 
 from __future__ import annotations
@@ -483,6 +482,120 @@ class CreditDefaultSwap(Instrument):
         self.calculate()
         qassert.require(self._accrual_rebate_npv is not None, "accrual rebate NPV not available")
         return cast("float", self._accrual_rebate_npv)
+
+    # ---- implied_hazard_rate + conventional_spread ----------------------
+
+    def implied_hazard_rate(
+        self,
+        target_npv: float,
+        discount_curve: object,
+        day_counter: object,
+        recovery_rate: float = 0.4,
+        accuracy: float = 1e-8,
+        max_iterations: int = 100,
+        guess: float | None = None,
+        model: PricingModel = PricingModel.Midpoint,
+    ) -> float:
+        """Solve for the flat hazard rate that reproduces ``target_npv``.
+
+        # C++ parity: ``CreditDefaultSwap::impliedHazardRate``
+        # (creditdefaultswap.cpp:340-381).
+
+        Builds a ``FlatHazardRate(rate)`` probability term structure
+        plus a MidPoint / ISDA engine, then runs Brent over the hazard
+        rate. Returns the rate that makes
+        ``engine_result.value == target_npv``.
+
+        Local imports prevent the instruments → termstructures/credit →
+        instruments cycle.
+        """
+        # Local imports: avoid circular import with FlatHazardRate /
+        # IsdaCdsEngine / MidPointCdsEngine via the instruments tree.
+        from pquantlib.math.solvers1d.brent import Brent  # noqa: PLC0415
+        from pquantlib.pricingengines.credit.isda_cds_engine import (  # noqa: PLC0415
+            IsdaCdsEngine,
+        )
+        from pquantlib.pricingengines.credit.midpoint_cds_engine import (  # noqa: PLC0415
+            MidPointCdsEngine,
+        )
+        from pquantlib.quotes.simple_quote import SimpleQuote  # noqa: PLC0415
+        from pquantlib.termstructures.credit.flat_hazard_rate import (  # noqa: PLC0415
+            FlatHazardRate,
+        )
+        from pquantlib.termstructures.yield_term_structure import (  # noqa: PLC0415
+            YieldTermStructure,
+        )
+
+        del max_iterations  # Brent's default max iterations is 100.
+
+        # Build the probe FlatHazardRate(rate) curve.
+        flat_rate_quote = SimpleQuote(0.02 if guess is None else float(guess))
+        assert isinstance(discount_curve, YieldTermStructure)
+        # FlatHazardRate uses the discount curve's reference date as its
+        # anchor — the C++ engine uses a moving-mode (settlement_days=0)
+        # WeekendsOnly variant; PQuantLib uses the fixed-date constructor
+        # which is equivalent at the reference date.
+        from pquantlib.daycounters.day_counter import DayCounter  # noqa: PLC0415
+
+        assert isinstance(day_counter, DayCounter)
+        probability = FlatHazardRate(
+            discount_curve.reference_date(), flat_rate_quote, day_counter,
+        )
+
+        # Pick the engine.
+        engine: MidPointCdsEngine | IsdaCdsEngine
+        if model == PricingModel.Midpoint:
+            engine = MidPointCdsEngine(probability, recovery_rate, discount_curve)
+        elif model == PricingModel.ISDA:
+            engine = IsdaCdsEngine(probability, recovery_rate, discount_curve)
+        else:
+            qassert.fail(f"unknown CDS pricing model: {model}")
+
+        # Drive the engine directly (matches C++ approach — bypass the
+        # instrument's lazy machinery so we can mutate the hazard rate
+        # in the inner loop).
+        engine_args = engine.get_arguments()
+        engine_results = engine.get_results()
+        self.setup_arguments(engine_args)
+
+        def f(x: float) -> float:
+            flat_rate_quote.set_value(x)
+            engine.calculate()
+            value = engine_results.value
+            assert value is not None
+            return value - target_npv
+
+        # C++ initial guess: spread / (1 - recovery) * 365/360.
+        x0 = self._running_spread / (1.0 - recovery_rate) * 365.0 / 360.0
+        if guess is not None:
+            x0 = guess
+        step = 0.1 * x0 if x0 != 0.0 else 0.01
+        return Brent().solve(f, accuracy, x0, step)
+
+    def conventional_spread(
+        self,
+        conventional_recovery: float,
+        discount_curve: object,
+        day_counter: object,
+        model: PricingModel = PricingModel.ISDA,
+        accuracy: float = 1e-8,
+    ) -> float:
+        """Conventional par spread under the ISDA convention.
+
+        # C++ parity: ``CreditDefaultSwap::conventionalSpread``
+        # (creditdefaultswap.cpp:383-422).
+
+        Same Brent approach as :meth:`implied_hazard_rate` but with
+        ``target_npv = 0`` and the conventional recovery rate.
+        """
+        return self.implied_hazard_rate(
+            target_npv=0.0,
+            discount_curve=discount_curve,
+            day_counter=day_counter,
+            recovery_rate=conventional_recovery,
+            accuracy=accuracy,
+            model=model,
+        )
 
 
 __all__ = [
