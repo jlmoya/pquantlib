@@ -61,13 +61,19 @@ C++: `ql/models/shortrate/onefactormodels/{gaussian1dmodel,gsr,markovfunctional}
 
 **Remaining (future-cluster candidates):** `MarkovFunctional` (542 LOC; second Gaussian1dModel concrete with bootstrap-vs-swaption-strip calibration — its own dedicated cluster). Plus `Gaussian1dGsrProcess` companion + `Gaussian1dCapFloorEngine` + `Gaussian1dFloatFloatSwaptionEngine` + `Gaussian1dNonStandardSwaptionEngine` (Gaussian1d-driven engines on top of the model). `Gaussian1dSmileSection` IborIndex ctor (depends on Gaussian1dCapFloorEngine).
 
-### Specialty Heston variants
+### Specialty Heston variants — **partially CLOSED** by Phase 11 W1-D
 
-C++: `ql/models/equity/{batesdetjumpmodel,batesdoubleexpmodel,batesdoubleexpdetjumpmodel,gjrgarchmodel,hestonslvfdmmodel,hestonslvmcmodel,piecewisetimedependenthestonmodel}.hpp`.
+Phase 11 W1-D landed:
+- `GjrGarchModel` + `AnalyticGjrGarchEngine` (Duan et al. 2006 Edgeworth expansion).
+- `PiecewiseTimeDependentHestonModel` + `AnalyticPiecewiseTimeDependentHestonEngine` (Gatheral form, time-segmented).
+- `HestonSlvMcModel` (MC-bucketing leverage-function calibration).
+- `HestonSlvFdmModel` (**scaffold only** — public API + unit-leverage fallback; the Fokker-Planck FDM solver depends on 2-D Heston FD operators scheduled for Phase 11 W5-C).
 
-**Why deferred:** Each is a calibration variant of the basic Heston model. Heston + Bates (basic jump-diffusion) cover most uses.
+Still deferred (covered elsewhere in Phase 11 plan):
+- `BatesDetJumpModel` + `BatesDoubleExpModel` + `BatesDoubleExpDetJumpModel` and their analytic engines → Phase 11 W1-C.
+- `HestonSlvFdmModel` full implementation → Phase 11 W5-C (depends on `Fdm2dHestonOp` / `FdmHestonFwdOp` / `Concentrating1dMesher`).
 
-**Access:** none for the variants; use `HestonModel` + `AnalyticHestonEngine` for the vanilla case.
+**Access:** `from pquantlib.models.equity.gjr_garch_model import GjrGarchModel`, `from pquantlib.models.equity.piecewise_time_dependent_heston_model import PiecewiseTimeDependentHestonModel`, `from pquantlib.models.equity.heston_slv_mc_model import HestonSlvMcModel`, `from pquantlib.models.equity.heston_slv_fdm_model import HestonSlvFdmModel` (returns unit leverage).
 
 ## Category 2 — Engine-pair carry-overs
 
