@@ -320,3 +320,9 @@ target_link_libraries(cluster_l10b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     AbcdInterpolation + zabr_volatility + ZabrSmileSection). ===
 add_executable(cluster_l10c_probe cluster_l10c/probe.cpp)
 target_link_libraries(cluster_l10c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W1-A cluster: MarkovFunctional model + adapter process
+#     (Gaussian1dGsrProcess wrapper + MarkovFunctional swaption-strip
+#     calibration + numeraire tabulation + zerobondImpl/numeraireImpl). ===
+add_executable(cluster_w1a_probe cluster_w1a/probe.cpp)
+target_link_libraries(cluster_w1a_probe PRIVATE ${QUANTLIB_LIBRARY})
