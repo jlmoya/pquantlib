@@ -414,3 +414,10 @@ target_link_libraries(cluster_w4b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     oscillatory integral). ===
 add_executable(cluster_w4c_probe cluster_w4c/probe.cpp)
 target_link_libraries(cluster_w4c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W5-C cluster: experimental FD operators + OU vanilla engine +
+#     inner-value calculators. FdmZabrOp, FdmDupire1dOp,
+#     FdmOrnsteinUhlenbeckOp, FdOrnsteinUhlenbeckVanillaEngine,
+#     FdmExtOUJumpModelInnerValue. ===
+add_executable(cluster_w5c_probe cluster_w5c/probe.cpp)
+target_link_libraries(cluster_w5c_probe PRIVATE ${QUANTLIB_LIBRARY})
