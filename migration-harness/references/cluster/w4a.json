@@ -1,0 +1,36 @@
+{
+  "himalaya": {
+    "strike": 100,
+    "n_fixings": 3,
+    "npv": 6.3612161390011925
+  },
+  "everest": {
+    "notional": 1000000,
+    "guarantee": 0.029999999999999999,
+    "exercise_serial": 45672,
+    "npv": 843597.02941305959,
+    "yield": -0.11241147699173781
+  },
+  "pagoda": {
+    "roof": 0.20000000000000001,
+    "fraction": 0.5,
+    "n_fixings": 4,
+    "npv": 0.053982219090902228
+  },
+  "two_asset_barrier": {
+    "strike": 100,
+    "barrier_upout": 130,
+    "rho": 0.5,
+    "npv_upout_call": 2.5882340792898466,
+    "npv_downout_put": 2.2345041198702682,
+    "exercise_serial": 45672
+  },
+  "two_asset_correlation": {
+    "strike1": 100,
+    "strike2": 100,
+    "rho": 0.40000000000000002,
+    "npv_call": 11.666167154484441,
+    "npv_put": 5.7248384426197694,
+    "exercise_serial": 45672
+  }
+}

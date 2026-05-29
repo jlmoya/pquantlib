@@ -389,3 +389,11 @@ target_link_libraries(cluster_w3c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     and probes Basket/OneFactorGaussianCopula directly from C++. ===
 add_executable(cluster_w3d_probe cluster_w3d/probe.cpp)
 target_link_libraries(cluster_w3d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W4-A cluster: multi-asset exotic options — HimalayaOption /
+#     EverestOption / PagodaOption with MC engines (PseudoRandom,
+#     fixed seed + samples), plus TwoAssetBarrierOption + TwoAsset
+#     CorrelationOption with their analytic engines (Heynen-Kat
+#     barrier + Zhang correlation). ===
+add_executable(cluster_w4a_probe cluster_w4a/probe.cpp)
+target_link_libraries(cluster_w4a_probe PRIVATE ${QUANTLIB_LIBRARY})
