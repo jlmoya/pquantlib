@@ -1,0 +1,33 @@
+{
+  "ntd": {
+    "premium": 0.0050000000000000001,
+    "nominal": 1000000,
+    "rank": 2,
+    "basket_size": 3,
+    "side_idx": 0,
+    "maturity_serial": 45673
+  },
+  "cds_option": {
+    "npv_knockout": 113702.84591714003,
+    "risky_annuity": 43902637.892129503,
+    "atm_rate": 0.012057020610810213,
+    "npv_non_knockout": 229302.7228472897
+  },
+  "risky_asset_swap": {
+    "fair_spread": 0.012990937082041371,
+    "npv": 100.75347811143477,
+    "float_annuity": 4.612215741292168,
+    "nominal": 100,
+    "spread": 0.014999999999999999
+  },
+  "risky_asw_option": {
+    "npv": 74.859864032951307
+  },
+  "rdm_seq0": {
+    "t0": 51,
+    "t1": 51,
+    "t2": 9.688097436819529
+  },
+  "rdm_seq0_after_reset_t0": 51,
+  "rdm_seq1_t0": 51
+}

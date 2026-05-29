@@ -381,3 +381,11 @@ target_link_libraries(cluster_w3b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     GaussianLHPLossModel). ===
 add_executable(cluster_w3c_probe cluster_w3c/probe.cpp)
 target_link_libraries(cluster_w3c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W3-D cluster: NthToDefault + IntegralNTDEngine + CdsOption +
+#     BlackCDSOptionEngine + RandomDefaultModel + RiskyAssetSwap +
+#     RiskyAssetSwapOption. NTD-basket + CDS-option + asset-swap-option
+#     family. Depends on W3-A pilot (Pool/Issuer/DefaultProbKey),
+#     and probes Basket/OneFactorGaussianCopula directly from C++. ===
+add_executable(cluster_w3d_probe cluster_w3d/probe.cpp)
+target_link_libraries(cluster_w3d_probe PRIVATE ${QUANTLIB_LIBRARY})
