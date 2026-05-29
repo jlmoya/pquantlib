@@ -70,6 +70,7 @@ Carve-outs (documented inline below):
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -263,9 +264,9 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         reversion: float,
         volatility: list[float],
         smile_step_dates: list[Date],
-        swap_indexes: list[SwapIndex],
-        cap_volatilities: list[Quote] | None = None,
-        swaption_volatilities: list[Quote] | None = None,
+        swap_indexes: Sequence[SwapIndex],
+        cap_volatilities: Sequence[Quote] | None = None,
+        swaption_volatilities: Sequence[Quote] | None = None,
         settings: MarkovFunctionalSettings | None = None,
     ) -> None:
         # Parent ctors. Gaussian1dModel sets up the LazyObject + curve
@@ -904,6 +905,50 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
     def model_outputs(self) -> _ModelOutputs:
         """Diagnostic per-expiry calibration outputs (atm / annuity / adj factors)."""
         return self._model_outputs
+
+    # --- engine-facing accessors ---------------------------------------
+    #
+    # These are not part of the C++ public surface but the engine
+    # subclass needs structured access without going through the
+    # protected `_` underscore fields. They mirror the C++
+    # ``MarkovFunctional::modelSettings()``-style passthrough.
+
+    def settings(self) -> MarkovFunctionalSettings:
+        """Numerical / grid settings used by the model.
+
+        # C++ parity: ``MarkovFunctional::modelSettings()`` accessor.
+        """
+        return self._settings
+
+    def swap_indexes(self) -> list[SwapIndex]:
+        """List of swap indexes used to construct the calibration points.
+
+        # C++ parity: ``MarkovFunctional::swapIndexBase_`` (singular —
+        # the C++ uses a single base index since the tenors are
+        # provided separately as ``swaptionTenors``). Python's
+        # plural form mirrors the more flexible ctor signature.
+        """
+        return self._swap_indexes
+
+    def gaussian_shifted_polynomial_integral_helper(
+        self,
+        a: float,
+        b: float,
+        c: float,
+        d: float,
+        e: float,
+        h: float,
+        x0: float,
+        x1: float,
+    ) -> float:
+        """Public wrapper for ``_gaussian_shifted_polynomial_integral``.
+
+        Used by ``MarkovFunctionalSwaptionEngine`` (and any future
+        Gaussian1d-flavoured engine) to access the closed-form
+        polynomial-integral helper without going through the
+        underscore-prefixed module-level function.
+        """
+        return _gaussian_shifted_polynomial_integral(a, b, c, d, e, h, x0, x1)
 
 
 __all__ = [
