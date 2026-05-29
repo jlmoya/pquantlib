@@ -367,3 +367,10 @@ target_link_libraries(cluster_w2b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     LossDist family + Distribution + Loss. Foundation for W3-B/C/D. ===
 add_executable(cluster_w3a_probe cluster_w3a/probe.cpp)
 target_link_libraries(cluster_w3a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W3-C cluster: hazard-rate specialty curves + CDO + tranche + Basket
+#     (FactorSpreadedHazardRateCurve + SpreadedHazardRateCurve + Basket +
+#     SyntheticCDO + IntegralCDOEngine + MidPointCDOEngine driven by
+#     GaussianLHPLossModel). ===
+add_executable(cluster_w3c_probe cluster_w3c/probe.cpp)
+target_link_libraries(cluster_w3c_probe PRIVATE ${QUANTLIB_LIBRARY})
