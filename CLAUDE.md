@@ -28,7 +28,7 @@ Pin: `v1.42.1` @ `099987f0ca2c11c505dc4348cdb9ce01a598e1e5` (2026-04-16).
 
 ## Current state
 
-- **Phase:** **Phase 11 PAUSED at W5 (computer-restart checkpoint).** W1+W2+W3+W4 closed (latest tag `pquantlib-phase11-w4-complete` @ `eb901ae`, 3172/0/0). W5 branches on remote: `phase11-w5-A` (WIP — untested snapshot), `phase11-w5-B` (done at 3225 on branch), `phase11-w5-C` (done at 3197 on branch). **None merged.** Resume procedure: see [`docs/migration/phase11-w5-resume-checkpoint.md`](docs/migration/phase11-w5-resume-checkpoint.md).
+- **Phase:** **Phase 11 PAUSED at W5 (computer-restart checkpoint).** W1+W2+W3+W4 closed (latest tag `pquantlib-phase11-w4-complete` @ `eb901ae`, 3172/0/0). W5 branches on remote: `phase11-w5-A` @ `111a27e` (done at 3221, triad green), `phase11-w5-B` (done at 3225 on branch), `phase11-w5-C` (done at 3197 on branch). **All 3 W5 clusters done — none merged.** Resume = merge sequence A→B→C + tag. See [`docs/migration/phase11-w5-resume-checkpoint.md`](docs/migration/phase11-w5-resume-checkpoint.md).
 - **Branch:** `main` @ `eb901ae`. Active feature branches: `phase11-w5-A`, `phase11-w5-B`, `phase11-w5-C` (all pushed to origin).
 - **Workspace:** uv-managed 4-package monorepo. Dependencies: numpy, scipy, pytest, pyright, ruff. No new deps in Phase 11.
 - **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **main currently 3172/0/0**.
