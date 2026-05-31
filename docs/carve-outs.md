@@ -192,6 +192,9 @@ Still deferred (covered elsewhere in Phase 11 plan):
 - **`LaplaceInterpolation` FD-operator assembly** (Phase 11 W6-C): the C++ threads `Predefined1dMesher` + `FdmMesherComposite` + `SecondDerivativeOp.toMatrix()` + `BiCGstab`. The W6-C port inlines the identical second-derivative stencil (`2/zeta` weights) + Numerical-Recipes 3.8.6 corner weighting, assembles the system with `scipy.sparse.csr_matrix`, and solves it with `scipy.sparse.linalg.bicgstab` (the same Bi-CG-Stab algorithm). Inner/boundary/corner in-fills match the C++ reference grids exactly.
 - **`GaussNonCentralChiSquaredPolynomial` weight** (Phase 11 W6-C): `scipy.stats.ncx2.pdf` for `w(x)`; the orthogonal-polynomial recurrence is ported directly (the C++ `MomentBasedGaussianPolynomial<mp_real>` arbitrary-precision moment accumulation is run in double precision only — matches the C++ `Real` specialization at the 1e-5 quadrature test tolerance; mpmath multiprecision is a deferred carve-out).
 - **`MultidimGaussianQuadrature` node/weight solve** (Phase 11 W6-C): Golub-Welsch via `numpy.linalg.eigh` of the Hermite Jacobi matrix (C++ uses `TqrEigenDecomposition`); QuantLib's weight convention (`w_i = mu_0·ev[0,i]²/w(x_i)`) is reproduced so results match.
+- **`GaussianQuadrature` 1-D node solve** (Phase 11 W8-D): standalone `pquantlib.math.integrals.GaussianQuadrature` drives Golub-Welsch via `scipy.linalg.eigh_tridiagonal` of the symmetric tridiagonal Jacobi matrix (diag `alpha(i)`, off-diag `sqrt(beta(i))`) — the C++ `GaussianQuadrature` uses its own `TqrEigenDecomposition`. The weight formula (`w_i = mu_0·ev[0,i]²/w(x_i)`, the Lebesgue convention) is ported line-for-line; nodes match the C++ TQR to ~1e-11. Used by `SquareRootCLVModel`'s collocation.
+- **Gauss-Hermite collocation abscissae** (Phase 11 W8-D): `NormalCLVModel` uses `sqrt(2)·scipy.special.roots_hermite(n)` for the OU collocation nodes (the C++ `M_SQRT2·GaussHermiteIntegration(n).x()`); scipy returns ascending physicists' Hermite roots, reversed to match the C++ descending node order.
+- **Non-central chi-squared quantile** (Phase 11 W8-D): `SquareRootCLVModel`'s `pMin`/`pMax` collocation clamps use `scipy.stats.ncx2.ppf` (the C++ used `boost::math::quantile`); the CDF uses the ported `NonCentralCumulativeChiSquareDistribution` (itself `scipy.stats.ncx2.cdf`).
 - **Custom random number generation**: numpy.random + scipy.stats (Sobol/Halton via scipy.stats.qmc).
 - **Direction integer tables for Sobol** (Jaeckel default / Unit / SobolLevitan / Kuo / etc.): scipy.stats.qmc uses Joe-Kuo by default.
 
@@ -215,6 +218,30 @@ These were deferred during specific clusters with clear access patterns:
 - **L5-E `BivariateCumulativeNormalDistribution`**: closed in L5-E.
 - **W6-C `LatentModel<Impl>::FactorSampler` specializations**: the general `experimental.math.LatentModel` ports the integration/inspector surface (factor loadings, per-variable correlation, copula cumulative/inverse passthroughs, `latent_var_value`, `integrated_expected_value`); the C++ `Impl`-driven random-sample machinery (the `FactorSampler` partial specializations for Gaussian/T copulas) is deferred — the W6-C copula RNGs (`ClaytonCopulaRng` / `FrankCopulaRng` / `FarlieGumbelMorgensternCopulaRng` / `PolarStudentTRng`) and `GaussianCopulaPolicy.all_factor_cumul_inverter` provide direct factor-sample generation when a simulation is needed.
 - **W8-C `experimental.mcbasket` Longstaff-Schwartz multipath engines**: the W8-C cluster ports the deterministic mcbasket scaffolding — `PathPayoff` (abstract) + `AdaptedPathPayoff` (the `ValuationData` adapted-accessor, enforcing non-anticipating payoffs) + `PathMultiAssetOption` (instrument) + `MCPathBasketEngine` (European path-dependent basket MC, with `EuropeanPathMultiPathPricer`). The **American multi-asset** variant — `LongstaffSchwartzMultiPathPricer` (309-line LS regression over multi-asset paths) + `MCLongstaffSchwartzPathEngine` + `MCAmericanPathEngine` — is deferred: a ~3-hour follow-up that extends the L6-A `LongstaffSchwartzPathPricer` / `LsmBasisSystem` to multi-asset states using the W8-C `PathPayoff.basis_system_dimension()` + the `states`/`exercises` outputs already plumbed through `AdaptedPathPayoff.set_exercise_data`. The European engine + the deterministic scaffolding cover the non-exercise path; for American multi-asset basket pricing today, the L6-A single-asset `MCAmericanEngine` (regression LS) is the closest in-tree option.
+
+### Arithmetic-average OIS — **removed upstream (deprecated v1.41)**
+
+The W8-D plan called for `ArithmeticAverageOIS` + `ArithmeticOISRateHelper` +
+`MakeArithmeticAverageOIS` (C++ `ql/experimental/averageois/`). On inspection
+of v1.42.1 (`099987f0`), **all three headers are empty deprecation stubs**:
+
+```cpp
+// ql/experimental/averageois/arithmeticaverageois.hpp (v1.42.1)
+// Deprecated in version 1.41
+#pragma message("Warning: this file is empty and will disappear in a future release; do not include it.")
+```
+
+The class definitions were deleted upstream — there is no
+`class ArithmeticAverageOIS` anywhere in the v1.42.1 tree (verified by
+`grep -rl "class ArithmeticAverageOIS"`). Since **C++ v1.42.1 is the source
+of truth** and the source of truth contains no implementation, these are
+carved out: there is nothing to port. The arithmetic-averaging convexity
+adjustment they once provided over compounded OIS is, in modern QuantLib,
+subsumed by the standard `OvernightIndexedSwap` (L3-C, already ported) plus
+the ibor-ibor / overnight-ibor basis-swap rate helpers added in W8-D
+(`IborIborBasisSwapRateHelper`, `OvernightIborBasisSwapRateHelper`). If the
+historical arithmetic-average behaviour is ever needed, recover it from a
+pre-1.41 QuantLib tag or from QuantLib-Python's matching version.
 
 ## Category 5 — Items not in C++ v1.42.1
 
