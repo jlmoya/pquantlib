@@ -574,3 +574,15 @@ target_link_libraries(cluster_w9a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     the enabler for historicalRatesAnalysis / HistoricalForwardRatesAnalysis. ===
 add_executable(cluster_w9b_probe cluster_w9b/probe.cpp)
 target_link_libraries(cluster_w9b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W9-C cluster: MarketModels Brownian generators + accounting/greek
+#     engines. MTBrownianGenerator (nextPath/nextStep over the bit-identical
+#     MT uniform stream + inverse-cumulative normal); SobolBrownianGenerator
+#     orderedIndices (Factors/Steps/Diagonal fill schema) + the transform()
+#     Brownian-bridge test interface on a fixed variate matrix;
+#     AccountingEngine (discounted cash-flow accumulation over a deterministic
+#     stub evolver + stub MultiProduct, terminal numeraire); ProxyGreekEngine
+#     original-evolver leg (singlePathValues). PathwiseAccountingEngine is not
+#     probed (its ctor needs a concrete LogNormalFwdRateEuler from W10). ===
+add_executable(cluster_w9c_probe cluster_w9c/probe.cpp)
+target_link_libraries(cluster_w9c_probe PRIVATE ${QUANTLIB_LIBRARY})
