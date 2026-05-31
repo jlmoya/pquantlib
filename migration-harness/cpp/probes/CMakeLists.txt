@@ -463,3 +463,11 @@ target_link_libraries(cluster_w6a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     inline with the documented-correct variance grid + Bilinear. ===
 add_executable(cluster_w6b_probe cluster_w6b/probe.cpp)
 target_link_libraries(cluster_w6b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W6-C cluster: experimental math foundations. ConvolvedStudentT,
+#     GaussNonCentralChiSquaredPolynomial, moorePenroseInverse,
+#     GaussianQuadMultidimIntegrator, MultidimIntegral, piecewise
+#     function/integral, Gaussian/T copula policies, LatentModel,
+#     laplaceInterpolation, PolarStudentTRng. ===
+add_executable(cluster_w6c_probe cluster_w6c/probe.cpp)
+target_link_libraries(cluster_w6c_probe PRIVATE ${QUANTLIB_LIBRARY})
