@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 from statistics import NormalDist
+from typing import Protocol
 
 import numpy as np
 import pytest
@@ -49,6 +50,14 @@ _R = 0.05
 _Q = 0.02
 _SIGMA = 0.25
 _T = 1.0
+
+
+class _ExtendedTreeCtor(Protocol):
+    """The 4-arg (process, end, steps, strike) extended-tree constructor."""
+
+    def __call__(
+        self, process: StochasticProcess1D, end: float, steps: int, strike: float
+    ) -> ExtendedBinomialTree: ...
 
 
 def _process() -> StochasticProcess1D:
@@ -102,7 +111,7 @@ _SCHEMES = [
 
 @pytest.mark.parametrize(("tree_cls", "steps", "tol"), _SCHEMES)
 def test_extended_tree_converges_to_bs(
-    tree_cls: type[ExtendedBinomialTree], steps: int, tol: float
+    tree_cls: _ExtendedTreeCtor, steps: int, tol: float
 ) -> None:
     tree = tree_cls(_process(), _T, steps, _K)
     price = _price_european_call(tree)
