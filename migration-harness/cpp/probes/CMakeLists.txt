@@ -519,3 +519,12 @@ target_link_libraries(cluster_w7c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     KInterpolatedYoYOptionletVolatilitySurface. ===
 add_executable(cluster_w7d_probe cluster_w7d/probe.cpp)
 target_link_libraries(cluster_w7d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W8-D cluster: CLV models + generalized short-rate + basis/xccy
+#     rate helpers. GeneralizedOrnsteinUhlenbeckProcess; GeneralizedHullWhite;
+#     NormalCLVModel; SquareRootCLVModel; GBSMRNDCalculator;
+#     IborIborBasisSwapRateHelper / OvernightIborBasisSwapRateHelper;
+#     ConstNotional/MtM CrossCurrencyBasisSwapRateHelper +
+#     ConstNotionalCrossCurrencySwapRateHelper. ===
+add_executable(cluster_w8d_probe cluster_w8d/probe.cpp)
+target_link_libraries(cluster_w8d_probe PRIVATE ${QUANTLIB_LIBRARY})
