@@ -1,0 +1,22 @@
+{
+  "bdc_fwd_call_strike": 1.3932055910423049,
+  "bdc_fwd_call_delta_roundtrip": 0.24999999999131134,
+  "bdc_fwd_put_strike": 1.2351727664774916,
+  "bdc_fwd_put_delta_roundtrip": -0.24999999999131184,
+  "bdc_spot_call_strike": 1.3931713445604283,
+  "bdc_spot_call_delta_roundtrip": 0.2499999999905064,
+  "bdc_atm_fwd": 1.306597305419263,
+  "bdc_atm_spot": 1.3026500000000001,
+  "bdc_atm_dn": 1.3118115734203724,
+  "vv_upout_call_k1": 0.14812717421025179,
+  "vv_upout_call_k3": 0.027477104322688711,
+  "vv_upout_put_k4": 0.096987665635518569,
+  "vv_upin_call_k1": 0.032220213533230457,
+  "vv_downout_put_k3": 0.039924178142029094,
+  "vv_double_ko_call": 0.032399550595011747,
+  "vv_double_ki_call": 0.017819422697227569,
+  "heston_cont_geom_asian_call": 7.1132322954383689,
+  "heston_discr_geom_asian_call": 7.5896669083756043,
+  "heston_forward_call": 2.735124212533274,
+  "_schema": 1
+}

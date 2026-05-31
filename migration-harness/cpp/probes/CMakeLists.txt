@@ -532,3 +532,14 @@ target_link_libraries(cluster_w7d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     + DigitalCoupon foundations), so they are not probed. ===
 add_executable(cluster_w8a_probe cluster_w8a/probe.cpp)
 target_link_libraries(cluster_w8a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W8-C cluster: FX delta-vol + VannaVolga + Heston Asian/forward.
+#     BlackDeltaCalculator (strikeFromDelta round-trip + atmStrike for
+#     Fwd/Spot/PaSpot conventions); VannaVolgaBarrierEngine (canonical
+#     FX single-barrier values, adaptVanDelta=true); VannaVolga double-
+#     barrier engine (KnockOut/KnockIn over AnalyticDoubleBarrierEngine);
+#     AnalyticContinuous/DiscreteGeometricAveragePriceAsianHestonEngine
+#     (Kim-Wee CF integration); AnalyticHestonForwardEuropeanEngine
+#     (Kruse forward-start). ===
+add_executable(cluster_w8c_probe cluster_w8c/probe.cpp)
+target_link_libraries(cluster_w8c_probe PRIVATE ${QUANTLIB_LIBRARY})
