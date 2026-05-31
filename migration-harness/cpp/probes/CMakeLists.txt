@@ -481,3 +481,11 @@ target_link_libraries(cluster_w6c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     LOOSE region-convergence contract). ===
 add_executable(cluster_w6d_probe cluster_w6d/probe.cpp)
 target_link_libraries(cluster_w6d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W7-D cluster: experimental inflation — YoY optionlet stripping +
+#     CPI/YoY cap-floor price surfaces. Polynomial2DSpline;
+#     Interpolated{CPI,YoY}CapFloorTermPriceSurface;
+#     InterpolatingCPICapFloorEngine; InterpolatedYoYOptionletStripper +
+#     KInterpolatedYoYOptionletVolatilitySurface. ===
+add_executable(cluster_w7d_probe cluster_w7d/probe.cpp)
+target_link_libraries(cluster_w7d_probe PRIVATE ${QUANTLIB_LIBRARY})

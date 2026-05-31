@@ -53,10 +53,12 @@ def test_region_is_ordered_intenum() -> None:
     """Region is an IntEnum, so members are ordered and hashable."""
     assert int(Region.Europe) == 1
     assert int(Region.UnitedStates) == 4
+    assert int(Region.Generic) == 5
     assert sorted(Region) == [
         Region.Europe,
         Region.France,
         Region.UnitedKingdom,
         Region.UnitedStates,
+        Region.Generic,
     ]
     assert {Region.Europe, Region.Europe} == {Region.Europe}
