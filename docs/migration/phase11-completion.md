@@ -16,7 +16,8 @@ Living document — updated incrementally as each wave closes.
 | W4 | `pquantlib-phase11-w4-complete` @ `eb901ae` | +68 | 3172 | 2026-05-29 |
 | W5 | `pquantlib-phase11-w5-complete` @ `6e0f8d2` | +127 | 3299 | 2026-05-29 |
 | W6 | `pquantlib-phase11-w6-complete` @ `ac69e2f` | +169 | 3468 | 2026-05-31 |
-| W7 | `pquantlib-phase11-w7-complete` @ `6ae1cfd` | +152 | **3620** | 2026-05-31 |
+| W7 | `pquantlib-phase11-w7-complete` @ `6ae1cfd` | +152 | 3620 | 2026-05-31 |
+| W8 | `pquantlib-phase11-w8-complete` @ `8573dd9` | +143 | **3763** | 2026-05-31 |
 
 ## W1 — Specialty model completion
 
@@ -103,6 +104,25 @@ Mini-pilot topology: W7-B (commodity foundations) merged first to unblock W7-C (
 - Flyweight/singleton registries → Python module-level dicts + `Singleton` metaclass.
 
 **W7 follow-ups (carve-outs):** cross-currency FX (`ExchangeRateManager` + `Money` cross-currency arithmetic + commodity `calculate_fx_conversion_factor`); YoY surface cubic-extrapolation above max strike (scipy BicubicSpline clamps).
+
+## W8 — long-tail experimental (15 subdirs)
+
+4-parallel-no-pilot. +143 tests / 3620 → 3763. Tag `pquantlib-phase11-w8-complete` @ `8573dd9`.
+
+| Cluster | Tests | Scope |
+|---|---|---|
+| W8-A coupons + swaptions + basismodels | +31 | SwapSpreadIndex + CmsSpreadCoupon + ProxyIbor + BlackIborQuantoCouponPricer + IrregularSwap/Swaption + HaganIrregularSwaptionEngine + SwaptionCashFlows + TenorSwaptionVTS + TenorOptionletVTS |
+| W8-B callable + cat bonds + risk | +23 | CallableFixedRate/ZeroCouponBond + CallableBondVolatilityStructure(+Constant) + DiscretizedCallableFixedRateBond + Black/TreeCallableFixedRateBondEngine + CatRisk/EventSet/BetaRisk + NotionalRisk + CatBond/FloatingCatBond + MonteCarloCatBondEngine + CreditRiskPlus + SensitivityAnalysis |
+| W8-C mcbasket + Heston Asian/fwd + FX VannaVolga | +32 | DeltaVolQuote + BlackDeltaCalculator + **VannaVolga single/double barrier engines (closes W4-C)** + AnalyticCont/DiscreteGeometricAvgPriceAsianHestonEngine + AnalyticHestonForwardEuropeanEngine + ExtendedBinomialTree family + PathPayoff/AdaptedPathPayoff/PathMultiAssetOption + MCPathBasketEngine + ForwardVanillaOption |
+| W8-D CLV + generalized short-rate + xccy helpers | +57 | NormalCLVModel + SquareRootCLVModel + GeneralizedHullWhite + GeneralizedOrnsteinUhlenbeckProcess + IborIbor/OvernightIborBasisSwapRateHelper + ConstNotional/MtM CrossCurrencyBasisSwapRateHelper + foundations (LagrangeInterpolation, GaussianQuadrature, SquareRootProcess, GBSMRNDCalculator, LinearFlatInterpolation) |
+
+**Upstream-removed (carved out — nothing to port at v1.42.1):** `ArithmeticAverageOIS` + `ArithmeticOISRateHelper` + `MakeArithmeticAverageOIS` (emptied v1.41); `CreditRiskPlus` + `SensitivityAnalysis` (emptied v1.36 — W8-B ported full functionality from recovered pre-removal history `6f379f4e9~1` as bonus value, documented inline).
+
+**Surfaced core gap (→ W12 audit target):** `CmsCoupon` / `CmsCouponPricer` / `CappedFlooredCoupon` / `DigitalCoupon` (core `ql/cashflows/`) were never ported in L2-D. This blocks 4 experimental CMS-spread classes (LognormalCmsSpreadPricer, CappedFlooredCmsSpreadCoupon, DigitalCmsSpreadCoupon, StrippedCappedFlooredCoupon). W12's coverage audit will catch these core headers and a gap-fill should port them (which then unblocks the experimental coupons).
+
+**W8 follow-ups (carve-outs):** American multi-asset LS engines (`LongstaffSchwartzMultiPathPricer` + `MCLongstaffSchwartzPathEngine` + `MCAmericanPathEngine` — states/exercises plumbed, ~3hr); GeneralizedHullWhite tree-fitting + non-linear-mapping path (`dynamics()` raises, matching C++ QL_FAIL); W8-B `cluster_w8b/probe.cpp` lost (left untracked in the shared worktree by the subagent, cleaned pre-merge) — `references/cluster/w8b.json` is committed and tests pass; reconstruct the probe in W12 if reference regeneration is needed.
+
+**Notable divergences:** Heston Asian/forward CF engines match C++ to machine precision (numpy.leggauss(128) == C++ GaussLegendreIntegration(128)); MtM cross-currency swap rate helper bit-exact vs C++; W8-C caught + fixed a real lazy-cache bug (FD `recalculate()` → `instrument.update()`); Tree callable-bond engine ~1e-8 (custom tolerance, TreeSwaptionEngine precedent).
 
 **Notable divergences:**
 - ZabrInterpolation: scipy TRF finds strictly lower RMS (5.2e-5) than C++ projected-LM (5.8e-5) on the γ-fixed=1 slice. Fourth instance of "Python scipy more accurate" pattern (cf. L9-B `conventional_spread`, L10-C `AbcdInterpolation`, this).
