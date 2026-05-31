@@ -1,5 +1,10 @@
 # Phase 11 W5 — Resume Checkpoint (computer restart pause)
 
+> **✅ RESOLVED 2026-05-29** — W5-A/B/C were merged on resume; tag
+> `pquantlib-phase11-w5-complete` @ `6e0f8d2`, main at 3299/0/0. This
+> document is retained as a historical record of the checkpoint/restart
+> handling pattern. No action pending.
+
 **Date:** 2026-05-29
 **Pause reason:** Computer restart requested by user.
 **Predecessor tag:** `pquantlib-phase11-w4-complete` @ `eb901ae` — 3172/0/0 on main.
