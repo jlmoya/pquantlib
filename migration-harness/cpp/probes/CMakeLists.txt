@@ -439,3 +439,11 @@ target_link_libraries(cluster_w5b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     FdmExtOUJumpModelInnerValue. ===
 add_executable(cluster_w5c_probe cluster_w5c/probe.cpp)
 target_link_libraries(cluster_w5c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W6-C cluster: experimental math foundations. ConvolvedStudentT,
+#     GaussNonCentralChiSquaredPolynomial, moorePenroseInverse,
+#     GaussianQuadMultidimIntegrator, MultidimIntegral, piecewise
+#     function/integral, Gaussian/T copula policies, LatentModel,
+#     laplaceInterpolation, PolarStudentTRng. ===
+add_executable(cluster_w6c_probe cluster_w6c/probe.cpp)
+target_link_libraries(cluster_w6c_probe PRIVATE ${QUANTLIB_LIBRARY})
