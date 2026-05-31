@@ -28,10 +28,10 @@ Pin: `v1.42.1` @ `099987f0ca2c11c505dc4348cdb9ce01a598e1e5` (2026-04-16).
 
 ## Current state
 
-- **Phase:** **Phase 11 in progress — W1–W9 closed.** Latest tag `pquantlib-phase11-w9-complete` @ `4d09234` (3845/0/0). W9 = marketmodels CORE (abstract spine + curve states + correlations + drift calculators + Brownian generators + AccountingEngine). **Next: W10** (marketmodels models[18] + evolvers[12]) then W11 (products[31] + callability[14] + pathwisegreeks[4]), then W12 audit + final tag. Marketmodels wave order is core→models+evolvers→products+callability (dependency DAG).
-- **Branch:** `main` @ `4d09234`. No active feature branches between waves.
+- **Phase:** **Phase 11 in progress — W1–W10 closed.** Latest tag `pquantlib-phase11-w10-complete` @ `1d559de` (3909/0/0). W10 = marketmodels models (FlatVol/AbcdVol + adapters + calibration) + 12 BGM evolvers. **Next: W11** (marketmodels products[31] + callability[14] + pathwisegreeks[4] — the LAST marketmodels wave), then W12 audit + final tag (`pquantlib-phase11-complete` + `pquantlib-100-complete`).
+- **Branch:** `main` @ `1d559de`. No active feature branches between waves.
 - **Workspace:** uv-managed 4-package monorepo. Dependencies: numpy, scipy, pytest, pyright, ruff. No new deps in Phase 11.
-- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **main currently 3845/0/0**.
+- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **main currently 3909/0/0**.
 - **L1 layer (Phase 1):** foundations, time core, day counters, 8 first-math modules, copulas + distributions + statistics, currencies, Solver1D + integrals, deterministic RNGs, optimization scaffolding, interpolations + matrix utils.
 - **L2 layer (Phase 2):** quotes, termstructures core + 4 cross-cluster Protocols, Index + IndexManager, Compounding + InterestRate, YieldTermStructure + concrete curves, InterestRateIndex hierarchy + 8 ibor concretes + 2 swap indexes + 7 rate helpers, cashflows + CashFlows aggregator + Duration, volatility termstructures (Black/Local Constant/Curve/Surface).
 - **L3 layer (Phase 3):** Settings.evaluation_date observable; Payoff + Exercise + Option + Instrument + PricingEngine + GenericEngine + BlackFormula + 3 cross-cluster Protocols; Bond + 4 concretes + DiscountingBondEngine + BondForward; Swap + VanillaSwap + OIS + ZeroCoupon + make_vanilla_swap + make_ois + DiscountingSwapEngine; StochasticProcess + GBSM family + VanillaOption + EuropeanOption + AnalyticEuropeanEngine + BinomialVanillaEngine + BlackCalculator; Forward + Position + FxForward + ForwardRateAgreement + DiscountingFwdEngine.

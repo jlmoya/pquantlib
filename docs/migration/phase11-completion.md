@@ -18,7 +18,8 @@ Living document — updated incrementally as each wave closes.
 | W6 | `pquantlib-phase11-w6-complete` @ `ac69e2f` | +169 | 3468 | 2026-05-31 |
 | W7 | `pquantlib-phase11-w7-complete` @ `6ae1cfd` | +152 | 3620 | 2026-05-31 |
 | W8 | `pquantlib-phase11-w8-complete` @ `8573dd9` | +143 | 3763 | 2026-05-31 |
-| W9 | `pquantlib-phase11-w9-complete` @ `4d09234` | +82 | **3845** | 2026-05-31 |
+| W9 | `pquantlib-phase11-w9-complete` @ `4d09234` | +82 | 3845 | 2026-05-31 |
+| W10 | `pquantlib-phase11-w10-complete` @ `1d559de` | +64 | **3909** | 2026-05-31 |
 
 ## W1 — Specialty model completion
 
@@ -138,6 +139,20 @@ Pilot (W9-A core spine) + 2-parallel (W9-B/C). +82 tests / 3763 → 3845. Tag `p
 **Divergences:** MT uniform stream bit-exact, Gaussian variates TIGHT (L1 InverseCumulativeNormal Halley-refinement gap ~1e-16); Sobol scipy-Joe-Kuo vs C++-Jaeckel diverge beyond 2 dims → only stream-independent surfaces (ordering schema + Brownian-bridge algebra) cross-validated; W9-B caught + fixed a `np.diagonal`-view aliasing bug in SequenceStatistics.correlation().
 
 **W9 follow-ups (carve-outs):** PathwiseVegasAccountingEngine + Burley2020SobolBrownianGenerator (need W10 evolver `browniansThisStep` + RatePseudoRootJacobian); EvolutionDescription.effective_stop_time (commented-out in v1.42.1 source); marketmodeldifferences free functions (need W10 concrete MarketModel).
+
+## W10 — marketmodels models + evolvers
+
+Pilot (W10-A vol models) + 2-parallel (W10-B evolvers, W10-C calibration). +64 tests / 3845 → 3909. Tag `pquantlib-phase11-w10-complete` @ `1d559de`.
+
+| Cluster | Tests | Scope |
+|---|---|---|
+| W10-A pilot vol models | +33 | FlatVol + AbcdVol + PiecewiseConstant{,Abcd}Variance + AbcdFunction + pseudo_sqrt (rank-reduced spectral) + PseudoRootFacade + FwdToCotSwap/CotSwapToFwd/FwdPeriod adapters + VolatilityInterpolationSpecifier{,abcd} |
+| W10-B evolvers | +16 | LogNormalFwdRate{Pc,Euler,EulerConstrained,Ipc,Balland,IBalland} + NormalFwdRatePc + LogNormalCotSwapRatePc + LogNormalCmSwapRatePc + SVDDFwdRatePc + MarketModelVolProcess + SquareRootAndersen |
+| W10-C caplet-coterminal calibration | +15 | AlphaForm + AlphaFormInverseLinear/LinearHyperbolic + AlphaFinder + CTSMMCapletCalibration base + CTSMMCapletOriginal/MaxHomogeneity/AlphaForm calibration + periodic + Quadratic + SphereCylinderOptimizer + BasisIncompleteOrdered |
+
+**Key divergence (pseudo-root eigenvector sign — load-bearing):** the spectral pseudo-root `A` (`numpy.linalg.eigh`) is unique only up to per-eigenvector sign/rotation, so `A@Aᵀ` (covariance) matched C++ but the sign-sensitive diffusion `A@Z` did not. W10-B's `align(pseudo_sqrt)` commit pins each eigenvector's first component non-negative — replicating C++ `SymmetricSchurDecomposition`'s convention — making `A` match C++ for distinct-eigenvalue covariances; evolvers cross-validated TIGHT against the bit-identical MT Gaussian stream (Sobol diverges >2 factors). Another C++ quirk replicated verbatim: FwdPeriodAdapter's never-reset cumulative-sum "average". The `PseudoRootFacade.from_calibrator` ↔ `CTSMMCapletCalibration` wiring (W10-A↔W10-C) is confirmed end-to-end; max-homogeneity caplet vols reprice within 1 bp.
+
+**W10 follow-ups (carve-outs):** FlatVolFactory (curve-wiring convenience); rank_reduced_sqrt Higham salvaging arm (no consumer); OrthogonalProjections (matrices-test companion).
 
 **Notable divergences:**
 - ZabrInterpolation: scipy TRF finds strictly lower RMS (5.2e-5) than C++ projected-LM (5.8e-5) on the γ-fixed=1 slice. Fourth instance of "Python scipy more accurate" pattern (cf. L9-B `conventional_spread`, L10-C `AbcdInterpolation`, this).
