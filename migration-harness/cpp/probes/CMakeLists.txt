@@ -599,3 +599,15 @@ target_link_libraries(cluster_w9c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     orthogonal rotation / sign in the spectral decomposition. ===
 add_executable(cluster_w10a_probe cluster_w10a/probe.cpp)
 target_link_libraries(cluster_w10a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W10-B cluster: MarketModels (BGM) forward-/swap-rate evolvers.
+#     LMM forward-rate evolvers (Pc / Euler / Ipc / Balland / iBalland),
+#     NormalFwdRatePc, LogNormalCotSwapRatePc, LogNormalCmSwapRatePc,
+#     SVDDFwdRatePc, and the SquareRootAndersen QE vol process. Every evolver is
+#     driven by MTBrownianGeneratorFactory, whose Gaussian stream pquantlib
+#     ports bit-identically, so the evolved rates cross-validate TIGHT (the
+#     full RNG -> drift -> diffusion pipeline, not just the algebra). MT is used
+#     rather than Sobol because Sobol's stream diverges from C++ beyond ~2
+#     factors (W9-C finding). ===
+add_executable(cluster_w10b_probe cluster_w10b/probe.cpp)
+target_link_libraries(cluster_w10b_probe PRIVATE ${QUANTLIB_LIBRARY})
