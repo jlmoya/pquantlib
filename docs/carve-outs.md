@@ -215,6 +215,30 @@ These were deferred during specific clusters with clear access patterns:
 - **L5-E `BivariateCumulativeNormalDistribution`**: closed in L5-E.
 - **W6-C `LatentModel<Impl>::FactorSampler` specializations**: the general `experimental.math.LatentModel` ports the integration/inspector surface (factor loadings, per-variable correlation, copula cumulative/inverse passthroughs, `latent_var_value`, `integrated_expected_value`); the C++ `Impl`-driven random-sample machinery (the `FactorSampler` partial specializations for Gaussian/T copulas) is deferred — the W6-C copula RNGs (`ClaytonCopulaRng` / `FrankCopulaRng` / `FarlieGumbelMorgensternCopulaRng` / `PolarStudentTRng`) and `GaussianCopulaPolicy.all_factor_cumul_inverter` provide direct factor-sample generation when a simulation is needed.
 
+### Arithmetic-average OIS — **removed upstream (deprecated v1.41)**
+
+The W8-D plan called for `ArithmeticAverageOIS` + `ArithmeticOISRateHelper` +
+`MakeArithmeticAverageOIS` (C++ `ql/experimental/averageois/`). On inspection
+of v1.42.1 (`099987f0`), **all three headers are empty deprecation stubs**:
+
+```cpp
+// ql/experimental/averageois/arithmeticaverageois.hpp (v1.42.1)
+// Deprecated in version 1.41
+#pragma message("Warning: this file is empty and will disappear in a future release; do not include it.")
+```
+
+The class definitions were deleted upstream — there is no
+`class ArithmeticAverageOIS` anywhere in the v1.42.1 tree (verified by
+`grep -rl "class ArithmeticAverageOIS"`). Since **C++ v1.42.1 is the source
+of truth** and the source of truth contains no implementation, these are
+carved out: there is nothing to port. The arithmetic-averaging convexity
+adjustment they once provided over compounded OIS is, in modern QuantLib,
+subsumed by the standard `OvernightIndexedSwap` (L3-C, already ported) plus
+the ibor-ibor / overnight-ibor basis-swap rate helpers added in W8-D
+(`IborIborBasisSwapRateHelper`, `OvernightIborBasisSwapRateHelper`). If the
+historical arithmetic-average behaviour is ever needed, recover it from a
+pre-1.41 QuantLib tag or from QuantLib-Python's matching version.
+
 ## Category 5 — Items not in C++ v1.42.1
 
 Some PQuantLib-only additions don't have C++ analogues:
