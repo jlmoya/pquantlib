@@ -660,3 +660,12 @@ target_link_libraries(cluster_w11a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     the analytic swaption deltas cross-checked against the numerical-FD twin. ===
 add_executable(cluster_w11b_probe cluster_w11b/probe.cpp)
 target_link_libraries(cluster_w11b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W11-C: MarketModels (BGM) callability — exercise values + basis systems
+#     + swap-rate trigger. NothingExerciseValue / BermudanSwaptionExerciseValue
+#     .value, SwapBasisSystem / SwapForwardBasisSystem .values, and
+#     SwapRateTrigger.exercise logic on a flat-forward LMMCurveState are probed
+#     TIGHT. The canonical Bermudan-swaption MC test is structurally
+#     self-validating (no reference). ===
+add_executable(cluster_w11c_probe cluster_w11c/probe.cpp)
+target_link_libraries(cluster_w11c_probe PRIVATE ${QUANTLIB_LIBRARY})
