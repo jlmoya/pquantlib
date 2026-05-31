@@ -644,3 +644,22 @@ target_link_libraries(cluster_w10c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     and the CashRebate one-shot are probed TIGHT. ===
 add_executable(cluster_w11a_probe cluster_w11a/probe.cpp)
 target_link_libraries(cluster_w11a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W11-D cluster: MarketModels (BGM) pathwise-greeks Jacobians.
+#     RatePseudoRootJacobian / RatePseudoRootJacobianAllElements (the analytic
+#     dRate/dPseudoRoot one-step log-Euler Jacobian — GG paper page 95 "B"),
+#     cross-checked against RatePseudoRootJacobianNumerical (finite-difference
+#     bump of the same one-step evolution); SwaptionPseudoDerivative
+#     (d swaption variance/impliedVol / d pseudoRoot on a coterminal swaption);
+#     CapPseudoDerivative (d cap price/impliedVol / d pseudoRoot, cap implied
+#     vol via a Brent solve over sum-of-caplet Black prices); VegaBumpCluster /
+#     VegaBumpCollection (deterministic pseudo-root-element clustering schema —
+#     doesIntersect/isCompatible/isFull/isNonOverlapping/isSensible);
+#     VolatilityBumpInstrumentJacobian (instrument-level vega-bump Jacobian +
+#     0.01v/<v,v> one-percent bumps) + OrthogonalizedBumpFinder (the
+#     orthogonalised pseudo-root bump directions consumed by
+#     PathwiseVegasAccountingEngine). Deterministic FlatVol(6 rates, 3 factors,
+#     semiannual, exponential correlation). Linear-algebra Jacobians TIGHT;
+#     analytic-vs-numerical and orthogonalised-bump reconstruction LOOSE. ===
+add_executable(cluster_w11d_probe cluster_w11d/probe.cpp)
+target_link_libraries(cluster_w11d_probe PRIVATE ${QUANTLIB_LIBRARY})
