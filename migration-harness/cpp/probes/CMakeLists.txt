@@ -552,3 +552,13 @@ target_link_libraries(cluster_w8c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     ConstNotionalCrossCurrencySwapRateHelper. ===
 add_executable(cluster_w8d_probe cluster_w8d/probe.cpp)
 target_link_libraries(cluster_w8d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W9-A cluster (PILOT): MarketModels (LIBOR Market Model / BGM) core —
+#     abstract spine + curve-state geometry + swap<->forward mappings +
+#     numeraire discounters + grid utilities. mergeTimes / isInSubset;
+#     EvolutionDescription (default evolutionTimes + firstAliveRate);
+#     LMMCurveState / CMSwapCurveState / CoterminalSwapCurveState discounting
+#     algebra; SwapForwardMappings::coterminalSwapForwardJacobian;
+#     MarketModelDiscounter.numeraireBonds. ===
+add_executable(cluster_w9a_probe cluster_w9a/probe.cpp)
+target_link_libraries(cluster_w9a_probe PRIVATE ${QUANTLIB_LIBRARY})
