@@ -688,3 +688,16 @@ target_link_libraries(cluster_w11c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     analytic-vs-numerical and orthogonalised-bump reconstruction LOOSE. ===
 add_executable(cluster_w11d_probe cluster_w11d/probe.cpp)
 target_link_libraries(cluster_w11d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W12-A cluster: CMS coupons + GFunction/Hagan (Conundrum) replication
+#     pricers + LognormalCmsSpreadPricer. The core ql/cashflows/ CMS-coupon
+#     family W8-A deferred — a genuine gap. GFunctionStandard closed-form
+#     value/derivatives and the ConundrumIntegrand value are probed TIGHT;
+#     AnalyticHaganPricer convexity-adjusted CMS coupon rates (Standard /
+#     ExactYield / ParallelShifts / NonParallelShifts) on a flat 5% curve +
+#     constant lognormal swaption vol, NumericHaganPricer-vs-Analytic
+#     agreement (the canonical cms.cpp testFairRate 2e-4 equivalence), and the
+#     LognormalCmsSpreadPricer CMS-spread coupon rate at known correlation are
+#     probed LOOSE (static replication / bivariate-lognormal integration). ===
+add_executable(cluster_w12a_probe cluster_w12a/probe.cpp)
+target_link_libraries(cluster_w12a_probe PRIVATE ${QUANTLIB_LIBRARY})

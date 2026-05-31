@@ -1,0 +1,23 @@
+{
+  "gstd_value": 0.12638352415595788,
+  "gstd_first": 0.55357006768185424,
+  "gstd_second": 0.96300754152752077,
+  "gstd2_value": 0.22155350086603084,
+  "gstd2_first": 0.55244322730445472,
+  "gstd2_second": 0.66836903550043303,
+  "ci_forward": 0.050572664165054286,
+  "ci_value": 0.45357202837968147,
+  "hagan_forward": 0.050572664165054286,
+  "hagan_an_standard": 0.057320154653192672,
+  "hagan_num_standard": 0.057364797734363211,
+  "hagan_an_exactyield": 0.057321776566036507,
+  "hagan_num_exactyield": 0.057442536756150249,
+  "hagan_an_parallel": 0.057670202089901236,
+  "hagan_num_parallel": 0.057443347925552259,
+  "hagan_an_nonparallel": 0.057670202089901236,
+  "hagan_num_nonparallel": 0.057443347925552259,
+  "ssp_fix1_10y": 0.050572664165054286,
+  "ssp_fix2_2y": 0.050574099997021241,
+  "ssp_rate": 0.0059399459280601594,
+  "ssp_rate_corr0": 0.0059399459280601594
+}
