@@ -43,11 +43,16 @@
 #include <ql/models/marketmodels/evolutiondescription.hpp>
 #include <ql/models/marketmodels/models/alphafinder.hpp>
 #include <ql/models/marketmodels/models/alphaformconcrete.hpp>
+#include <ql/models/marketmodels/models/capletcoterminalalphacalibration.hpp>
 #include <ql/models/marketmodels/models/capletcoterminalmaxhomogeneity.hpp>
+#include <ql/models/marketmodels/models/capletcoterminalperiodic.hpp>
 #include <ql/models/marketmodels/models/capletcoterminalswaptioncalibration.hpp>
 #include <ql/models/marketmodels/models/cotswaptofwdadapter.hpp>
+#include <ql/models/marketmodels/models/fwdperiodadapter.hpp>
+#include <ql/models/marketmodels/models/fwdtocotswapadapter.hpp>
 #include <ql/models/marketmodels/models/piecewiseconstantabcdvariance.hpp>
 #include <ql/models/marketmodels/models/pseudorootfacade.hpp>
+#include <ql/models/marketmodels/models/volatilityinterpolationspecifierabcd.hpp>
 #include <ql/models/marketmodels/piecewiseconstantcorrelation.hpp>
 
 #include <cmath>
@@ -298,8 +303,123 @@ void block_original_calibration() {
     for (Size i = 0; i < f.numberOfRates; ++i) {
         swapTermCov += swapPseudoRoots[i] * transpose(swapPseudoRoots[i]);
         Volatility sv = std::sqrt(swapTermCov[i][i] / f.rateTimes[i]);
-        bool last = (i == f.numberOfRates - 1);
-        emit(("oc_swaption_vol_" + std::to_string(i)).c_str(), sv, !last);
+        emit(("oc_swaption_vol_" + std::to_string(i)).c_str(), sv);
+    }
+}
+
+// === (e) alpha-form full calibration =======================================
+
+void block_alpha_form_calibration() {
+    Fixture f = make_fixture();
+    EvolutionDescription evolution(f.rateTimes);
+    std::vector<Real> alphaInitial(f.numberOfRates, 0.0);
+    std::vector<Real> alphaMax(f.numberOfRates, 1.0);
+    std::vector<Real> alphaMin(f.numberOfRates, -1.0);
+    bool maximizeHomogeneity = false;
+    CTSMMCapletAlphaFormCalibration calibrator(
+        evolution, f.corr, f.swapVariances, f.capletVols, f.cs, f.displacement,
+        alphaInitial, alphaMax, alphaMin, maximizeHomogeneity);
+
+    Size numberOfFactors = 3;
+    Natural maxIterations = 10;
+    Real capletTolerance = 1e-4;
+    bool result = calibrator.calibrate(numberOfFactors, maxIterations,
+                                       capletTolerance);
+    emit("af_cal_result", result ? 1.0 : 0.0);
+    emit("af_cal_failures", (Real)calibrator.failures());
+    emit("af_cal_caplet_rms", calibrator.capletRmsError());
+
+    const std::vector<Matrix>& swapPseudoRoots = calibrator.swapPseudoRoots();
+    auto smm = ext::make_shared<PseudoRootFacade>(
+        swapPseudoRoots, f.rateTimes, f.cs->coterminalSwapRates(),
+        std::vector<Spread>(f.numberOfRates, f.displacement));
+    CotSwapToFwdAdapter flmm(smm);
+    Matrix capletTotCov = flmm.totalCovariance(f.numberOfRates - 1);
+    for (Size i = 0; i < f.numberOfRates; ++i) {
+        Volatility v = std::sqrt(capletTotCov[i][i] / f.rateTimes[i]);
+        emit(("af_cal_caplet_vol_" + std::to_string(i)).c_str(), v);
+    }
+    Matrix swapTermCov(f.numberOfRates, f.numberOfRates, 0.0);
+    for (Size i = 0; i < f.numberOfRates; ++i) {
+        swapTermCov += swapPseudoRoots[i] * transpose(swapPseudoRoots[i]);
+        Volatility sv = std::sqrt(swapTermCov[i][i] / f.rateTimes[i]);
+        emit(("af_cal_swaption_vol_" + std::to_string(i)).c_str(), sv);
+    }
+}
+
+// === (f) periodic calibration ==============================================
+
+void block_periodic_calibration() {
+    Fixture f = make_fixture();
+    EvolutionDescription evolution(f.rateTimes);
+    Size period = 2;
+    Size offset = f.numberOfRates % period;
+    Size numberBigRates = f.numberOfRates / period;
+
+    std::vector<Time> bigRateTimes(numberBigRates + 1);
+    for (Size i = 0; i <= numberBigRates; ++i)
+        bigRateTimes[i] = f.rateTimes[i * period + offset];
+
+    std::vector<PiecewiseConstantAbcdVariance> swapVariances;
+    swapVariances.reserve(numberBigRates);
+    for (Size i = 0; i < numberBigRates; ++i)
+        swapVariances.emplace_back(0.0, 0.17, 1.0, 0.10, i, bigRateTimes);
+
+    VolatilityInterpolationSpecifierabcd varianceInterpolator(
+        period, offset, swapVariances, f.rateTimes);
+
+    Real caplet0Swaption1Priority = 1.0;
+    Natural maxUnperiodicIterations = 10;
+    Real toleranceUnperiodic = 1e-5;
+    Natural max1dIterations = 100;
+    Real tolerance1d = 1e-8;
+    Size maxPeriodIterations = 30;
+    Real periodTolerance = 1e-5;
+
+    std::vector<Matrix> swapPseudoRoots;
+    Real deformationSize;
+    Real totalSwaptionError;
+    std::vector<Real> finalScales;
+    Size iterationsDone;
+    Real errorImprovement;
+    Matrix modelSwaptionVolsMatrix;
+
+    Integer failures = capletSwaptionPeriodicCalibration(
+        evolution, f.corr, varianceInterpolator, f.capletVols, f.cs,
+        f.displacement, caplet0Swaption1Priority, 3, period, max1dIterations,
+        tolerance1d, maxUnperiodicIterations, toleranceUnperiodic,
+        maxPeriodIterations, periodTolerance, deformationSize, totalSwaptionError,
+        swapPseudoRoots, finalScales, iterationsDone, errorImprovement,
+        modelSwaptionVolsMatrix);
+
+    emit("pc_failures", (Real)failures);
+    emit("pc_iterations_done", (Real)iterationsDone);
+    emit("pc_total_swaption_error", totalSwaptionError);
+    for (Size i = 0; i < finalScales.size(); ++i)
+        emit(("pc_final_scale_" + std::to_string(i)).c_str(), finalScales[i]);
+
+    auto smm = ext::make_shared<PseudoRootFacade>(
+        swapPseudoRoots, f.rateTimes, f.cs->coterminalSwapRates(),
+        std::vector<Spread>(f.numberOfRates, f.displacement));
+    ext::shared_ptr<MarketModel> flmm(new CotSwapToFwdAdapter(smm));
+    Matrix capletTotCov = flmm->totalCovariance(f.numberOfRates - 1);
+    for (Size i = 0; i < f.numberOfRates; ++i) {
+        Volatility v = std::sqrt(capletTotCov[i][i] / f.rateTimes[i]);
+        emit(("pc_caplet_vol_" + std::to_string(i)).c_str(), v);
+    }
+
+    // periodic swaption fit
+    std::vector<Spread> adaptedDisplacements(numberBigRates, f.displacement);
+    ext::shared_ptr<MarketModel> adaptedFlmm(
+        new FwdPeriodAdapter(flmm, period, offset, adaptedDisplacements));
+    auto adaptedsmm = ext::make_shared<FwdToCotSwapAdapter>(adaptedFlmm);
+    Matrix swapTerminalCovariance(
+        adaptedsmm->totalCovariance(adaptedsmm->numberOfSteps() - 1));
+    for (Size i = 0; i < numberBigRates; ++i) {
+        Time time = adaptedsmm->evolution().rateTimes()[i];
+        Volatility sv = std::sqrt(swapTerminalCovariance[i][i] / time);
+        bool last = (i == numberBigRates - 1);
+        emit(("pc_swaption_vol_" + std::to_string(i)).c_str(), sv, !last);
     }
 }
 
@@ -314,6 +434,8 @@ int main() {
     block_sphere_cylinder();
     block_max_homogeneity();
     block_original_calibration();
+    block_alpha_form_calibration();
+    block_periodic_calibration();
 
     std::cout << "}\n";
     return 0;
