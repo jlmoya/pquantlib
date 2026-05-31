@@ -30,15 +30,17 @@ Documented divergences from C++:
   ``numpy.linalg.eigh`` (LAPACK ``?syevd``, divide-and-conquer). Both compute
   the exact spectral decomposition of a symmetric matrix; ``eigh`` returns
   eigenvalues in **ascending** order, so we reverse to match the C++
-  decreasing convention. Eigenvectors of degenerate eigenvalues can differ by
-  an orthogonal rotation within the eigenspace and by an overall sign, so the
-  raw pseudo-root ``B`` is **not** bit-identical to C++ — but ``B @ B.T``
-  (the covariance it reconstructs) is, and that is what every consumer (and
-  the cross-validation probe) checks. The diagonal is additionally pinned
-  exactly by ``normalizePseudoRoot``.
-* **Sign convention.** ``eigh`` and the Jacobi solver may pick opposite signs
-  for an eigenvector column; this flips the sign of a whole pseudo-root column
-  but leaves ``B @ B.T`` unchanged.
+  decreasing convention. Eigenvectors of *degenerate* eigenvalues can still
+  differ by an orthogonal rotation within the eigenspace, so the raw
+  pseudo-root ``B`` is not guaranteed bit-identical to C++ in that case — but
+  ``B @ B.T`` (the covariance it reconstructs) always is, and the diagonal is
+  additionally pinned exactly by ``normalizePseudoRoot``.
+* **Sign convention (matched to C++).** ``SymmetricSchurDecomposition`` pins
+  each eigenvector's sign so its first component is non-negative; we apply the
+  same rule to the ``eigh`` output. For the distinct-eigenvalue covariance
+  matrices the concrete market models produce, this makes ``B`` itself match
+  C++ — which the BGM evolvers (W10-B) rely on, because the diffusion term
+  ``B @ Z`` is sign-sensitive even though ``B @ B.T`` is not.
 """
 
 from __future__ import annotations
@@ -114,6 +116,18 @@ def rank_reduced_sqrt(
     eig_vals_asc, eig_vecs_asc = np.linalg.eigh(m)
     eigen_values = eig_vals_asc[::-1].copy()
     eigen_vectors = eig_vecs_asc[:, ::-1].copy()
+
+    # C++ parity: symmetricschurdecomposition.cpp pins each eigenvector's sign
+    # so that its first component is non-negative
+    # (``if (temp[col].second[0] < 0.0) sign = -1.0;``). numpy's ``eigh`` makes
+    # an arbitrary per-column sign choice, which leaves ``B @ B.T`` invariant
+    # but flips the diffusion term ``B @ Z`` used by the market-model evolvers.
+    # Applying the same convention makes the pseudo-root itself match C++ (up to
+    # the usual degenerate-eigenspace rotation, which does not arise for the
+    # distinct-eigenvalue covariance matrices the market models produce).
+    for k in range(eigen_vectors.shape[1]):
+        if eigen_vectors[0, k] < 0.0:
+            eigen_vectors[:, k] = -eigen_vectors[:, k]
 
     # salvaging algorithm
     if sa is SalvagingAlgorithm.NONE:
