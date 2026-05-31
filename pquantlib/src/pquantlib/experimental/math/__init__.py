@@ -1,9 +1,9 @@
-"""Experimental math foundations.
+"""Experimental math: foundations + heuristic optimizers.
 
 # C++ parity: ql/experimental/math/* (v1.42.1).
 
-This sub-package hosts the experimental math foundations used by the latent
-factor model and its copula policies:
+**W6-C — math foundations** (latent factor model + copula policies + special
+functions + integration):
 
   * copula policies — :mod:`gaussian_copula_policy`, :mod:`t_copula_policy`;
   * copula RNGs — :mod:`clayton_copula_rng`, :mod:`frank_copula_rng`,
@@ -15,4 +15,11 @@ factor model and its copula policies:
     :mod:`piecewise_function`, :mod:`piecewise_integral`;
   * the generic :mod:`latent_model` (the math template that the
     ``experimental.credit`` latent models specialise to the credit domain).
+
+**W6-D — heuristic global optimizers + specialised RNGs:**
+
+  * optimizers — :mod:`particle_swarm_optimization`, :mod:`firefly_algorithm`,
+    :mod:`hybrid_simulated_annealing` (+ :mod:`hybrid_simulated_annealing_functors`);
+  * RNG / distribution primitives they rely on — :mod:`ziggurat_rng`,
+    :mod:`levy_flight_distribution`, :mod:`isotropic_random_walk`.
 """

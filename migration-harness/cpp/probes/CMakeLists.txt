@@ -471,3 +471,13 @@ target_link_libraries(cluster_w6b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     laplaceInterpolation, PolarStudentTRng. ===
 add_executable(cluster_w6c_probe cluster_w6c/probe.cpp)
 target_link_libraries(cluster_w6c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W6-D cluster: experimental heuristic optimizers + RNG.
+#     ZigguratRng (EXACT-tier first-N draw stream + LOOSE statistical
+#     moments); LevyFlightDistribution (pdf + inverse-transform variate);
+#     IsotropicRandomWalk (deterministic MT-driven spherical step);
+#     ParticleSwarmOptimization / FireflyAlgorithm /
+#     HybridSimulatedAnnealing (analytic test-function global optima,
+#     LOOSE region-convergence contract). ===
+add_executable(cluster_w6d_probe cluster_w6d/probe.cpp)
+target_link_libraries(cluster_w6d_probe PRIVATE ${QUANTLIB_LIBRARY})
