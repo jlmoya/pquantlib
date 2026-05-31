@@ -29,9 +29,12 @@
 #include <ql/errors.hpp>
 #include <ql/experimental/inflation/cpicapfloorengines.hpp>
 #include <ql/experimental/inflation/cpicapfloortermpricesurface.hpp>
+#include <ql/experimental/inflation/interpolatedyoyoptionletstripper.hpp>
+#include <ql/experimental/inflation/kinterpolatedyoyoptionletvolatilitysurface.hpp>
 #include <ql/experimental/inflation/polynomial2Dspline.hpp>
 #include <ql/experimental/inflation/yoycapfloortermpricesurface.hpp>
 #include <ql/indexes/inflation/euhicp.hpp>
+#include <ql/pricingengines/inflation/inflationcapfloorengines.hpp>
 #include <ql/indexes/inflation/ukrpi.hpp>
 #include <ql/instruments/cpicapfloor.hpp>
 #include <ql/termstructures/inflation/interpolatedyoyinflationcurve.hpp>
@@ -333,6 +336,35 @@ int main() {
         // ATM swap rate (from cap/floor intersection) at a couple maturities
         out.push_back(j("yoy_surf_atm_swap_3y", base.atmYoYSwapRate(cfMatEU[0])));
         out.push_back(j("yoy_surf_atm_swap_7y", base.atmYoYSwapRate(cfMatEU[2])));
+
+        // ---- YoY optionlet stripping (UnitDisplaced engine, slope -0.5)
+        ext::shared_ptr<YoYOptionletStripper> stripper(
+            new InterpolatedYoYOptionletStripper<Linear>());
+        ext::shared_ptr<YoYOptionletVolatilitySurface> pVS;
+        Handle<YoYOptionletVolatilitySurface> hVS(pVS, false);
+        auto yoyPricerUD =
+            ext::make_shared<YoYInflationUnitDisplacedBlackCapFloorEngine>(
+                yoyIndexEU, hVS, nominalEUR);
+        Real slope = -0.5;
+        ext::shared_ptr<YoYCapFloorTermPriceSurface> capFloorPrices = surf;
+        auto kSurf =
+            ext::make_shared<KInterpolatedYoYOptionletVolatilitySurface<Linear>>(
+                0, TARGET(), ModifiedFollowing, Actual365Fixed(),
+                Period(3, Months), capFloorPrices, yoyPricerUD, stripper, slope);
+
+        Date d1 = kSurf->baseDate() + Period(1, Years);
+        auto slice1 = kSurf->Dslice(d1);
+        for (Size i = 0; i < slice1.first.size(); ++i)
+            out.push_back(j("yoy_strip_vol_y1_k" + std::to_string(i),
+                            slice1.second[i]));
+        Date d3 = kSurf->baseDate() + Period(3, Years);
+        auto slice3 = kSurf->Dslice(d3);
+        for (Size i = 0; i < slice3.first.size(); ++i)
+            out.push_back(j("yoy_strip_vol_y3_k" + std::to_string(i),
+                            slice3.second[i]));
+        // and the K-interpolated vol at a specific (date, strike)
+        out.push_back(j("yoy_strip_kvol_y1_strike0.02",
+                        kSurf->volatility(d1, 0.02, Period(-1, Days), true)));
     }
 
     std::cout << "{\n";

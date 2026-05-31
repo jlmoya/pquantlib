@@ -59,14 +59,17 @@ class YoYInflationCapFloorEngine(
     def __init__(
         self,
         index: YoYInflationIndex,
-        volatility: YoYOptionletVolatilitySurface,
+        volatility: YoYOptionletVolatilitySurface | None,
         nominal_term_structure: YieldTermStructureProtocol,
     ) -> None:
+        # # C++ parity: the vol argument is a ``Handle`` which may be empty —
+        # # the optionlet stripper constructs the engine with no vol surface
+        # # and sets it during the per-K bootstrap via ``set_volatility``.
         super().__init__(
             YoYInflationCapFloorArguments(), YoYInflationCapFloorResults()
         )
         self._index: YoYInflationIndex = index
-        self._volatility: YoYOptionletVolatilitySurface = volatility
+        self._volatility: YoYOptionletVolatilitySurface | None = volatility
         self._nominal_term_structure: YieldTermStructureProtocol = nominal_term_structure
         # # C++ parity: registerWith(index/volatility/nominalTermStructure).
         # # PQuantLib's Engine base doesn't auto-register; concrete callers
@@ -78,6 +81,8 @@ class YoYInflationCapFloorEngine(
         return self._index
 
     def volatility(self) -> YoYOptionletVolatilitySurface:
+        qassert.require(self._volatility is not None, "volatility surface not set")
+        assert self._volatility is not None
         return self._volatility
 
     def nominal_term_structure(self) -> YieldTermStructureProtocol:
@@ -100,6 +105,11 @@ class YoYInflationCapFloorEngine(
         args = self._arguments
         results = self._results
         results.reset()
+        qassert.require(
+            self._volatility is not None,
+            "YoY cap/floor engine: volatility surface not set",
+        )
+        assert self._volatility is not None
 
         n = len(args.start_dates)
         values: list[float] = [0.0] * n
