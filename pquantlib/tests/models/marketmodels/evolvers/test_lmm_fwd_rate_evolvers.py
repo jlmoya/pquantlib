@@ -173,7 +173,7 @@ def test_euler_constrained_inactive_matches_euler(ref: dict[str, Any]) -> None:
         total_weight *= constrained.advance_step()
     f_con = list(constrained.current_state().forward_rates())
 
-    assert total_weight == pytest.approx(1.0, abs=1e-15)
+    assert abs(total_weight - 1.0) < 1e-15
     for i in range(5):
         tight(f_con[i], f_plain[i])
 
@@ -199,4 +199,4 @@ def test_euler_constrained_active_constraint_hits_target(ref: dict[str, Any]) ->
     # after step 0, forward rate 0 is fixed at the target.
     f = list(constrained.current_state().forward_rates())
     tight(f[0], target)
-    assert w0 != pytest.approx(1.0, abs=1e-9)
+    assert abs(w0 - 1.0) > 1e-9
