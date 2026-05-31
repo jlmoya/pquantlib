@@ -629,3 +629,18 @@ target_link_libraries(cluster_w10b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     base. ===
 add_executable(cluster_w10c_probe cluster_w10c/probe.cpp)
 target_link_libraries(cluster_w10c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W11-A cluster: MarketModels (BGM) MultiProduct framework + core products.
+#     The LAST marketmodels wave. Composite framework (MultiProductMultiStep/
+#     OneStep, MarketModelComposite + MultiProductComposite, SingleProductComposite,
+#     CallSpecifiedMultiProduct, ExerciseAdapter, MarketModelCashRebate) + core
+#     concrete products (MultiStepNothing/Forwards/Optionlets/Swap/CoterminalSwaps/
+#     CoterminalSwaptions, OneStepForwards/Optionlets). The CANONICAL BGM
+#     end-to-end test reproduces marketmodel.cpp testMultiStepForwardsAndOptionlets:
+#     AccountingEngine(LogNormalFwdRatePc(FlatVol)) over a MultiProductComposite
+#     (forwards + optionlets) reproduces the closed-form Black FRA + caplet prices
+#     (emitted here EXACT; the MC comparison is the C++ 2.5-standard-error band).
+#     Per-product nextTimeStep cash-flow generation on a flat-forward LMMCurveState
+#     and the CashRebate one-shot are probed TIGHT. ===
+add_executable(cluster_w11a_probe cluster_w11a/probe.cpp)
+target_link_libraries(cluster_w11a_probe PRIVATE ${QUANTLIB_LIBRARY})
