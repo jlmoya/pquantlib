@@ -688,3 +688,17 @@ target_link_libraries(cluster_w11c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     analytic-vs-numerical and orthogonalised-bump reconstruction LOOSE. ===
 add_executable(cluster_w11d_probe cluster_w11d/probe.cpp)
 target_link_libraries(cluster_w11d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W12-C cluster: core ql/cashflows gap-fill — dividends + average-BMA
+#     coupon + equity (quanto) cashflow + overnight-indexed coupon pricers.
+#     FixedDividend / FractionalDividend amount() + amount(underlying) +
+#     DividendVector (EXACT/TIGHT); AverageBMACoupon rate via the built-in
+#     AverageBMACouponPricer over a fully-known weekly-Wednesday BMA fixing
+#     history — calendar-day-weighted average (LOOSE); EquityQuantoCashFlowPricer
+#     quanto-adjusted growth amount on a flat-curve flat-vol EquityIndex
+#     (LOOSE); CompoundingOvernightIndexedCouponPricer and
+#     ArithmeticAveragedOvernightIndexedCouponPricer coupon rate over a fully
+#     known overnight (Sofr) fixing history — deterministic compounding /
+#     averaging, no forward curve (TIGHT). ===
+add_executable(cluster_w12c_probe cluster_w12c/probe.cpp)
+target_link_libraries(cluster_w12c_probe PRIVATE ${QUANTLIB_LIBRARY})

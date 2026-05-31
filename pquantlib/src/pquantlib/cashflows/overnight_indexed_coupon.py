@@ -37,10 +37,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from pquantlib import qassert
-from pquantlib.cashflows.coupon_pricer import CouponPricer
 from pquantlib.cashflows.floating_rate_coupon import FloatingRateCoupon
+from pquantlib.cashflows.overnight_indexed_coupon_pricer import (
+    CompoundingOvernightIndexedCouponPricer,
+)
 from pquantlib.daycounters.day_counter import DayCounter
-from pquantlib.exceptions import LibraryException
 from pquantlib.time.date import Date
 from pquantlib.time.time_unit import TimeUnit
 
@@ -134,75 +135,12 @@ class OvernightIndexedCoupon(FloatingRateCoupon):
         return self._index  # type: ignore[return-value]
 
 
-# -----------------------------------------------------------------------
-# CompoundingOvernightIndexedCouponPricer — daily compounded rate
-# -----------------------------------------------------------------------
-
-
-class CompoundingOvernightIndexedCouponPricer(CouponPricer):
-    """Daily-compounded overnight rate pricer.
-
-    C++ parity: ql/cashflows/overnightindexedcouponpricer.cpp
-    ``CompoundingOvernightIndexedCouponPricer``.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._coupon: OvernightIndexedCoupon | None = None
-        self._gearing: float = 1.0
-        self._spread: float = 0.0
-        self._accrual_period: float = 0.0
-
-    def initialize(self, coupon: FloatingRateCoupon) -> None:
-        qassert.require(
-            isinstance(coupon, OvernightIndexedCoupon),
-            "CompoundingOvernightIndexedCouponPricer requires OvernightIndexedCoupon",
-        )
-        assert isinstance(coupon, OvernightIndexedCoupon)
-        self._coupon = coupon
-        self._gearing = coupon.gearing()
-        self._spread = coupon.spread()
-        self._accrual_period = coupon.accrual_period()
-
-    def average_rate(self) -> float:
-        """Daily-compounded average rate over the coupon period."""
-        qassert.require(self._coupon is not None, "coupon not set")
-        assert self._coupon is not None
-        coupon = self._coupon
-        index = coupon.overnight_index()
-        compound = 1.0
-        fixing_dates = coupon.fixing_dates()
-        dt = coupon.dt()
-        for i in range(coupon.n()):
-            fixing = index.fixing(fixing_dates[i], False)
-            compound *= 1.0 + fixing * dt[i]
-        # (compound - 1) / accrual_period == compounded daily rate
-        # over the coupon's accrual day-counter. C++ uses the
-        # coupon's dayCounter for accrualPeriod and the index's for dt.
-        return (compound - 1.0) / coupon.accrual_period()
-
-    def swaplet_rate(self) -> float:
-        return self._gearing * self.average_rate() + self._spread
-
-    def swaplet_price(self) -> float:
-        return self.swaplet_rate() * self._accrual_period
-
-    def caplet_price(self, effective_cap: float) -> float:
-        del effective_cap
-        msg = "caplet pricing not supported on overnight pricer"
-        raise LibraryException(msg)
-
-    def caplet_rate(self, effective_cap: float) -> float:
-        del effective_cap
-        msg = "caplet pricing not supported on overnight pricer"
-        raise LibraryException(msg)
-
-    def floorlet_price(self, effective_floor: float) -> float:
-        del effective_floor
-        msg = "floorlet pricing not supported on overnight pricer"
-        raise LibraryException(msg)
-
-    def floorlet_rate(self, effective_floor: float) -> float:
-        del effective_floor
-        msg = "floorlet pricing not supported on overnight pricer"
-        raise LibraryException(msg)
+# The default pricer (CompoundingOvernightIndexedCouponPricer) and the
+# arithmetic-average / base variants now live in
+# ``overnight_indexed_coupon_pricer`` (the full-fidelity port with
+# past-fixing handling). It is imported above and attached in __init__.
+# It is re-exported here for backwards-compatible imports.
+__all__ = [
+    "CompoundingOvernightIndexedCouponPricer",
+    "OvernightIndexedCoupon",
+]
