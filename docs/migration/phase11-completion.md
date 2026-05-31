@@ -14,7 +14,8 @@ Living document — updated incrementally as each wave closes.
 | W2 | `pquantlib-phase11-w2-complete` @ `d345bde` | +100 | 2875 | 2026-05-29 |
 | W3 | `pquantlib-phase11-w3-complete` @ `ea41029` | +229 | 3104 | 2026-05-29 |
 | W4 | `pquantlib-phase11-w4-complete` @ `eb901ae` | +68 | 3172 | 2026-05-29 |
-| W5 | `pquantlib-phase11-w5-complete` @ `6e0f8d2` | +127 | **3299** | 2026-05-29 |
+| W5 | `pquantlib-phase11-w5-complete` @ `6e0f8d2` | +127 | 3299 | 2026-05-29 |
+| W6 | `pquantlib-phase11-w6-complete` @ `ac69e2f` | +169 | **3468** | 2026-05-31 |
 
 ## W1 — Specialty model completion
 
@@ -61,6 +62,27 @@ Pilot (W3-A) + 3-parallel (W3-B/C/D). +229 tests / 2875 → 3104. Closed the ful
 **Merge reconciliations:** add/add docstring-union on `experimental/finitedifferences/__init__.py` (all 3 branches created it docstring-only); CMakeLists stacking ×3. W5-C's `FdmLinearOpComposite` Protocol refactor of the scheme classes (ExplicitEuler/ImplicitEuler/CrankNicolson/FdmBackwardSolver + FdmBlackScholesOp) preserved all existing L5-D FD-engine behavior (full pytest green post-merge).
 
 **W5 follow-ups (carve-outs):** multi-D backward FDM framework (Fdm2DimSolver/Fdm3DimSolver/Hundsdorfer scheme) blocks full pricing of the 7 FdSimple*/FdExtOU* engine scaffolds; HestonSlvFdmModel Fokker-Planck wiring still scaffold-only; `NinePointLinearOp` + `SecondOrderMixedDerivativeOp` duplicated across `experimental/finitedifferences/` (W5-A) and `methods/finitedifferences/operators/` (W5-C) — dedup pending.
+
+## W6 — experimental/volatility + experimental/math
+
+4-parallel-no-pilot. +169 tests / 3299 → 3468. Tag `pquantlib-phase11-w6-complete` @ `ac69e2f`. The 4 `zabr*` files in `experimental/volatility` were correctly skipped (already on main from L10-C + W2-A).
+
+| Cluster | Tests | Scope |
+|---|---|---|
+| W6-A NoArbSABR + SVI | +30 | NoArbSabrModel (Doust 2012, byte-exact 1.2M-entry absorption-prob table as a 3.6 MB gz numpy asset) + D0Interpolator + NoArbSabr{Interpolation,SmileSection,InterpolatedSmileSection,SwaptionVolatilityCube} + SVI (svi_volatility/total_variance + SviInterpolation + Svi{,Interpolated}SmileSection). Extends W2-A `XabrModelKind` with `NOARB_SABR`. |
+| W6-B experimental vol surfaces | +28 | BlackVolSurface/BlackAtmVolCurve/EquityFXVolSurface/InterestRateVolSurface/VolatilityCube abstracts + ExtendedBlackVariance{Curve,Surface} + AbcdAtmVolCurve + SabrVolSurface + SABRVolTermStructure |
+| W6-C experimental math foundations | +61 | Gaussian/T copula policies + 4 copula RNGs (Clayton/Frank/FGM/PolarStudentT) + ConvolvedStudentT + GaussianNonCentralChiSquaredPolynomial + moore_penrose_inverse + LaplaceInterpolation + Multidim{Integral,GaussianQuadrature} + Piecewise{Function,Integral} + generic LatentModel |
+| W6-D heuristic optimizers | +50 | ParticleSwarmOptimization + FireflyAlgorithm + HybridSimulatedAnnealing(+functors) + ZigguratRng + LevyFlightDistribution + IsotropicRandomWalk |
+
+**Notable divergences:**
+- **C++ `ExtendedBlackVarianceSurface` is broken in v1.42.1** — out-of-bounds read in `setVariances()` + reference bound to a moved temporary → aborts on construction. W6-B ported the documented-correct variance grid (`variance[i][j] = t[j]·vol[i][j-1]²` + Bilinear); the probe computes references inline with the corrected formula rather than driving the broken class. (A3-class finding; resolved by porting intended behavior + documenting the upstream bug.)
+- **MoorePenrose** → `numpy.linalg.pinv` (wrapped-delegation; numpy's SVD pinv is ecosystem-superior to QuantLib's hand-rolled SVD). Validated A·A⁺·A = A.
+- **ZigguratRng** reproduces the C++ MersenneTwister-backed stream — 49/50 draws (seed 42) bit-exact; the 1 tail draw routing through the Acklam inverse-normal differs by 1 ULP (~4.4e-16, documented).
+- scipy-TRF vs C++ projected-LM optimizer divergence on Abcd/SABR fits (L10-C precedent); stochastic optimizers (PSO/Firefly/HSA) use fixed seeds + region-convergence contracts.
+
+**Merge reconciliations:** add/add docstring-union on `experimental/volatility/__init__.py` (W6-A namespace-package had none; W6-B's governs + enriched with W6-A families) and `experimental/math/__init__.py` (W6-C+W6-D docstring union); CMakeLists stacking ×4; `docs/carve-outs.md` auto-merged (W6-C additions).
+
+**W6 follow-ups (carve-outs):** PSO ClubsTopology + AdaptiveInertia + LevyFlightInertia variants; LatentModel FactorSampler random-sample specializations; GaussNonCentralChiSquared mpmath-multiprecision moment recurrence (double-precision shipped).
 
 **Notable divergences:**
 - ZabrInterpolation: scipy TRF finds strictly lower RMS (5.2e-5) than C++ projected-LM (5.8e-5) on the γ-fixed=1 slice. Fourth instance of "Python scipy more accurate" pattern (cf. L9-B `conventional_spread`, L10-C `AbcdInterpolation`, this).

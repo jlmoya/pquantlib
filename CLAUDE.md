@@ -28,10 +28,10 @@ Pin: `v1.42.1` @ `099987f0ca2c11c505dc4348cdb9ce01a598e1e5` (2026-04-16).
 
 ## Current state
 
-- **Phase:** **Phase 11 in progress — W1–W5 closed.** Latest tag `pquantlib-phase11-w5-complete` @ `6e0f8d2` (3299/0/0). W5 (experimental/finitedifferences) merged cleanly on resume after the computer-restart checkpoint. **Next: W6** (experimental/volatility + experimental/math) per [`docs/migration/phase11-plan.md`](docs/migration/phase11-plan.md).
-- **Branch:** `main` @ `6e0f8d2`. No active feature branches between waves.
+- **Phase:** **Phase 11 in progress — W1–W6 closed.** Latest tag `pquantlib-phase11-w6-complete` @ `ac69e2f` (3468/0/0). W6 (experimental/volatility NoArbSABR+SVI+vol-surfaces + experimental/math copulas/optimizers) merged cleanly. **Next: W7** (experimental processes + commodities + experimental inflation + variancegamma) per [`docs/migration/phase11-plan.md`](docs/migration/phase11-plan.md).
+- **Branch:** `main` @ `ac69e2f`. No active feature branches between waves.
 - **Workspace:** uv-managed 4-package monorepo. Dependencies: numpy, scipy, pytest, pyright, ruff. No new deps in Phase 11.
-- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **main currently 3299/0/0**.
+- **Python:** 3.14. **Type checker:** pyright strict. **Lint+format:** ruff. **Test framework:** pytest 9+, **main currently 3468/0/0**.
 - **L1 layer (Phase 1):** foundations, time core, day counters, 8 first-math modules, copulas + distributions + statistics, currencies, Solver1D + integrals, deterministic RNGs, optimization scaffolding, interpolations + matrix utils.
 - **L2 layer (Phase 2):** quotes, termstructures core + 4 cross-cluster Protocols, Index + IndexManager, Compounding + InterestRate, YieldTermStructure + concrete curves, InterestRateIndex hierarchy + 8 ibor concretes + 2 swap indexes + 7 rate helpers, cashflows + CashFlows aggregator + Duration, volatility termstructures (Black/Local Constant/Curve/Surface).
 - **L3 layer (Phase 3):** Settings.evaluation_date observable; Payoff + Exercise + Option + Instrument + PricingEngine + GenericEngine + BlackFormula + 3 cross-cluster Protocols; Bond + 4 concretes + DiscountingBondEngine + BondForward; Swap + VanillaSwap + OIS + ZeroCoupon + make_vanilla_swap + make_ois + DiscountingSwapEngine; StochasticProcess + GBSM family + VanillaOption + EuropeanOption + AnalyticEuropeanEngine + BinomialVanillaEngine + BlackCalculator; Forward + Position + FxForward + ForwardRateAgreement + DiscountingFwdEngine.
