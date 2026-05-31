@@ -439,3 +439,12 @@ target_link_libraries(cluster_w5b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     FdmExtOUJumpModelInnerValue. ===
 add_executable(cluster_w5c_probe cluster_w5c/probe.cpp)
 target_link_libraries(cluster_w5c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W6-A cluster: NoArbSABR (Doust 2012) + SVI (Gatheral) smile
+#     families. SviSmileSection + sviTotalVariance; NoArbSabrModel
+#     (absorption-probability no-arb SABR) + D0Interpolator;
+#     NoArbSabrSmileSection. The probe also serializes the 1,209,600-
+#     entry absorption-probability table (QuantLib::detail::sabrabsprob)
+#     to a uint32 binary blob for the Python data asset. ===
+add_executable(cluster_w6a_probe cluster_w6a/probe.cpp)
+target_link_libraries(cluster_w6a_probe PRIVATE ${QUANTLIB_LIBRARY})
