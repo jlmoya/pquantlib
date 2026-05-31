@@ -39,6 +39,7 @@
 #include <ql/models/marketmodels/models/fwdtocotswapadapter.hpp>
 #include <ql/models/marketmodels/models/piecewiseconstantabcdvariance.hpp>
 #include <ql/models/marketmodels/models/pseudorootfacade.hpp>
+#include <ql/models/marketmodels/models/volatilityinterpolationspecifierabcd.hpp>
 #include <ql/models/marketmodels/piecewiseconstantcorrelation.hpp>
 #include <ql/models/marketmodels/swapforwardmappings.hpp>
 
@@ -241,7 +242,49 @@ void block_adapters() {
     emit("c2f_pr0_0_0", pr0[0][0]);
     emit("orig_pr0_0_0", orig0[0][0]);
     emit("c2f_pr0_4_4", pr0[4][4]);
-    emit("orig_pr0_4_4", orig0[4][4], false);
+    emit("orig_pr0_4_4", orig0[4][4]);
+}
+
+// --- (c) VolatilityInterpolationSpecifierabcd -------------------------------
+
+void block_vol_interpolation_specifier() {
+    // period=2, offset=1, noBigRates=2 -> noSmallRates=5 (timesForSmallRates
+    // has 6 entries). Big-rate times = small[offset + j*period].
+    std::vector<Time> timesSmall(6);
+    for (Size i = 0; i < 6; ++i)
+        timesSmall[i] = 0.5 * (i + 1);  // 0.5..3.0
+    std::vector<Time> bigRt = {timesSmall[1], timesSmall[3], timesSmall[5]};  // 1,2,3
+    std::vector<PiecewiseConstantAbcdVariance> origVars;
+    origVars.emplace_back(-0.02, 0.5, 1.0, 0.14, 0, bigRt);
+    origVars.emplace_back(-0.02, 0.5, 1.0, 0.14, 1, bigRt);
+
+    VolatilityInterpolationSpecifierabcd spec(2, 1, origVars, timesSmall, 0.0);
+    emit("vis_period", (Real)spec.getPeriod());
+    emit("vis_offset", (Real)spec.getOffset());
+    emit("vis_no_big", (Real)spec.getNoBigRates());
+    emit("vis_no_small", (Real)spec.getNoSmallRates());
+
+    const auto& iv = spec.interpolatedVariances();
+    for (Size k = 0; k < iv.size(); ++k) {
+        std::string nm = "vis_small_totvol_" + std::to_string(k);
+        emit(nm.c_str(), iv[k]->totalVolatility(k));
+    }
+    // a couple of per-step variances of the interpolated curves
+    emit("vis_small0_var0", iv[0]->variance(0));
+    emit("vis_small4_var0", iv[4]->variance(0));
+
+    // after setScalingFactors (scale big rate 0 by 1.1, big rate 1 by 0.9)
+    spec.setScalingFactors({1.1, 0.9});
+    const auto& iv2 = spec.interpolatedVariances();
+    emit("vis_scaled_small0_totvol", iv2[0]->totalVolatility(0));
+    emit("vis_scaled_small2_totvol", iv2[2]->totalVolatility(2));
+
+    // after setLastCapletVol (force terminal vol to 0.25)
+    spec.setLastCapletVol(0.25);
+    const auto& iv3 = spec.interpolatedVariances();
+    emit("vis_lastvol_small4_totvol",
+         iv3[spec.getNoSmallRates() - 1]->totalVolatility(spec.getNoSmallRates() - 1),
+         false);
 }
 
 }  // namespace
@@ -255,6 +298,7 @@ int main() {
     block_piecewise_constant_abcd_variance();
     block_pseudo_root_facade();
     block_adapters();
+    block_vol_interpolation_specifier();
 
     std::cout << "}\n";
     return 0;

@@ -59,5 +59,19 @@
   "c2f_pr0_0_0": 0.13398835741173701,
   "orig_pr0_0_0": 0.13398835741173656,
   "c2f_pr0_4_4": 0.0046710682525796894,
-  "orig_pr0_4_4": 0.0046710682525796928
+  "orig_pr0_4_4": 0.0046710682525796928,
+  "vis_period": 2,
+  "vis_offset": 1,
+  "vis_no_big": 2,
+  "vis_no_small": 5,
+  "vis_small_totvol_0": 0.21931342409975738,
+  "vis_small_totvol_1": 0.15507800938617963,
+  "vis_small_totvol_2": 0.21674034776358037,
+  "vis_small_totvol_3": 0.28353997061621822,
+  "vis_small_totvol_4": 0.28353997061621822,
+  "vis_small0_var0": 0.024049188995180017,
+  "vis_small4_var0": 0.034189691057300867,
+  "vis_scaled_small0_totvol": 0.24124476650973312,
+  "vis_scaled_small2_totvol": 0.21674034776358037,
+  "vis_lastvol_small4_totvol": 0.24999999999999994
 }
