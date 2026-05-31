@@ -1,0 +1,20 @@
+{
+  "ssi_fix1_10y": 0.030471194063085561,
+  "ssi_fix2_2y": 0.030454594349068997,
+  "ssi_spread_fixing": 1.659971401656371e-05,
+  "ssi_gearing1": 1,
+  "ssi_gearing2": -1,
+  "irr_swap_npv": 8809.2086839501862,
+  "irr_swap_fixed_npv": 67831.313820766998,
+  "irr_swap_float_npv": -59022.105136816812,
+  "hagan_swaption_npv": 11569.671517452469,
+  "tsvts_vol_5x10_atm": 0.0090000010631817035,
+  "tsvts_vol_2x5_atm": 0.0089999999999999993,
+  "tsvts_vol_5x10_otm": 0.0090000010631817035,
+  "scfs_sum_annuity": 5.0027777777777782,
+  "scfs_sum_float": 0,
+  "scfs_sum_fixed": 0.15008333333333335,
+  "scfs_num_exercise": 1,
+  "scfs_num_float": 12,
+  "scfs_first_float_time": 2.0136986301369864
+}
