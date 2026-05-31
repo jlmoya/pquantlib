@@ -439,3 +439,18 @@ target_link_libraries(cluster_w5b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     FdmExtOUJumpModelInnerValue. ===
 add_executable(cluster_w5c_probe cluster_w5c/probe.cpp)
 target_link_libraries(cluster_w5c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W6-B cluster: experimental volatility surfaces.
+#     ExtendedBlackVarianceCurve / ExtendedBlackVarianceSurface
+#     (Quote-backed Black variance term structures); AbcdAtmVolCurve
+#     (Abcd-parametric ATM IR vol curve, k-adjusted fit reproduces
+#     input ATM vols); SabrVolSurface (interpolated SABR vol surface
+#     from market vol spreads over an InterestRateVolSurface base).
+#     Abstract bases (BlackVolSurface, BlackAtmVolCurve,
+#     EquityFXVolSurface, InterestRateVolSurface, VolatilityCube) are
+#     smoke-tested via minimal Python concretes — no C++ probe.
+#     NOTE: ExtendedBlackVarianceSurface aborts on construction in
+#     v1.42.1 (OOB in setVariances()); its reference values are computed
+#     inline with the documented-correct variance grid + Bilinear. ===
+add_executable(cluster_w6b_probe cluster_w6b/probe.cpp)
+target_link_libraries(cluster_w6b_probe PRIVATE ${QUANTLIB_LIBRARY})
