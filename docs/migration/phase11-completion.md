@@ -19,7 +19,8 @@ Living document — updated incrementally as each wave closes.
 | W7 | `pquantlib-phase11-w7-complete` @ `6ae1cfd` | +152 | 3620 | 2026-05-31 |
 | W8 | `pquantlib-phase11-w8-complete` @ `8573dd9` | +143 | 3763 | 2026-05-31 |
 | W9 | `pquantlib-phase11-w9-complete` @ `4d09234` | +82 | 3845 | 2026-05-31 |
-| W10 | `pquantlib-phase11-w10-complete` @ `1d559de` | +64 | **3909** | 2026-05-31 |
+| W10 | `pquantlib-phase11-w10-complete` @ `1d559de` | +64 | 3909 | 2026-05-31 |
+| W11 | `pquantlib-phase11-w11-complete` @ `1ebbd5c` | +70 | **3979** | 2026-05-31 |
 
 ## W1 — Specialty model completion
 
@@ -152,7 +153,24 @@ Pilot (W10-A vol models) + 2-parallel (W10-B evolvers, W10-C calibration). +64 t
 
 **Key divergence (pseudo-root eigenvector sign — load-bearing):** the spectral pseudo-root `A` (`numpy.linalg.eigh`) is unique only up to per-eigenvector sign/rotation, so `A@Aᵀ` (covariance) matched C++ but the sign-sensitive diffusion `A@Z` did not. W10-B's `align(pseudo_sqrt)` commit pins each eigenvector's first component non-negative — replicating C++ `SymmetricSchurDecomposition`'s convention — making `A` match C++ for distinct-eigenvalue covariances; evolvers cross-validated TIGHT against the bit-identical MT Gaussian stream (Sobol diverges >2 factors). Another C++ quirk replicated verbatim: FwdPeriodAdapter's never-reset cumulative-sum "average". The `PseudoRootFacade.from_calibrator` ↔ `CTSMMCapletCalibration` wiring (W10-A↔W10-C) is confirmed end-to-end; max-homogeneity caplet vols reprice within 1 bp.
 
-**W10 follow-ups (carve-outs):** FlatVolFactory (curve-wiring convenience); rank_reduced_sqrt Higham salvaging arm (no consumer); OrthogonalProjections (matrices-test companion).
+**W10 follow-ups (carve-outs):** FlatVolFactory (curve-wiring convenience); rank_reduced_sqrt Higham salvaging arm (no consumer); OrthogonalProjections (matrices-test companion — landed in W11-D).
+
+## W11 — marketmodels products + callability + pathwise greeks (final LMM wave)
+
+Pilot (W11-A framework + products) + 3-parallel (W11-B/C/D). +70 tests / 3909 → 3979. Tag `pquantlib-phase11-w11-complete` @ `1ebbd5c`. **Completes the entire ~111-file marketmodels (BGM/LMM) domain.**
+
+| Cluster | Tests | Scope |
+|---|---|---|
+| W11-A pilot products framework | +20 | MultiProductMultiStep/OneStep + MarketModelComposite/MultiProductComposite/SingleProductComposite + CallSpecifiedMultiProduct + ExerciseAdapter + MarketModelCashRebate + MultiStep{Nothing,Forwards,Optionlets,Swap,CoterminalSwaps,CoterminalSwaptions} + OneStep{Forwards,Optionlets} + **canonical AccountingEngine→Black caplet/FRA end-to-end test** |
+| W11-B remaining + pathwise products | +16 | MultiStep{Coinitial,Ratchet,Tarn,InverseFloater,PeriodCapletSwaptions,Swaption} + OneStep{Coinitial,Coterminal} + 8 pathwise products (MultiCaplet/Swap/CoterminalSwaptionsDeflated/InverseFloater/CashRebate/CallSpecified) + MultiProductPathwiseWrapper |
+| W11-C callability | +17 | MarketModelExerciseValue + Nothing/BermudanSwaption + ExerciseStrategy + SwapRateTrigger + TriggeredSwapExercise + ParametricExercise + Swap/SwapForward basis systems + collect_node_data + LongstaffSchwartzExerciseStrategy + full Andersen-Broadie UpperBoundEngine + **canonical Bermudan-swaption LS test** |
+| W11-D pathwise greeks | +17 | RatePseudoRootJacobian(+AllElements+Numerical) + Swaption/CapPseudoDerivative + VegaBumpCluster/Collection + VolatilityBumpInstrumentJacobian + OrthogonalizedBumpFinder + OrthogonalProjections |
+
+**TWO canonical end-to-end validations pass** — the W11-A `AccountingEngine(LogNormalFwdRatePc(FlatVol), Composite(MultiStepForwards+MultiStepOptionlets))` → Black caplet/FRA test (all 18 prices within C++ 2.5σ) and the W11-C callable-swap LS test (4 products priced together satisfying payer+receiver≈0 / callable≥receiver / receiver+bermudan≈callable). These prove the full W9+W10+W11 BGM stack works together, not just compiles.
+
+**Divergences:** the pseudo-root eigenvector-sign convention (W10-B's `align(pseudo_sqrt)`) carries through to W11-D's sign-sensitive Jacobians — cross-validated against exact C++ pseudo-roots via PseudoRootFacade (machine-ε); TARN's doubled-payment-time C++ quirk replicated; VegaBumpCollection's inverted `numberFailures>0` semantics reproduced; OrthogonalProjections IEEE-754 inf-discard (no zero-guard) reproduced under numpy float semantics.
+
+**W11 follow-ups (carve-outs):** PathwiseVegasAccountingEngine (now UNBLOCKED — both `browniansThisStep` and RatePseudoRootJacobian exist; the ~1200-line Giles-Glasserman smoking-adjoints sweep is a documented follow-up beyond the 4-class W11-D scope).
 
 **Notable divergences:**
 - ZabrInterpolation: scipy TRF finds strictly lower RMS (5.2e-5) than C++ projected-LM (5.8e-5) on the γ-fixed=1 slice. Fourth instance of "Python scipy more accurate" pattern (cf. L9-B `conventional_spread`, L10-C `AbcdInterpolation`, this).
