@@ -15,7 +15,8 @@ Living document — updated incrementally as each wave closes.
 | W3 | `pquantlib-phase11-w3-complete` @ `ea41029` | +229 | 3104 | 2026-05-29 |
 | W4 | `pquantlib-phase11-w4-complete` @ `eb901ae` | +68 | 3172 | 2026-05-29 |
 | W5 | `pquantlib-phase11-w5-complete` @ `6e0f8d2` | +127 | 3299 | 2026-05-29 |
-| W6 | `pquantlib-phase11-w6-complete` @ `ac69e2f` | +169 | **3468** | 2026-05-31 |
+| W6 | `pquantlib-phase11-w6-complete` @ `ac69e2f` | +169 | 3468 | 2026-05-31 |
+| W7 | `pquantlib-phase11-w7-complete` @ `6ae1cfd` | +152 | **3620** | 2026-05-31 |
 
 ## W1 — Specialty model completion
 
@@ -83,6 +84,25 @@ Pilot (W3-A) + 3-parallel (W3-B/C/D). +229 tests / 2875 → 3104. Closed the ful
 **Merge reconciliations:** add/add docstring-union on `experimental/volatility/__init__.py` (W6-A namespace-package had none; W6-B's governs + enriched with W6-A families) and `experimental/math/__init__.py` (W6-C+W6-D docstring union); CMakeLists stacking ×4; `docs/carve-outs.md` auto-merged (W6-C additions).
 
 **W6 follow-ups (carve-outs):** PSO ClubsTopology + AdaptiveInertia + LevyFlightInertia variants; LatentModel FactorSampler random-sample specializations; GaussNonCentralChiSquared mpmath-multiprecision moment recurrence (double-precision shipped).
+
+## W7 — experimental processes + commodities + inflation + variance-gamma
+
+Mini-pilot topology: W7-B (commodity foundations) merged first to unblock W7-C (commodity instruments); W7-A + W7-D ran independently in parallel. +152 tests / 3468 → 3620. Tag `pquantlib-phase11-w7-complete` @ `6ae1cfd`. The ExtendedOU/ExtOUWithJumps/Kluge processes were already on main (W5-A) — W7-A ported only the 3 remaining experimental processes.
+
+| Cluster | Tests | Scope |
+|---|---|---|
+| W7-A processes + variance-gamma | +33 | ExtendedBlackScholesMertonProcess + GemanRoncoroniProcess + VegaStressedBlackScholesProcess + VarianceGammaProcess/Model + AnalyticVarianceGammaEngine (Madan-Carr-Chang) + FFTEngine base + FFTVanillaEngine + FFTVarianceGammaEngine (Carr-Madan, numpy.fft) |
+| W7-B commodity foundations (mini-pilot) | +62 | UnitOfMeasure + 7 petroleum UOM + UnitOfMeasureConversion(+Manager singleton) + CommodityType (flyweight) + Quantity (UOM-converting arithmetic) + CommoditySettings + CommodityUnitCost + ExchangeContract + PaymentTerm + DateInterval + PricingPeriod + Commodity base + CommodityPricingHelper + Money |
+| W7-C commodity instruments | +30 | CommodityIndex + CommodityCurve + CommodityCashFlow + EnergyCommodity + EnergyFuture + EnergySwap + EnergyVanillaSwap + EnergyBasisSwap (canonical energy-swap NPV 1999.123 cross-validated) |
+| W7-D experimental inflation | +27 | Polynomial2DSpline + GenericCPI/YYGenericCPI + Region.Generic + CPI/YoY cap-floor term price surface abstracts + Interpolated{CPI,YoY}CapFloorTermPriceSurface + InterpolatingCPICapFloorEngine + YoYOptionletHelper + YoYOptionletStripper + InterpolatedYoYOptionletStripper + KInterpolatedYoYOptionletVolatilitySurface + PiecewiseYoYOptionletVolatilityCurve + YoYInflationOptionletVolatilityStructure2 + make_yoy_inflation_cap_floor |
+
+**Notable divergences:**
+- VarianceGamma analytic engine delegates the split Gauss-Kronrod/Lobatto quadrature to `scipy.integrate.quad` (reproduces canonical 955.16/687.20/453.47); FFT engines use `numpy.fft.fft` (verified identical unnormalized-DFT convention).
+- Two more C++ v1.42.1 quirks: `CommodityType` ctor arg-order disagreement between header and impl (replicated faithfully, registry keyed on code); `PricingPeriod` is 4-arg (no unit-cost), not 5 as initially specced — source-of-truth followed.
+- `Polynomial2DSpline` ported the parabolic-y/cubic-x algorithm directly (scipy `RectBivariateSpline` doesn't match QuantLib's basis).
+- Flyweight/singleton registries → Python module-level dicts + `Singleton` metaclass.
+
+**W7 follow-ups (carve-outs):** cross-currency FX (`ExchangeRateManager` + `Money` cross-currency arithmetic + commodity `calculate_fx_conversion_factor`); YoY surface cubic-extrapolation above max strike (scipy BicubicSpline clamps).
 
 **Notable divergences:**
 - ZabrInterpolation: scipy TRF finds strictly lower RMS (5.2e-5) than C++ projected-LM (5.8e-5) on the γ-fixed=1 slice. Fourth instance of "Python scipy more accurate" pattern (cf. L9-B `conventional_spread`, L10-C `AbcdInterpolation`, this).
