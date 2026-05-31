@@ -481,3 +481,13 @@ target_link_libraries(cluster_w6c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     LOOSE region-convergence contract). ===
 add_executable(cluster_w6d_probe cluster_w6d/probe.cpp)
 target_link_libraries(cluster_w6d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W7-B cluster: commodity foundation types + units of measure.
+#     UnitOfMeasure + petroleum UOM concretes + UnitOfMeasureConversion +
+#     UnitOfMeasureConversionManager (singleton conversion registry) +
+#     CommodityType (flyweight) + Quantity (typed commodity amount with
+#     UOM-converting arithmetic) + PricingPeriod + CommodityPricingHelper.
+#     Probes known petroleum conversion factors, Quantity arithmetic
+#     (same-UOM + cross-UOM AutomatedConversion), and accessor round-trips. ===
+add_executable(cluster_w7b_probe cluster_w7b/probe.cpp)
+target_link_libraries(cluster_w7b_probe PRIVATE ${QUANTLIB_LIBRARY})
