@@ -40,6 +40,10 @@ class Region(IntEnum):
     France = 2
     UnitedKingdom = 3
     UnitedStates = 4
+    # C++ parity: GenericRegion in ql/experimental/inflation/genericindexes.hpp
+    # — a placeholder region (name "Generic", code "GENERIC") used by the
+    # generic test indexes that drive YoY optionlet stripping.
+    Generic = 5
 
     def region_name(self) -> str:
         """Return the C++-equivalent ``Region::name()`` string."""
@@ -56,6 +60,7 @@ _NAMES: Final[dict[Region, str]] = {
     Region.France: "France",
     Region.UnitedKingdom: "UK",
     Region.UnitedStates: "USA",
+    Region.Generic: "Generic",
 }
 
 _CODES: Final[dict[Region, str]] = {
@@ -63,4 +68,5 @@ _CODES: Final[dict[Region, str]] = {
     Region.France: "FR",
     Region.UnitedKingdom: "UK",
     Region.UnitedStates: "US",
+    Region.Generic: "GENERIC",
 }

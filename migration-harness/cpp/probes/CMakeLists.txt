@@ -511,3 +511,11 @@ target_link_libraries(cluster_w7a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     and the canonical energy future / vanilla-swap NPVs. ===
 add_executable(cluster_w7c_probe cluster_w7c/probe.cpp)
 target_link_libraries(cluster_w7c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W7-D cluster: experimental inflation — YoY optionlet stripping +
+#     CPI/YoY cap-floor price surfaces. Polynomial2DSpline;
+#     Interpolated{CPI,YoY}CapFloorTermPriceSurface;
+#     InterpolatingCPICapFloorEngine; InterpolatedYoYOptionletStripper +
+#     KInterpolatedYoYOptionletVolatilitySurface. ===
+add_executable(cluster_w7d_probe cluster_w7d/probe.cpp)
+target_link_libraries(cluster_w7d_probe PRIVATE ${QUANTLIB_LIBRARY})
