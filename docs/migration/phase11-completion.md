@@ -17,7 +17,8 @@ Living document — updated incrementally as each wave closes.
 | W5 | `pquantlib-phase11-w5-complete` @ `6e0f8d2` | +127 | 3299 | 2026-05-29 |
 | W6 | `pquantlib-phase11-w6-complete` @ `ac69e2f` | +169 | 3468 | 2026-05-31 |
 | W7 | `pquantlib-phase11-w7-complete` @ `6ae1cfd` | +152 | 3620 | 2026-05-31 |
-| W8 | `pquantlib-phase11-w8-complete` @ `8573dd9` | +143 | **3763** | 2026-05-31 |
+| W8 | `pquantlib-phase11-w8-complete` @ `8573dd9` | +143 | 3763 | 2026-05-31 |
+| W9 | `pquantlib-phase11-w9-complete` @ `4d09234` | +82 | **3845** | 2026-05-31 |
 
 ## W1 — Specialty model completion
 
@@ -123,6 +124,20 @@ Mini-pilot topology: W7-B (commodity foundations) merged first to unblock W7-C (
 **W8 follow-ups (carve-outs):** American multi-asset LS engines (`LongstaffSchwartzMultiPathPricer` + `MCLongstaffSchwartzPathEngine` + `MCAmericanPathEngine` — states/exercises plumbed, ~3hr); GeneralizedHullWhite tree-fitting + non-linear-mapping path (`dynamics()` raises, matching C++ QL_FAIL); W8-B `cluster_w8b/probe.cpp` lost (left untracked in the shared worktree by the subagent, cleaned pre-merge) — `references/cluster/w8b.json` is committed and tests pass; reconstruct the probe in W12 if reference regeneration is needed.
 
 **Notable divergences:** Heston Asian/forward CF engines match C++ to machine precision (numpy.leggauss(128) == C++ GaussLegendreIntegration(128)); MtM cross-currency swap rate helper bit-exact vs C++; W8-C caught + fixed a real lazy-cache bug (FD `recalculate()` → `instrument.update()`); Tree callable-bond engine ~1e-8 (custom tolerance, TreeSwaptionEngine precedent).
+
+## W9 — marketmodels CORE (LIBOR Market Model foundations)
+
+Pilot (W9-A core spine) + 2-parallel (W9-B/C). +82 tests / 3763 → 3845. Tag `pquantlib-phase11-w9-complete` @ `4d09234`. First of the 3 marketmodels waves; corrected dependency order (core → models+evolvers → products+callability — original plan was inverted).
+
+| Cluster | Tests | Scope |
+|---|---|---|
+| W9-A pilot core spine | +25 | EvolutionDescription + CurveState abstract + LMM/CMSwap/CoterminalSwap curve states + MarketModel/MarketModelEvolver/MarketModelMultiProduct/PathwiseMultiProduct/BrownianGenerator abstracts + MarketModelDiscounter/PathwiseDiscounter + ForwardForward/SwapForward mappings + PiecewiseConstantCorrelation + utilities |
+| W9-B correlations + drift + historical | +38 | exponential_forward_correlation + ExponentialForwardCorrelation + TimeHomogeneousForwardCorrelation + CotSwapFromFwdCorrelation + LMM/LMMNormal/SMM/CMSMM drift calculators + historical rates analysis + **SequenceStatistics** (L1-B enabler) |
+| W9-C Brownian generators + accounting | +19 | MTBrownianGenerator + SobolBrownianGenerator (+Ordering) + factories + AccountingEngine (BGM MC pricing loop) + PathwiseAccountingEngine (Delta) + ProxyGreekEngine + ConstrainedEvolver |
+
+**Divergences:** MT uniform stream bit-exact, Gaussian variates TIGHT (L1 InverseCumulativeNormal Halley-refinement gap ~1e-16); Sobol scipy-Joe-Kuo vs C++-Jaeckel diverge beyond 2 dims → only stream-independent surfaces (ordering schema + Brownian-bridge algebra) cross-validated; W9-B caught + fixed a `np.diagonal`-view aliasing bug in SequenceStatistics.correlation().
+
+**W9 follow-ups (carve-outs):** PathwiseVegasAccountingEngine + Burley2020SobolBrownianGenerator (need W10 evolver `browniansThisStep` + RatePseudoRootJacobian); EvolutionDescription.effective_stop_time (commented-out in v1.42.1 source); marketmodeldifferences free functions (need W10 concrete MarketModel).
 
 **Notable divergences:**
 - ZabrInterpolation: scipy TRF finds strictly lower RMS (5.2e-5) than C++ projected-LM (5.8e-5) on the γ-fixed=1 slice. Fourth instance of "Python scipy more accurate" pattern (cf. L9-B `conventional_spread`, L10-C `AbcdInterpolation`, this).
