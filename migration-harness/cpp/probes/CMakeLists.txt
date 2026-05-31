@@ -599,3 +599,21 @@ target_link_libraries(cluster_w9c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     orthogonal rotation / sign in the spectral decomposition. ===
 add_executable(cluster_w10a_probe cluster_w10a/probe.cpp)
 target_link_libraries(cluster_w10a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W10-C cluster: MarketModels caplet / coterminal-swaption CALIBRATION.
+#     AlphaForm concretes (AlphaFormInverseLinear 1/(1+a*t);
+#     AlphaFormLinearHyperbolic sqrt(1+a*t*(atan(a*t)-pi/2))); AlphaFinder
+#     (Joshi 2007 alpha-form root-find — Bisection on quadratic.valueAtTurningPoint
+#     for solve(); golden-section Minimize on homogeneity-failure for
+#     solveWithMaxHomogeneity()); SphereCylinderOptimizer (the inner max-
+#     homogeneity solver — sphere ∩ vertical-cylinder closest-point via Brent
+#     golden-section minimize); CTSMMCapletMaxHomogeneityCalibration.calibrate
+#     (the canonical marketmodel.cpp coterminal-swap-market-model caplet
+#     calibration — singleRateClosestPointFinder over BasisIncompleteOrdered +
+#     SphereCylinderOptimizer per rate, iterated to match caplet vols while
+#     keeping perfect swaption fit); CTSMMCapletOriginalCalibration.calibrate
+#     (Joshi-original joint caplet+swaption alpha-rescaled quadratic per-rate
+#     fit). PseudoRootFacade.from_calibrator consumes the CTSMMCapletCalibration
+#     base. ===
+add_executable(cluster_w10c_probe cluster_w10c/probe.cpp)
+target_link_libraries(cluster_w10c_probe PRIVATE ${QUANTLIB_LIBRARY})
