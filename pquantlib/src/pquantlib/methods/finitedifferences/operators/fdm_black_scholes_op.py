@@ -120,6 +120,22 @@ class FdmBlackScholesOp:
         """
         return self._map_t.apply(r)
 
+    def apply_mixed(self, r: Array) -> Array:
+        """Mixed-derivative apply — zero for the 1-D BSM op.
+
+        # C++ parity: ``FdmBlackScholesOp::apply_mixed``.
+        """
+        return np.zeros_like(r)
+
+    def apply_direction(self, direction: int, r: Array) -> Array:
+        """Directional apply — equal to ``apply`` along direction 0, zero else.
+
+        # C++ parity: ``FdmBlackScholesOp::apply_direction``.
+        """
+        if direction == self._direction:
+            return self._map_t.apply(r)
+        return np.zeros_like(r)
+
     def solve_splitting(self, direction: int, r: Array, dt: float) -> Array:
         """Solve ``(I + dt * L) x = r`` along the given direction.
 

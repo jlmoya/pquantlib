@@ -21,8 +21,8 @@ from typing import final
 
 from pquantlib import qassert
 from pquantlib.math.array import Array
-from pquantlib.methods.finitedifferences.operators.fdm_black_scholes_op import (
-    FdmBlackScholesOp,
+from pquantlib.methods.finitedifferences.operators.fdm_linear_op_composite import (
+    FdmLinearOpComposite,
 )
 
 
@@ -31,10 +31,14 @@ class ExplicitEulerScheme:
     """Explicit-Euler one-step evolver.
 
     # C++ parity: ``class ExplicitEulerScheme``.
+
+    # Phase 11 W5-C: generalized ``op`` argument from concrete
+    # ``FdmBlackScholesOp`` to ``FdmLinearOpComposite`` Protocol so OU
+    # / Dupire / ZABR ops can be plugged in too.
     """
 
-    def __init__(self, op: FdmBlackScholesOp) -> None:
-        self._op: FdmBlackScholesOp = op
+    def __init__(self, op: FdmLinearOpComposite) -> None:
+        self._op: FdmLinearOpComposite = op
         self._dt: float = float("nan")
 
     def set_step(self, dt: float) -> None:

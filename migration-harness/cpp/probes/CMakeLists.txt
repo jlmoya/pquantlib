@@ -432,3 +432,10 @@ target_link_libraries(cluster_w5a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     is deferred until the ExtOU/Kluge FD operator cluster lands. ===
 add_executable(cluster_w5b_probe cluster_w5b/probe.cpp)
 target_link_libraries(cluster_w5b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W5-C cluster: experimental FD operators + OU vanilla engine +
+#     inner-value calculators. FdmZabrOp, FdmDupire1dOp,
+#     FdmOrnsteinUhlenbeckOp, FdOrnsteinUhlenbeckVanillaEngine,
+#     FdmExtOUJumpModelInnerValue. ===
+add_executable(cluster_w5c_probe cluster_w5c/probe.cpp)
+target_link_libraries(cluster_w5c_probe PRIVATE ${QUANTLIB_LIBRARY})

@@ -85,7 +85,7 @@ Still deferred (covered elsewhere in Phase 11 plan):
 
 **Why deferred:** TreeLattice2D needs care + 2-D backward induction; the analytic G2SwaptionEngine covers the common case.
 
-### Multi-asset finite-difference
+### Multi-asset finite-difference — **partially CLOSED** by Phase 11 W5-C
 
 - **`ql/methods/finitedifferences/*`** beyond the 1-D Black-Scholes subset ported in L5-D (~110 of 120 files).
   - 2-D Heston FD (`FdmHestonOp`, `FdmHestonVarianceMesher`, etc.).
@@ -98,9 +98,32 @@ Still deferred (covered elsewhere in Phase 11 plan):
   - `Concentrating1dMesher` (mesh concentration around features).
   - Iterative solvers (BiCGstab, GMRES) for sparse non-tridiagonal systems.
 
-**Why deferred:** 1-D BSM FD (L5-D) covers the most-cited vanilla American-option use case. Multi-asset FD is a research-grade undertaking that would benefit from its own dedicated phase.
+**Status (Phase 11 W5-C):** **Partially closed.** Now ported:
+  - `NinePointLinearOp` + `SecondOrderMixedDerivativeOp` (2-D 9-stencil operator base + central mixed-derivative).
+  - `FdmZabrOp` (2-D ZABR pricing PDE — `0.5 V^2 F^{2β} D_FF + 0.5 ν^2 V^{2γ} D_VV + νρ|V|^{γ+1} F^β D_FV`).
+  - `FdmDupire1dOp` (1-D Dupire local-volatility op — `0.5 σ(S)^2 D_SS`).
+  - `FdmOrnsteinUhlenbeckOp` (1-D OU PDE — `a(b-x) D_x + 0.5 σ^2 D_xx - rI`).
+  - `FdmSimpleProcess1dMesher` (process-driven 1-D mesh anchored at x0).
+  - `FdOrnsteinUhlenbeckVanillaEngine` (end-to-end FD engine for vanillas under arithmetic OU dynamics).
+  - `FdmExtOUJumpModelInnerValue` (inner-value calculator for Kluge-style payoffs).
+  - `FdmLinearOpComposite` Protocol (the schemes + backward solver now accept any conforming op, not just `FdmBlackScholesOp`).
 
-**Access:** For Heston/Bates analytic pricing, `AnalyticHestonEngine` / `BatesEngine` from L4-C / L6-B cover characteristic-function-based pricing.
+**Remaining (W5-C deferred):**
+  - `FdmExtOUJumpOp` + `ExtOUWithJumpsProcess` + `ExponentialJump1dMesher`: 2-D op for OU+jumps. Needs the Kluge process family and the exponential-jump 1-D mesher.
+  - `FdmKlugeExtOUOp` + `KlugeExtOUProcess`: 3-D op composition for power+gas spread under Kluge+ExtOU.
+  - `FdExtOUJumpVanillaEngine` + `FdKlugeExtOUSpreadEngine`: process-specific FD vanilla / spread engines. Each requires its op + a 2-D / 3-D solver decomposition (Hundsdorfer / Craig-Sneyd / TR-BDF2 — none of which is ported yet).
+  - `FdmHestonFwdOp` + `FdmSquareRootFwdOp`: forward (Fokker-Planck) operators for the Heston SLV calibration.
+  - `Concentrating1dMesher`: mesh concentration around strike/spot — required by both the BSM mesher's `c_point` parameter and the SLV calibration.
+  - `LocalVolRNDCalculator` + `FdmHestonGreensFct`: Green's-function machinery underpinning the SLV's local-vol density target.
+  - **Heston SLV Fokker-Planck FDM calibration**: the `HestonSlvFdmModel.leverage_function()` real implementation. The W1-D scaffold returns unit leverage (model degenerates to pure Heston). Real calibration requires all four bullets above plus 6 different time-stepping schemes with Rannacher smoothing.
+
+**Why deferred:** The W5-C scope (per the cluster brief) was sized for 7 classes of straightforward 1-D / 2-D FD operators + 1 vanilla engine + 1 SLV calibration. The first 7 landed; the SLV FDM piece alone is 537 LOC of C++ depending on ~5 cross-cluster operators + meshers (~1500 LOC total). Lands as a dedicated Phase-12 cluster (or as an opt-in extension if a user surfaces the requirement).
+
+**Access:**
+  - For Heston/Bates *analytic* pricing, `AnalyticHestonEngine` / `BatesEngine` from L4-C / L6-B cover characteristic-function-based pricing.
+  - For Heston SLV, the `HestonSlvFdmModel` scaffold accepts the public API but `leverage_function()` returns the unit-leverage degenerate; round-trip tests vs pure `HestonModel` pricing pass.
+  - For ZABR via FD, `FdmZabrOp` provides the spatial operator. A `ZabrModel.fdmPrice()` wrapper still needs a 2-D solver loop (Craig-Sneyd-style) — separate follow-up.
+  - For energy/power-gas, port the missing process + mesher + op trio against the existing `FdmExtOUJumpModelInnerValue` Python inner-value calculator. The W5-C ports give you the inner-value piece for free.
 
 ### Monte Carlo engine carry-overs
 

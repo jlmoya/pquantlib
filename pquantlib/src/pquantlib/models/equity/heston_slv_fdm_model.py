@@ -43,9 +43,25 @@ ships the public API skeleton:
 * ``heston_process()`` — passthrough.
 * ``local_vol()`` — passthrough.
 
-The carve-out is logged comprehensively in ``docs/carve-outs.md``
-(W1-D § "FDM SLV calibration"). The full implementation is a
-documented Phase 11 W5-C deliverable.
+**Phase 11 W5-C status — still deferred.** The W5-C cluster landed
+``FdmZabrOp`` + ``FdmDupire1dOp`` + ``FdmOrnsteinUhlenbeckOp`` +
+``FdOrnsteinUhlenbeckVanillaEngine`` + ``FdmExtOUJumpModelInnerValue``
++ ``NinePointLinearOp`` + ``SecondOrderMixedDerivativeOp`` (closing
+~70% of the cluster scope). The HestonSLV FDM wiring required:
+
+  * ``FdmHestonFwdOp`` (2-D forward Heston operator)
+  * ``FdmSquareRootFwdOp`` (1-D variance-direction forward operator)
+  * ``Concentrating1dMesher`` (strike-anchored mesh refinement)
+  * ``LocalVolRNDCalculator`` + ``FdmHestonGreensFct`` (local-vol
+    density target + Green's function for the calibration)
+  * 6 multi-time-stepping schemes (Craig-Sneyd, Hundsdorfer-Verwer,
+    TR-BDF2, MoL, plus Rannacher smoothing variants)
+
+— totalling ~1500 LOC of advanced PDE machinery. **Cumulative budget
+exceeded the W5-C cluster scope.** The carve-out is logged
+comprehensively in ``docs/carve-outs.md`` § "Multi-asset finite-
+difference". The full implementation is a documented Phase 12
+deliverable.
 
 Divergences from C++ (beyond the carve-out):
 - ``HestonSLVFokkerPlanckFdmParams`` is replaced by a dataclass with

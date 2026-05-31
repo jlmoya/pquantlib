@@ -18,8 +18,8 @@ from typing import final
 
 from pquantlib import qassert
 from pquantlib.math.array import Array
-from pquantlib.methods.finitedifferences.operators.fdm_black_scholes_op import (
-    FdmBlackScholesOp,
+from pquantlib.methods.finitedifferences.operators.fdm_linear_op_composite import (
+    FdmLinearOpComposite,
 )
 from pquantlib.methods.finitedifferences.schemes.explicit_euler_scheme import (
     ExplicitEulerScheme,
@@ -36,9 +36,13 @@ class CrankNicolsonScheme:
     # C++ parity: ``class CrankNicolsonScheme`` — same internal
     # composition (an ``ExplicitEulerScheme`` + ``ImplicitEulerScheme``
     # tied to the same operator).
+
+    # Phase 11 W5-C: generalized ``op`` argument from concrete
+    # ``FdmBlackScholesOp`` to ``FdmLinearOpComposite`` Protocol so OU
+    # / Dupire / ZABR ops can be plugged in too.
     """
 
-    def __init__(self, theta: float, op: FdmBlackScholesOp) -> None:
+    def __init__(self, theta: float, op: FdmLinearOpComposite) -> None:
         self._theta: float = theta
         self._dt: float = float("nan")
         self._explicit: ExplicitEulerScheme = ExplicitEulerScheme(op)

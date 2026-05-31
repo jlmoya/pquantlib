@@ -32,8 +32,8 @@ from typing import final
 from pquantlib import qassert
 from pquantlib.math.array import Array
 from pquantlib.math.constants import QL_EPSILON
-from pquantlib.methods.finitedifferences.operators.fdm_black_scholes_op import (
-    FdmBlackScholesOp,
+from pquantlib.methods.finitedifferences.operators.fdm_linear_op_composite import (
+    FdmLinearOpComposite,
 )
 from pquantlib.methods.finitedifferences.schemes.crank_nicolson_scheme import (
     CrankNicolsonScheme,
@@ -103,11 +103,11 @@ class FdmBackwardSolver:
 
     def __init__(
         self,
-        op: FdmBlackScholesOp,
+        op: FdmLinearOpComposite,
         condition: FdmStepConditionComposite | None,
         scheme_desc: FdmSchemeDesc,
     ) -> None:
-        self._op: FdmBlackScholesOp = op
+        self._op: FdmLinearOpComposite = op
         self._condition: FdmStepConditionComposite = (
             condition if condition is not None else FdmStepConditionComposite([], [])
         )
