@@ -48,4 +48,25 @@ Deferred to later clusters (need not-yet-ported foundations):
 - ``swaptionImpliedVolatility`` on ``SwapForwardMappings`` — needs a concrete
   ``MarketModel`` with a ``pseudo_root``; the static jacobian/Z-matrix helpers
   it builds on ARE ported here.
+
+W9-C additions (Brownian generators + accounting/greek engines):
+
+- ``browniangenerators`` subpackage — ``MTBrownianGenerator`` (Mersenne-
+  twister) + ``SobolBrownianGenerator`` (Sobol + Brownian bridge, Factors/
+  Steps/Diagonal ordering) + factories.
+- ``accounting_engine.AccountingEngine`` — the core BGM Monte-Carlo cash-flow
+  accounting loop.
+- ``pathwise_accounting_engine.PathwiseAccountingEngine`` — pathwise (Delta)
+  Giles-Glasserman smoking-adjoints accounting engine.
+- ``proxy_greek_engine.ProxyGreekEngine`` — Fries-Joshi proxy-simulation Greek
+  engine.
+- ``constrained_evolver.ConstrainedEvolver`` — abstract constrained-evolver
+  base (importance sampling for the proxy Greeks).
+
+Deferred to W10/W11 (need concrete models/evolvers):
+
+- ``PathwiseVegasAccountingEngine`` / ``PathwiseVegasOuterAccountingEngine`` —
+  need the evolver's ``browniansThisStep`` + ``RatePseudoRootJacobian``.
+- ``Burley2020SobolBrownianGenerator`` — a thin subclass once a consumer
+  requires it.
 """
