@@ -519,3 +519,16 @@ target_link_libraries(cluster_w7c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     KInterpolatedYoYOptionletVolatilitySurface. ===
 add_executable(cluster_w7d_probe cluster_w7d/probe.cpp)
 target_link_libraries(cluster_w7d_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W8-A cluster: CMS-spread index + irregular swaptions + basis-model
+#     (tenor-rescaled) volatility term structures. SwapSpreadIndex
+#     (gearing1*fix1 + gearing2*fix2); IrregularSwap NPV (step-down notional);
+#     HaganIrregularSwaptionEngine NPV (Hagan linear-TSR super-replication);
+#     TenorSwaptionVTS + TenorOptionletVTS volatility rescaling;
+#     SwaptionCashFlows annuity/float/fixed weight decomposition.
+#     NOTE: LognormalCmsSpreadPricer + CappedFlooredCmsSpreadCoupon +
+#     DigitalCmsSpreadCoupon + StrippedCappedFlooredCoupon are deferred
+#     (they need the not-ported CmsCoupon/CmsCouponPricer + CappedFlooredCoupon
+#     + DigitalCoupon foundations), so they are not probed. ===
+add_executable(cluster_w8a_probe cluster_w8a/probe.cpp)
+target_link_libraries(cluster_w8a_probe PRIVATE ${QUANTLIB_LIBRARY})
