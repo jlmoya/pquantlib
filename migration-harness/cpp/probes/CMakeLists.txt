@@ -491,3 +491,15 @@ target_link_libraries(cluster_w6d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     (same-UOM + cross-UOM AutomatedConversion), and accessor round-trips. ===
 add_executable(cluster_w7b_probe cluster_w7b/probe.cpp)
 target_link_libraries(cluster_w7b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W7-A cluster: experimental processes + variance-gamma.
+#     ExtendedBlackScholesMertonProcess (selectable Euler/Milstein/
+#     PredictorCorrector evol-discretization; Euler evolve matches the
+#     plain GBSM Euler evolve); GemanRoncoroniProcess (energy spot-price
+#     process: drift/diffusion/stdDeviation + deterministic jump-driven
+#     evolve via supplied Array du); VarianceGammaProcess accessors;
+#     VarianceGammaEngine (Madan-Carr-Chang integral) European call/put
+#     NPV; FFTVanillaEngine (Carr-Madan FFT) vs AnalyticEuropeanEngine;
+#     FFTVarianceGammaEngine vs the analytic VG engine. ===
+add_executable(cluster_w7a_probe cluster_w7a/probe.cpp)
+target_link_libraries(cluster_w7a_probe PRIVATE ${QUANTLIB_LIBRARY})
