@@ -644,3 +644,19 @@ target_link_libraries(cluster_w10c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     and the CashRebate one-shot are probed TIGHT. ===
 add_executable(cluster_w11a_probe cluster_w11a/probe.cpp)
 target_link_libraries(cluster_w11a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W11-B cluster: MarketModels (BGM) remaining products + pathwise
+#     (Greeks-aware) products. Remaining multistep/onestep products
+#     (MultiStepCoinitialSwaps/Ratchet/InverseFloater/Tarn/Swaption/
+#     PeriodCapletSwaptions, OneStepCoinitialSwaps/CoterminalSwaps) +
+#     pathwise products (MarketModelPathwiseMultiCaplet/DeflatedCaplet,
+#     MarketModelPathwiseSwap, MarketModelPathwiseCoterminalSwaptionsDeflated
+#     + its numerical-FD twin, MarketModelPathwiseInverseFloater,
+#     MarketModelPathwiseCashRebate, MultiProductPathwiseWrapper).
+#     Per-product nextTimeStep cash-flow generation on a flat-forward
+#     LMMCurveState is probed TIGHT; the Tarn/Ratchet path-dependent
+#     accumulation is probed over a deterministic step sequence; pathwise
+#     products' amount[] (value + per-rate derivatives) are probed TIGHT, with
+#     the analytic swaption deltas cross-checked against the numerical-FD twin. ===
+add_executable(cluster_w11b_probe cluster_w11b/probe.cpp)
+target_link_libraries(cluster_w11b_probe PRIVATE ${QUANTLIB_LIBRARY})

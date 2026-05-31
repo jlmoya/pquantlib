@@ -26,6 +26,9 @@ from pquantlib.models.marketmodels.products.multiproduct_multistep import (
 from pquantlib.models.marketmodels.products.multiproduct_onestep import (
     MultiProductOneStep,
 )
+from pquantlib.models.marketmodels.products.multistep_coinitial_swaps import (
+    MultiStepCoinitialSwaps,
+)
 from pquantlib.models.marketmodels.products.multistep_coterminal_swaps import (
     MultiStepCoterminalSwaps,
 )
@@ -33,33 +36,90 @@ from pquantlib.models.marketmodels.products.multistep_coterminal_swaptions impor
     MultiStepCoterminalSwaptions,
 )
 from pquantlib.models.marketmodels.products.multistep_forwards import MultiStepForwards
+from pquantlib.models.marketmodels.products.multistep_inverse_floater import (
+    MultiStepInverseFloater,
+)
 from pquantlib.models.marketmodels.products.multistep_nothing import MultiStepNothing
 from pquantlib.models.marketmodels.products.multistep_optionlets import (
     MultiStepOptionlets,
 )
+from pquantlib.models.marketmodels.products.multistep_pathwise_wrapper import (
+    MultiProductPathwiseWrapper,
+)
+from pquantlib.models.marketmodels.products.multistep_period_caplet_swaptions import (
+    MultiStepPeriodCapletSwaptions,
+)
+from pquantlib.models.marketmodels.products.multistep_ratchet import MultiStepRatchet
 from pquantlib.models.marketmodels.products.multistep_swap import MultiStepSwap
+from pquantlib.models.marketmodels.products.multistep_swaption import MultiStepSwaption
+from pquantlib.models.marketmodels.products.multistep_tarn import MultiStepTarn
+from pquantlib.models.marketmodels.products.onestep_coinitial_swaps import (
+    OneStepCoinitialSwaps,
+)
+from pquantlib.models.marketmodels.products.onestep_coterminal_swaps import (
+    OneStepCoterminalSwaps,
+)
 from pquantlib.models.marketmodels.products.onestep_forwards import OneStepForwards
 from pquantlib.models.marketmodels.products.onestep_optionlets import OneStepOptionlets
+from pquantlib.models.marketmodels.products.pathwise_product_callspecified import (
+    CallSpecifiedPathwiseMultiProduct,
+)
+from pquantlib.models.marketmodels.products.pathwise_product_caplet import (
+    MarketModelPathwiseMultiCaplet,
+    MarketModelPathwiseMultiDeflatedCap,
+    MarketModelPathwiseMultiDeflatedCaplet,
+)
+from pquantlib.models.marketmodels.products.pathwise_product_cashrebate import (
+    MarketModelPathwiseCashRebate,
+)
+from pquantlib.models.marketmodels.products.pathwise_product_inverse_floater import (
+    MarketModelPathwiseInverseFloater,
+)
+from pquantlib.models.marketmodels.products.pathwise_product_swap import (
+    MarketModelPathwiseSwap,
+)
+from pquantlib.models.marketmodels.products.pathwise_product_swaption import (
+    MarketModelPathwiseCoterminalSwaptionsDeflated,
+    MarketModelPathwiseCoterminalSwaptionsNumericalDeflated,
+)
 from pquantlib.models.marketmodels.products.single_product_composite import (
     SingleProductComposite,
 )
 
 __all__ = [
     "CallSpecifiedMultiProduct",
+    "CallSpecifiedPathwiseMultiProduct",
     "ExerciseAdapter",
     "ExerciseStrategy",
     "MarketModelCashRebate",
     "MarketModelComposite",
     "MarketModelExerciseValue",
+    "MarketModelPathwiseCashRebate",
+    "MarketModelPathwiseCoterminalSwaptionsDeflated",
+    "MarketModelPathwiseCoterminalSwaptionsNumericalDeflated",
+    "MarketModelPathwiseInverseFloater",
+    "MarketModelPathwiseMultiCaplet",
+    "MarketModelPathwiseMultiDeflatedCap",
+    "MarketModelPathwiseMultiDeflatedCaplet",
+    "MarketModelPathwiseSwap",
     "MultiProductComposite",
     "MultiProductMultiStep",
     "MultiProductOneStep",
+    "MultiProductPathwiseWrapper",
+    "MultiStepCoinitialSwaps",
     "MultiStepCoterminalSwaps",
     "MultiStepCoterminalSwaptions",
     "MultiStepForwards",
+    "MultiStepInverseFloater",
     "MultiStepNothing",
     "MultiStepOptionlets",
+    "MultiStepPeriodCapletSwaptions",
+    "MultiStepRatchet",
     "MultiStepSwap",
+    "MultiStepSwaption",
+    "MultiStepTarn",
+    "OneStepCoinitialSwaps",
+    "OneStepCoterminalSwaps",
     "OneStepForwards",
     "OneStepOptionlets",
     "SingleProductComposite",
