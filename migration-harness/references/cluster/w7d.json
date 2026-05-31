@@ -4,5 +4,12 @@
   "poly2d_pillar_x5_y0.04": 25.559999999999999,
   "poly2d_interior_x2.5_y0.025": 12.6875,
   "poly2d_interior_x4.2_y0.015": 21.148499999999999,
-  "poly2d_interior_x1.5_y0.035": 7.7274999999999991
+  "poly2d_interior_x1.5_y0.035": 7.7274999999999991,
+  "cpi_surf_floor_3y_fstrike-0.01": 0.001562,
+  "cpi_surf_floor_7y_fstrike0.01": 0.0077040000000000008,
+  "cpi_surf_cap_3y_cstrike0.03": 0.022759999999999999,
+  "cpi_surf_cap_10y_cstrike0.05": 0.010762000000000001,
+  "cpi_surf_cap_4y_cstrike0.035": 0.020027249999999993,
+  "cpi_surf_atm_rate_3y": 0.030589999999999895,
+  "cpi_engine_cap_3y_0.03_npv": 0.022759999999999999
 }
