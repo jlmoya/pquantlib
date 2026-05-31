@@ -422,3 +422,13 @@ target_link_libraries(cluster_w4c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     FdmExpExtOUInnerValueCalculator; FdmSpreadPayoffInnerValue. ===
 add_executable(cluster_w5a_probe cluster_w5a/probe.cpp)
 target_link_libraries(cluster_w5a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W5-B cluster: VPP option + storage/swing FD engine scaffold.
+#     VanillaVPPOption + FdmVPPStepCondition family +
+#     FdmVPPStepConditionFactory + DynProgVPPIntrinsicValueEngine
+#     (closed-form DP NPV against testVPPIntrinsicValue references).
+#     FD storage/swing/VPP engines under Kluge+ExtOU are scaffolded
+#     structurally (process side stubbed via Protocol) — full pricing
+#     is deferred until the ExtOU/Kluge FD operator cluster lands. ===
+add_executable(cluster_w5b_probe cluster_w5b/probe.cpp)
+target_link_libraries(cluster_w5b_probe PRIVATE ${QUANTLIB_LIBRARY})
