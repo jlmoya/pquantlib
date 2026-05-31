@@ -491,3 +491,11 @@ target_link_libraries(cluster_w6d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     (same-UOM + cross-UOM AutomatedConversion), and accessor round-trips. ===
 add_executable(cluster_w7b_probe cluster_w7b/probe.cpp)
 target_link_libraries(cluster_w7b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === cluster_w7c: commodity index/curve/cashflow + energy instruments —
+#     CommodityCurve (forward-flat price curve) + CommodityIndex (history +
+#     forward curve) + CommodityCashFlow (Money amount) + EnergyFuture +
+#     EnergyVanillaSwap. Probes interpolated forward prices, past fixings,
+#     and the canonical energy future / vanilla-swap NPVs. ===
+add_executable(cluster_w7c_probe cluster_w7c/probe.cpp)
+target_link_libraries(cluster_w7c_probe PRIVATE ${QUANTLIB_LIBRARY})

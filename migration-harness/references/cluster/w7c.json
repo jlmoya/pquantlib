@@ -1,0 +1,18 @@
+{
+  "curve_price_node1": 35,
+  "curve_price_mid01": 30,
+  "curve_price_node3": 45,
+  "curve_max_date_serial": 44180,
+  "index_empty_before": 1,
+  "index_fwd_curve_empty": 0,
+  "index_fixing_hist": 31,
+  "index_empty_after": 0,
+  "index_last_quote_serial": 43905,
+  "index_forward_price": 40,
+  "cashflow_amount": 12345.67,
+  "cashflow_disc_factor": 0.98699999999999999,
+  "future_npv": 3000,
+  "swap_npv": 1999.1234797992838,
+  "swap_daily_positions": 5,
+  "swap_payment_cashflows": 1
+}
