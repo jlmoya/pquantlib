@@ -562,3 +562,15 @@ target_link_libraries(cluster_w8d_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     MarketModelDiscounter.numeraireBonds. ===
 add_executable(cluster_w9a_probe cluster_w9a/probe.cpp)
 target_link_libraries(cluster_w9a_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W9-B cluster: MarketModels correlations + drift calculators +
+#     historical-analysis enabler. exponentialCorrelations (closed-form);
+#     TimeHomogeneousForwardCorrelation::evolvedMatrices (lower-right-shifted
+#     family); ExponentialForwardCorrelation (gamma=1 evolved + gamma!=1
+#     midpoint); CotSwapFromFwdCorrelation (Z C Z^T corr with expired-rate
+#     zeroing). LMM / LMMNormal / SMM / CMSMM drift calculators (Joshi 2003
+#     reduced-factor drift; pure linear algebra). SequenceStatistics
+#     covariance/correlation (multi-dim moment + outer-product accumulation),
+#     the enabler for historicalRatesAnalysis / HistoricalForwardRatesAnalysis. ===
+add_executable(cluster_w9b_probe cluster_w9b/probe.cpp)
+target_link_libraries(cluster_w9b_probe PRIVATE ${QUANTLIB_LIBRARY})
