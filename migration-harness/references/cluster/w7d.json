@@ -11,5 +11,11 @@
   "cpi_surf_cap_10y_cstrike0.05": 0.010762000000000001,
   "cpi_surf_cap_4y_cstrike0.035": 0.020027249999999993,
   "cpi_surf_atm_rate_3y": 0.030589999999999895,
-  "cpi_engine_cap_3y_0.03_npv": 0.022759999999999999
+  "cpi_engine_cap_3y_0.03_npv": 0.022759999999999999,
+  "yoy_surf_cap_3y_0.02": 116.22499999999999,
+  "yoy_surf_cap_10y_0.03": 66.420000000000002,
+  "yoy_surf_floor_5y_0.00": 2.2360000000000002,
+  "yoy_surf_floor_20y_0.01": 86.209999999999994,
+  "yoy_surf_atm_swap_3y": 0.024585990653559164,
+  "yoy_surf_atm_swap_7y": 0.024939600099273256
 }

@@ -30,16 +30,22 @@
 #include <ql/experimental/inflation/cpicapfloorengines.hpp>
 #include <ql/experimental/inflation/cpicapfloortermpricesurface.hpp>
 #include <ql/experimental/inflation/polynomial2Dspline.hpp>
+#include <ql/experimental/inflation/yoycapfloortermpricesurface.hpp>
+#include <ql/indexes/inflation/euhicp.hpp>
 #include <ql/indexes/inflation/ukrpi.hpp>
 #include <ql/instruments/cpicapfloor.hpp>
+#include <ql/termstructures/inflation/interpolatedyoyinflationcurve.hpp>
 #include <ql/math/interpolations/bicubicsplineinterpolation.hpp>
 #include <ql/math/interpolations/bilinearinterpolation.hpp>
+#include <ql/math/interpolations/cubicinterpolation.hpp>
 #include <ql/math/interpolations/linearinterpolation.hpp>
 #include <ql/math/matrix.hpp>
 #include <ql/termstructures/inflation/inflationhelpers.hpp>
 #include <ql/termstructures/inflation/piecewisezeroinflationcurve.hpp>
 #include <ql/termstructures/yield/zerocurve.hpp>
+#include <ql/time/calendars/target.hpp>
 #include <ql/time/calendars/unitedkingdom.hpp>
+#include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/daycounters/actualactual.hpp>
 #include <ql/time/schedule.hpp>
 
@@ -220,6 +226,113 @@ int main() {
         aCap.setPricingEngine(
             ext::make_shared<InterpolatingCPICapFloorEngine>(surfH));
         out.push_back(j("cpi_engine_cap_3y_0.03_npv", aCap.NPV()));
+    }
+
+    // ---- YoY cap/floor price surface (canonical EU test data) ---------
+    // Mirrors test-suite/inflationvolatility.cpp setup() + setupPriceSurface().
+    {
+        Date eval(23, November, 2007);
+        Settings::instance().evaluationDate() = eval;
+
+        RelinkableHandle<YoYInflationTermStructure> yoyEU;
+        auto yoyIndexEU = ext::make_shared<YoYInflationIndex>(
+            ext::make_shared<EUHICP>(), yoyEU);
+
+        // EUR nominal curve (cubic over derived dates)
+        Real timesEUR[] = {0.0109589, 0.0684932, 0.263014, 0.317808, 0.567123,
+                           0.816438, 1.06575, 1.31507, 1.56438, 2.0137, 3.01918,
+                           4.01644, 5.01644, 6.01644, 7.01644, 8.01644, 9.02192,
+                           10.0192, 12.0192, 15.0247, 20.0301, 25.0356, 30.0329,
+                           40.0384, 50.0466};
+        Real ratesEUR[] = {0.0415600, 0.0426840, 0.0470980, 0.0458506, 0.0449550,
+                           0.0439784, 0.0431887, 0.0426604, 0.0422925, 0.0424591,
+                           0.0421477, 0.0421853, 0.0424016, 0.0426969, 0.0430804,
+                           0.0435011, 0.0439368, 0.0443825, 0.0452589, 0.0463389,
+                           0.0472636, 0.0473401, 0.0470629, 0.0461092, 0.0450794};
+        std::vector<Date> dE;
+        std::vector<Rate> rE;
+        for (Size i = 0; i < std::size(timesEUR); ++i) {
+            rE.push_back(ratesEUR[i]);
+            auto ys = (Size)std::floor(timesEUR[i]);
+            auto ds = (Size)((timesEUR[i] - (Real)ys) * 365);
+            dE.push_back(eval + Period(ys, Years) + Period(ds, Days));
+        }
+        // NOTE: the QuantLib test-suite uses InterpolatedZeroCurve<Cubic>
+        // (Kruger derivative-approx). PQuantLib's CubicInterpolation only
+        // supports the natural-Spline approximation, so to keep the ATM
+        // cap/floor-intersection swap rates (which depend on the nominal
+        // discount factors) cross-validatable we use Linear here in BOTH
+        // the probe and the Python test. The surface algorithm under test
+        // is identical regardless of the nominal-curve interpolator.
+        Handle<YieldTermStructure> nominalEUR(
+            ext::make_shared<InterpolatedZeroCurve<Linear>>(dE, rE, Actual365Fixed()),
+            false);
+
+        // YoY EU curve (linear)
+        Real yoyEUrates[] = {0.0237951, 0.0238749, 0.0240334, 0.0241934, 0.0243567,
+                             0.0245323, 0.0247213, 0.0249348, 0.0251768, 0.0254337,
+                             0.0257258, 0.0260217, 0.0263006, 0.0265538, 0.0267803,
+                             0.0269378, 0.0270608, 0.0271363, 0.0272, 0.0272512,
+                             0.0272927, 0.027317, 0.0273615, 0.0273811, 0.0274063,
+                             0.0274307, 0.0274625, 0.027527, 0.0275952, 0.0276734,
+                             0.027794};
+        std::vector<Date> dY;
+        std::vector<Rate> rY;
+        Date baseDate = inflationPeriod(eval - 1 * Months, yoyIndexEU->frequency()).first;
+        dY.push_back(baseDate);
+        rY.push_back(yoyEUrates[0]);
+        Date capStartDate = TARGET().advance(eval, -2, Months, ModifiedFollowing);
+        for (Size i = 1; i < std::size(yoyEUrates); ++i) {
+            dY.push_back(TARGET().advance(capStartDate, i, Years, ModifiedFollowing));
+            rY.push_back(yoyEUrates[i]);
+        }
+        auto pYTSEU = ext::make_shared<InterpolatedYoYInflationCurve<Linear>>(
+            eval, dY, rY, Monthly, Actual365Fixed());
+        yoyEU.linkTo(pYTSEU);
+
+        // cap/floor price data
+        std::vector<Rate> cStrikesEU = {0.02, 0.025, 0.03, 0.035, 0.04, 0.05};
+        std::vector<Rate> fStrikesEU = {-0.01, 0.00, 0.005, 0.01, 0.015, 0.02};
+        std::vector<Period> cfMatEU = {3 * Years, 5 * Years, 7 * Years, 10 * Years,
+                                       15 * Years, 20 * Years, 30 * Years};
+        Real capPricesEU[6][7] = {
+            {116.225, 204.945, 296.285, 434.29, 654.47, 844.775, 1132.33},
+            {34.305, 71.575, 114.1, 184.33, 307.595, 421.395, 602.35},
+            {6.37, 19.085, 35.635, 66.42, 127.69, 189.685, 296.195},
+            {1.325, 5.745, 12.585, 26.945, 58.95, 94.08, 158.985},
+            {0.501, 2.37, 5.38, 13.065, 31.91, 53.95, 96.97},
+            {0.501, 0.695, 1.47, 4.415, 12.86, 23.75, 46.7}};
+        Real floorPricesEU[6][7] = {
+            {0.501, 0.851, 2.44, 6.645, 16.23, 26.85, 46.365},
+            {0.501, 2.236, 5.555, 13.075, 28.46, 44.525, 73.08},
+            {1.025, 3.935, 9.095, 19.64, 39.93, 60.375, 96.02},
+            {2.465, 7.885, 16.155, 31.6, 59.34, 86.21, 132.045},
+            {6.9, 17.92, 32.085, 56.08, 95.95, 132.85, 194.18},
+            {23.52, 47.625, 74.085, 114.355, 175.72, 229.565, 316.285}};
+        Matrix cPriceEU(6, 7), fPriceEU(6, 7);
+        for (Size i = 0; i < 6; ++i)
+            for (Size jj = 0; jj < 7; ++jj) {
+                cPriceEU[i][jj] = capPricesEU[i][jj];
+                fPriceEU[i][jj] = floorPricesEU[i][jj];
+            }
+
+        auto surf = ext::make_shared<
+            InterpolatedYoYCapFloorTermPriceSurface<Bicubic, Linear>>(
+            0, Period(3, Months), yoyIndexEU, CPI::Linear, nominalEUR,
+            Actual365Fixed(), TARGET(), ModifiedFollowing, cStrikesEU,
+            fStrikesEU, cfMatEU, cPriceEU, fPriceEU);
+
+        // Access the Period-tenor overloads via a base reference (the
+        // derived class hides them by overriding the Date forms).
+        YoYCapFloorTermPriceSurface& base = *surf;
+        // quote-point reproduction (Bicubic exact at nodes)
+        out.push_back(j("yoy_surf_cap_3y_0.02", base.capPrice(cfMatEU[0], 0.02)));
+        out.push_back(j("yoy_surf_cap_10y_0.03", base.capPrice(cfMatEU[3], 0.03)));
+        out.push_back(j("yoy_surf_floor_5y_0.00", base.floorPrice(cfMatEU[1], 0.00)));
+        out.push_back(j("yoy_surf_floor_20y_0.01", base.floorPrice(cfMatEU[5], 0.01)));
+        // ATM swap rate (from cap/floor intersection) at a couple maturities
+        out.push_back(j("yoy_surf_atm_swap_3y", base.atmYoYSwapRate(cfMatEU[0])));
+        out.push_back(j("yoy_surf_atm_swap_7y", base.atmYoYSwapRate(cfMatEU[2])));
     }
 
     std::cout << "{\n";

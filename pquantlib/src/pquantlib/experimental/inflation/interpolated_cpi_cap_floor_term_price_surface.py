@@ -33,7 +33,7 @@ from pquantlib.time.date import Date
 from pquantlib.time.period import Period
 
 
-class _Surface2D(Protocol):
+class Surface2D(Protocol):
     """Structural type for a 2-D interpolation usable as a price surface.
 
     Both :class:`BilinearInterpolation` (concrete-only) and the
@@ -51,7 +51,7 @@ class _Surface2D(Protocol):
 
 # C++ ``interpolator2d_.interpolate(xs, ys, z)`` -> factory taking the x
 # grid (maturity times), y grid (strikes) and the z matrix (z[y, x]).
-Interpolator2DFactory = Callable[[Matrix, Matrix, Matrix], _Surface2D]
+Interpolator2DFactory = Callable[[Matrix, Matrix, Matrix], Surface2D]
 
 
 class InterpolatedCPICapFloorTermPriceSurface(CPICapFloorTermPriceSurface):
@@ -81,8 +81,8 @@ class InterpolatedCPICapFloorTermPriceSurface(CPICapFloorTermPriceSurface):
             c_price, f_price,
         )
         self._interpolator2d: Interpolator2DFactory = interpolator2d
-        self._cap_price: _Surface2D | None = None
-        self._floor_price: _Surface2D | None = None
+        self._cap_price: Surface2D | None = None
+        self._floor_price: Surface2D | None = None
         self._perform_calculations()
 
     def _perform_calculations(self) -> None:
