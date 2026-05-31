@@ -586,3 +586,16 @@ target_link_libraries(cluster_w9b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     probed (its ctor needs a concrete LogNormalFwdRateEuler from W10). ===
 add_executable(cluster_w9c_probe cluster_w9c/probe.cpp)
 target_link_libraries(cluster_w9c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W10-A cluster: MarketModels concrete volatility models. FlatVol
+#     (flat-per-rate vol; per-step covariance via flatVolCovariance integral
+#     weighted by a PiecewiseConstantCorrelation, then rankReducedSqrt spectral
+#     pseudo-sqrt); AbcdVol (Rebonato abcd vol via AbcdFunction.covariance);
+#     PiecewiseConstantAbcdVariance (abcd variance integral per reset rate);
+#     PseudoRootFacade (wrap pseudo-roots as a MarketModel);
+#     FwdToCotSwapAdapter / CotSwapToFwdAdapter (Z-matrix swap<->forward
+#     pseudo-root re-expression + round-trip). The covariance B@B^T is probed
+#     (TIGHT) rather than the raw pseudo-root, which is only unique up to an
+#     orthogonal rotation / sign in the spectral decomposition. ===
+add_executable(cluster_w10a_probe cluster_w10a/probe.cpp)
+target_link_libraries(cluster_w10a_probe PRIVATE ${QUANTLIB_LIBRARY})
