@@ -151,7 +151,16 @@ class OrthogonalProjections:
                 projection_on_original = float(
                     np.dot(self._original_vectors[j], ortho[j])
                 )
-                size_multiplier = prev_norm_squared / projection_on_original
+                # C++ parity: ``prevNormSquared / projectionOnOriginalDirection``
+                # with NO guard — C++ relies on IEEE-754, so a zero projection
+                # (a linearly-dependent input vector) yields +/-inf or nan and
+                # ``fabs(.) < cutoff`` is false, discarding the vector. Python's
+                # float ``/`` would raise ZeroDivisionError, so divide under
+                # numpy float semantics to reproduce the C++ inf/nan behaviour.
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    size_multiplier = float(
+                        np.float64(prev_norm_squared) / np.float64(projection_on_original)
+                    )
 
                 if abs(size_multiplier) < self._multiplier_cutoff:
                     for t in range(self._dimension):

@@ -18,8 +18,11 @@ Divergences from C++:
   ``current_state``), so it is typed against that abstract base. A concrete
   ``LogNormalFwdRateEuler`` lands in W10; the Vegas variants
   (``PathwiseVegasAccountingEngine`` / ``...Outer...``) additionally need the
-  evolver's ``browniansThisStep`` + ``RatePseudoRootJacobian`` and are
-  deferred to W10/W11.
+  evolver's ``browniansThisStep`` + ``RatePseudoRootJacobian``. As of W11-D
+  both blockers are satisfied (``LogNormalFwdRateEuler.browniansThisStep`` from
+  W10-B and ``RatePseudoRootJacobian`` from W11-D), so the Vegas engines are
+  *unblocked*; the ~1200-line GG smoking-adjoints Vegas backward sweep itself
+  is left as a follow-up beyond W11-D's 4-class pathwise-greeks scope.
 - ``SequenceStatisticsInc&`` -> any ``add(values, weight)`` accumulator.
 - C++ ``Matrix`` workspace -> numpy float64 2-D arrays.
 - ``Clone<MarketModelPathwiseMultiProduct>`` -> ``product.clone()``.
