@@ -187,7 +187,11 @@ Still deferred (covered elsewhere in Phase 11 plan):
 - **Custom Gauss-Laguerre quadrature**: scipy.integrate.quad (Phase 4 L4-C).
 - **Custom Gauss-Hermite quadrature**: scipy.integrate.quad / scipy.special.roots_hermite.
 - **Custom matrix decompositions**: scipy.linalg.{cholesky, lu, svd, qr, eigh}.
+- **`moorePenroseInverse` custom SVD pseudo-inverse** (Phase 11 W6-C): `numpy.linalg.pinv`. The C++ hand-rolls `V·diag(1/sigma)·Uᵀ` from QuantLib's own `SVD` with cut-off `max(m,n)·eps·sigma_max`; numpy.linalg.pinv applies the identical relative cut-off (`rcond·sigma_max`) over LAPACK's divide-and-conquer SVD. The W6-C port reproduces the C++ default cut-off via a relative `rcond = max(m,n)·eps`.
 - **Custom sparse iterative solvers**: scipy.sparse.linalg.{bicgstab, gmres, spsolve}.
+- **`LaplaceInterpolation` FD-operator assembly** (Phase 11 W6-C): the C++ threads `Predefined1dMesher` + `FdmMesherComposite` + `SecondDerivativeOp.toMatrix()` + `BiCGstab`. The W6-C port inlines the identical second-derivative stencil (`2/zeta` weights) + Numerical-Recipes 3.8.6 corner weighting, assembles the system with `scipy.sparse.csr_matrix`, and solves it with `scipy.sparse.linalg.bicgstab` (the same Bi-CG-Stab algorithm). Inner/boundary/corner in-fills match the C++ reference grids exactly.
+- **`GaussNonCentralChiSquaredPolynomial` weight** (Phase 11 W6-C): `scipy.stats.ncx2.pdf` for `w(x)`; the orthogonal-polynomial recurrence is ported directly (the C++ `MomentBasedGaussianPolynomial<mp_real>` arbitrary-precision moment accumulation is run in double precision only — matches the C++ `Real` specialization at the 1e-5 quadrature test tolerance; mpmath multiprecision is a deferred carve-out).
+- **`MultidimGaussianQuadrature` node/weight solve** (Phase 11 W6-C): Golub-Welsch via `numpy.linalg.eigh` of the Hermite Jacobi matrix (C++ uses `TqrEigenDecomposition`); QuantLib's weight convention (`w_i = mu_0·ev[0,i]²/w(x_i)`) is reproduced so results match.
 - **Custom random number generation**: numpy.random + scipy.stats (Sobol/Halton via scipy.stats.qmc).
 - **Direction integer tables for Sobol** (Jaeckel default / Unit / SobolLevitan / Kuo / etc.): scipy.stats.qmc uses Joe-Kuo by default.
 
@@ -209,6 +213,7 @@ These were deferred during specific clusters with clear access patterns:
 - **L5-C American MC**: closed in L6-A.
 - **L5-D `VanillaOption.implied_volatility`**: closed in L5-D.
 - **L5-E `BivariateCumulativeNormalDistribution`**: closed in L5-E.
+- **W6-C `LatentModel<Impl>::FactorSampler` specializations**: the general `experimental.math.LatentModel` ports the integration/inspector surface (factor loadings, per-variable correlation, copula cumulative/inverse passthroughs, `latent_var_value`, `integrated_expected_value`); the C++ `Impl`-driven random-sample machinery (the `FactorSampler` partial specializations for Gaussian/T copulas) is deferred — the W6-C copula RNGs (`ClaytonCopulaRng` / `FrankCopulaRng` / `FarlieGumbelMorgensternCopulaRng` / `PolarStudentTRng`) and `GaussianCopulaPolicy.all_factor_cumul_inverter` provide direct factor-sample generation when a simulation is needed.
 
 ## Category 5 — Items not in C++ v1.42.1
 
