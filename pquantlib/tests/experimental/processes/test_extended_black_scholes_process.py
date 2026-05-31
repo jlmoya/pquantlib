@@ -123,6 +123,12 @@ def test_ebsm_euler_diverges_from_plain_gbsm_euler(
         gbsm.evolve_1d(0.5, 105.0, 0.25, 0.5),
         float(reference_data["ebsm_gbsm_evolve_euler"]),
     )
-    assert float(reference_data["ebsm_evolve_euler"]) != pytest.approx(
-        float(reference_data["ebsm_gbsm_evolve_euler"])
+    # The two Euler evolves genuinely differ (strike-dependent raw-Black-vol
+    # diffusion vs the GBSM strike-independent closed-form variance).
+    assert (
+        abs(
+            float(reference_data["ebsm_evolve_euler"])
+            - float(reference_data["ebsm_gbsm_evolve_euler"])
+        )
+        > 1e-6
     )
