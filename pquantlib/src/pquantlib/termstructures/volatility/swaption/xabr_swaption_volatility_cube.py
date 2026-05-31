@@ -68,12 +68,14 @@ from pquantlib.time.period import Period
 class XabrModelKind(IntEnum):
     """Selector for the xabr model used in :class:`XabrSwaptionVolatilityCube`.
 
-    # C++ parity: indirectly mapped from the template parameter pair
-    # ``SwaptionVolCubeSabrModel`` / ``SwaptionVolCubeZabrModel<Kernel>``.
+    # C++ parity: indirectly mapped from the template parameter triple
+    # ``SwaptionVolCubeSabrModel`` / ``SwaptionVolCubeZabrModel<Kernel>``
+    # / ``SwaptionVolCubeNoArbSabrModel``.
     """
 
     SABR = 0  # 4-param Hagan 2002 SABR via SabrInterpolation + SabrSmileSection
     ZABR = 1  # 5-param ZABR via ZabrInterpolation + ZabrSmileSection
+    NOARB_SABR = 2  # 4-param Doust no-arb SABR via NoArbSabrInterpolation
 
 
 # Initial guess shape per mode.
@@ -136,6 +138,7 @@ class XabrSwaptionVolatilityCube(SwaptionVolatilityCube):
             vega_weighted_smile_fit=vega_weighted_smile_fit,
         )
         self._model_kind: XabrModelKind = model_kind
+        # ZABR adds the 5th parameter (gamma); SABR + NOARB_SABR are 4.
         n_expected = 5 if model_kind == XabrModelKind.ZABR else 4
         qassert.require(
             len(is_parameter_fixed) == n_expected,
@@ -220,6 +223,10 @@ class XabrSwaptionVolatilityCube(SwaptionVolatilityCube):
         if self._model_kind == XabrModelKind.SABR:
             return self._fit_sabr_cell(
                 j, k, strikes, vols, option_time, forward, shift_local,
+            )
+        if self._model_kind == XabrModelKind.NOARB_SABR:
+            return self._fit_noarb_sabr_cell(
+                j, k, strikes, vols, option_time, forward,
             )
         return self._fit_zabr_cell(
             j, k, strikes, vols, option_time, forward,
@@ -315,6 +322,49 @@ class XabrSwaptionVolatilityCube(SwaptionVolatilityCube):
             interp.nu(), interp.rho(), interp.gamma(),
         )
 
+    def _fit_noarb_sabr_cell(
+        self,
+        j: int,
+        k: int,
+        strikes: list[float],
+        vols: list[float],
+        option_time: float,
+        forward: float,
+    ) -> tuple[float, float, float, float]:
+        # Imported lazily so the no-arb model + its absorption-table
+        # asset are only pulled in when a NOARB_SABR cube is built.
+        from pquantlib.experimental.volatility.no_arb_sabr_interpolation import (  # noqa: PLC0415
+            NoArbSabrInterpolation,
+        )
+
+        if self._initial_guess is not None:
+            guess = self._initial_guess[j][k]
+            if len(guess) != 4:
+                raise LibraryException(
+                    f"NoArbSabr cube expects 4-tuple guess at cell ({j},{k}); "
+                    f"got length {len(guess)}"
+                )
+            a0, b0, n0, r0 = guess[0], guess[1], guess[2], guess[3]
+            interp = NoArbSabrInterpolation(
+                strikes, vols, option_time, forward,
+                alpha=a0, beta=b0, nu=n0, rho=r0,
+                alpha_is_fixed=self._is_param_fixed[0],
+                beta_is_fixed=self._is_param_fixed[1],
+                nu_is_fixed=self._is_param_fixed[2],
+                rho_is_fixed=self._is_param_fixed[3],
+                vega_weighted=self._vega_weighted_smile_fit,
+            )
+        else:
+            interp = NoArbSabrInterpolation(
+                strikes, vols, option_time, forward,
+                alpha_is_fixed=self._is_param_fixed[0],
+                beta_is_fixed=self._is_param_fixed[1],
+                nu_is_fixed=self._is_param_fixed[2],
+                rho_is_fixed=self._is_param_fixed[3],
+                vega_weighted=self._vega_weighted_smile_fit,
+            )
+        return interp.alpha(), interp.beta(), interp.nu(), interp.rho()
+
     def _ensure_fitted(self) -> None:
         if self._fitted_params is None:
             self._fit_all()
@@ -380,6 +430,19 @@ class XabrSwaptionVolatilityCube(SwaptionVolatilityCube):
                 exercise_time=option_time,
                 volatility_type=self.volatility_type(),
                 shift=shift,
+            )
+        if self._model_kind == XabrModelKind.NOARB_SABR:
+            from pquantlib.experimental.volatility.no_arb_sabr_smile_section import (  # noqa: PLC0415
+                NoArbSabrSmileSection,
+            )
+
+            alpha, beta, nu, rho = self._fitted_params[j][k]
+            return NoArbSabrSmileSection(
+                forward=forward,
+                sabr_params=(alpha, beta, nu, rho),
+                exercise_time=option_time,
+                volatility_type=self.volatility_type(),
+                shift=0.0,
             )
         alpha, beta, nu, rho, gamma = self._fitted_params[j][k]
         return ZabrSmileSection(
