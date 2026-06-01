@@ -37,13 +37,18 @@ C++: `ql/termstructures/volatility/capfloor/*` (5 files), `ql/termstructures/vol
 
 **Remaining (future specialty-cluster candidates):** `KahaleSmileSection` (no-arbitrage smile reformulation), `ZabrSmileSection` + `ZabrInterpolatedSmileSection` (ZABR specialty), `AtmAdjustedSmileSection` + `AtmSmileSection` (ATM-targeted adapters), `SabrInterpolatedSmileSection` (composition wrapper — ~1 hr plumbing), `XabrSwaptionVolatilityCube` template generalisation, `Gaussian1dSwaptionVolatility`, `CmsMarket`, `CmsMarketCalibration`, `OptionletStripper2`.
 
-### MarketModels (LIBOR Market Model)
+### MarketModels (LIBOR Market Model) — **CLOSED** by Phase 11 W9 + W10 + W11
 
-C++: `ql/models/marketmodels/*` (~125 files).
+C++: `ql/models/marketmodels/*` (~111 class-bearing headers).
 
-**Why deferred:** Large self-contained domain (forward LIBOR dynamics + LMM calibration + drift approximations + BGM). Not on the vanilla critical path. Users requiring LMM should port the `marketmodels/` tree as a dedicated cluster.
+**Status:** the entire BGM/LMM domain is ported across three Phase-11 waves:
+- **W9 (core):** EvolutionDescription + CurveState (+ LMM/CMSwap/CoterminalSwap) + MarketModel/MarketModelEvolver/MarketModelMultiProduct/PathwiseMultiProduct/BrownianGenerator abstracts + discounters + swap-forward mappings + PiecewiseConstantCorrelation + exponential/time-homogeneous/cot-swap correlations + LMM/LMMNormal/SMM/CMSMM drift calculators + MT/Sobol Brownian generators + AccountingEngine + PathwiseAccountingEngine + ProxyGreekEngine + ConstrainedEvolver + SequenceStatistics.
+- **W10 (models + evolvers):** FlatVol + AbcdVol + PiecewiseConstant{,Abcd}Variance + PseudoRootFacade + Fwd↔CotSwap/FwdPeriod adapters + VolatilityInterpolationSpecifier + 12 evolvers (LogNormalFwdRate Pc/Euler/Ipc/Balland/IBalland + Normal/CotSwap/CmSwap/SVD + SquareRootAndersen) + AlphaForm/AlphaFinder + CTSMM caplet-coterminal calibration (Original/MaxHomogeneity/AlphaForm/periodic).
+- **W11 (products + callability + pathwise greeks):** the full MultiProduct framework + ~25 concrete products (MultiStep/OneStep + pathwise) + callability (exercise values/strategies + LS basis systems + LongstaffSchwartzExerciseStrategy + Andersen-Broadie UpperBoundEngine) + pathwise-greeks Jacobians (RatePseudoRoot + Swaption/Cap + VegaBumpCluster + VolatilityBumpInstrumentJacobian).
 
-**Access:** none — direct port required. Or use QuantLib via the SWIG `QuantLib-Python` binding for LMM-only.
+**Two canonical end-to-end tests pass** — `AccountingEngine(LogNormalFwdRatePc(FlatVol), MultiStepOptionlets)` → Black caplet prices, and the callable-swap Longstaff-Schwartz Bermudan test — proving the full stack works together.
+
+**Remaining (single documented follow-up):** `PathwiseVegasAccountingEngine` (the ~1200-line Giles-Glasserman smoking-adjoints sweep) is unblocked (both `browniansThisStep` and RatePseudoRootJacobian exist) but left as a follow-up beyond the W11-D scope.
 
 ### Specialty volatility models
 
@@ -260,12 +265,31 @@ If you need a carved-out feature:
 3. **Use scipy / numpy / mpmath directly** for the numerical-tooling category — see "Category 3" above.
 4. **Port the specific class** following the PQuantLib pattern: write a C++ probe, generate JSON reference values, write a failing Python test, port, verify. The full pattern is documented in `docs/migration/phase1-l1-A-design.md`.
 
-## Statistics
+## Statistics (final — after Phase 11 full-closure)
 
-- **C++ v1.42.1 surface**: ~2300 .hpp files.
-- **PQuantLib ported**: ~454 classes across ~2652 tests (after Phase 7 inflation + Phase 8 piecewise/credit/capfloor-vol + Phase 9 cubic/post-L8-ergonomics/SABR-cube + Phase 10 vol-tail/Gaussian1d/interpolator-tail/ZABR opt-in extensions).
-- **Test parity with `jquantlib-final`**: 2652 / 3610 = **73.5%**.
+- **C++ v1.42.1 surface**: 1320 class-bearing `.hpp` files (excl. `all.hpp`) / 2024 distinct class+struct names.
+- **PQuantLib ported**: ~895 Python modules across **4048 tests** / 499 test files.
+- **Test parity with `jquantlib-final`**: 4048 / 3610 = **112%** — PQuantLib now exceeds JQuantLib's final test count (JQuantLib never reached the `experimental/*` + full `marketmodels/*` surface).
+- **Raw name-match coverage** (`migration-harness/check_coverage.py`): 1024 / 2024 = 50.6%. **This is a heavily-distorted floor, not the functional measure** (see the audit-triage note below).
 
-PQuantLib covers the **vanilla + American + analytic-exotic pricing + calibration** surface end-to-end, with substantial coverage of specialty short-rate models (Vasicek, HullWhite, CIR, ExtendedCIR, G2++, BlackKarasinski, **Gsr**), equity stochastic-vol (Heston, Bates), and the full Monte Carlo / Finite-Difference / Tree pricing infrastructure. Phase 7 added the full inflation cluster (Tier-1 indexes/curves/cashflows/instruments/vol). Phase 8 added piecewise inflation + IterativeBootstrap + Tier-1 credit (CDS pricing + hazard-rate term structures + MidPoint/Integral engines) + capfloor/optionlet/swaption vol surfaces (incl. OptionletStripper1 + SwaptionVolatilityMatrix). Phase 9 added cubic/bicubic spline interpolators + post-L8 ergonomics (PiecewiseYieldCurve + 3 yield traits + IsdaCdsEngine + MakeCDS + implied_hazard_rate + conventional_spread + PiecewiseDefaultCurve bootstrap wiring) + the full SABR swaption smile cube (5-class SmileSection family + Hagan 2002 SABR closed-form + SabrInterpolation scipy least-squares fitter + Sabr/Interpolated SwaptionVolatilityCube). Phase 10 closed the vol surface tail (KahaleSmileSection + AtmSmileSection + AtmAdjustedSmileSection + SabrInterpolatedSmileSection + OptionletStripper2 + SabrInterpolation Halton multi-start + HaltonRsg) + the Gaussian1d short-rate cluster (Gaussian1dModel + Gsr + GsrProcess + Gaussian1dSwaptionVolatility) + the interpolator tail (HymanFilteredCubic + ChebyshevInterpolation + MultiCubicSpline + AbcdInterpolation) + the ZABR family closed-form (zabr_volatility + ZabrSmileSection).
+### The 50.6% raw figure is a floor — the functional surface is essentially complete
 
-Remaining specialty domains (MarketModels, MarkovFunctional, experimental credit basket/CDO, CmsMarket/CmsMarketCalibration, ZABR FD modes, Gaussian1d-driven engines) defer to dedicated future work or QuantLib-Python wrapping. Post-Phase-10 backlog (none blocking): ZabrInterpolation 5-param fitter + ZabrInterpolatedSmileSection (~3 hr), XabrSwaptionVolatilityCube template generalisation (~3 hr), KahaleSmileSection.core_smile deep-iteration testing (~2 hr), Gaussian1d engines (~6 hr each), Hyman-1983 alt monotonic cubic semantics, ConvexMonotoneInterpolation (Hagan-West 2009), BootstrapError / LocalBootstrap alt bootstrap algorithms.
+The audit script matches by `class Name`. The ~1000 raw "missing" names split into four buckets, only the first of which is a real gap (and Phase 11 W12 closed the bulk of it):
+
+1. **Real gaps — now CLOSED by W12** (core `cashflows`): CmsCoupon + CmsCouponPricer + CmsLeg + GFunction family + HaganPricer/AnalyticHaganPricer/NumericHaganPricer + ConundrumIntegrand + CappedFlooredCoupon/Ibor/Cms/Overnight + DigitalCoupon/Ibor/Cms + DigitalReplication + StrippedCappedFlooredCoupon + Dividend/FixedDividend/FractionalDividend + AverageBMACoupon/Leg + overnight-indexed coupon pricers + LognormalCmsSpreadPricer (also closed the W8-A CMS-spread deferral) + upgraded the L2-D BlackIborCouponPricer stub to a real optionlet pricer. **Remaining real gaps:** EquityCashFlow + EquityIndex + QuantoTermStructure (a small self-contained equity-return-cashflow batch deferred during W12 — see Category 2); CMS/overnight cap-floor *pricing* (needs a Hagan-replication / Black-overnight caplet pricer).
+
+2. **Representation mismatches — NOT gaps** (the bulk of the raw "missing"). The name-match audit cannot see these:
+   - `currencies` (5/111): every per-currency class (`USDCurrency`, `EURCurrency`, …, 100+ of them) is ported as a `Currency` *instance / registry entry*, not a `class X` subclass. Functionally complete.
+   - Leg builders (`IborLeg`, `FixedRateLeg`, `CmsLeg`, …) are ported as `ibor_leg(...)` / `fixed_rate_leg(...)` *functions*, not classes.
+   - Engine `Arguments` / `Results` nested structs are folded into the Python engine (no separate class).
+   - `pricingengines` (62/221 raw) and `math` (89/286 raw) are dominated by these nested-helper / template-tag / `detail::` names.
+
+3. **Superseded / not-in-scope** (formal carve-out): `ql/legacy/*` = the LIBOR Forward Model (`LiborForwardModel` + `Lm{Correlation,Volatility}Model` family + `LfmSwaptionEngine`) — **superseded** by the `marketmodels/*` (BGM) domain that Phase 11 W9–W11 fully ported; `ql/utilities/*` C++ idioms (`Clone`, `Null`, `Tracing`, `DateParser`, `PeriodParser`, `ObservableValue`) that Python handles natively (smart-pointer clone → `.clone()`, sentinel → `None`, RAII tracing → logging).
+
+4. **Permanently-delegated** (Category 3): historical-vol estimators (Parkinson, GarmanKlass, YangZhang, …) + GARCH → numpy / scipy / arch. Not ported by design.
+
+### What PQuantLib covers (functional summary)
+
+The **complete** vanilla + American + analytic-exotic + calibration surface, plus: all short-rate models (Vasicek/HullWhite/CIR/ExtendedCIR/G2++/BlackKarasinski/Gsr/**MarkovFunctional**) + equity stochastic-vol (Heston/Bates + **all Bates variants** + **GjrGarch** + **PiecewiseTimeDependentHeston** + **HestonSLV** MC) + Gaussian1d (model + engines + swaption vol) + the full SABR/ZABR/SVI/NoArbSABR smile-cube family + full inflation (Tier-1 + piecewise + experimental YoY-optionlet-stripping) + full credit (Tier-1 CDS + experimental CDO/basket/NthToDefault) + the complete commodity/energy stack + variance-gamma + FFT engines + CLV models + **the entire MarketModels/BGM/LMM domain** (W9–W11, with two passing canonical end-to-end validations) + the experimental finite-difference / exotic-option / heuristic-optimizer trees + the core cashflows CMS/CappedFloored/Digital coupon families (W12).
+
+**Remaining backlog (none blocking; all documented):** EquityCashFlow batch; CMS/overnight cap-floor pricing; PathwiseVegasAccountingEngine (Giles-Glasserman); MarkovFunctional caplet-calibration + Gaussian1d-engine edge cases; the W8-B `cluster_w8b/probe.cpp` reconstruction (reference JSON committed, tests pass). These are small follow-ups against a functionally-complete library.

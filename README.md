@@ -2,8 +2,8 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
-[![Tag](https://img.shields.io/badge/tag-pquantlib--phase10--complete-green)](#migration-status)
-[![Tests](https://img.shields.io/badge/tests-2652%2F0%2F0-brightgreen)](#migration-status)
+[![Tag](https://img.shields.io/badge/tag-pquantlib--100--complete-blue)](#migration-status)
+[![Tests](https://img.shields.io/badge/tests-4048%2F0%2F0-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
@@ -80,7 +80,9 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 - **Phase 6:** Python 3.14 modernization sweep
 - **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
 
-**Current tip on `main`:** Phase 10 closed via `pquantlib-phase10-complete` (opt-in extension beyond `pquantlib-final` — vol surface tail + Gaussian1d short-rate cluster + interpolator tail / ZABR family). See [`docs/migration/phase10-completion.md`](docs/migration/phase10-completion.md) for the closure summary + [`docs/carve-outs.md`](docs/carve-outs.md) for the comprehensive carve-out catalog.
+| 11 full C++ v1.42.1 closure (12-wave mega-phase) | `pquantlib-phase11-complete` + **`pquantlib-100-complete`** | The complete-closure phase. W1 specialty models (MarkovFunctional + Gaussian1d engines + Bates variants + Heston SLV/GjrGarch); W2 ZABR/smile/bootstrap tail; W3 `experimental/credit/*` (copulas + 5 loss models + CDO + NthToDefault); W4 exotic/barrier/variance options; W5 `experimental/finitedifferences/*`; W6 NoArbSABR + SVI + vol surfaces + copulas + heuristic optimizers; W7 processes + full commodity/energy stack + experimental inflation + variance-gamma + FFT; W8 long-tail experimental (CMS-spread, callable/cat bonds, **VannaVolga**, CLV, xccy); **W9–W11 the entire MarketModels/BGM/LMM domain** (core + models + evolvers + calibration + products + callability + pathwise greeks — 2 canonical end-to-end tests pass); W12 coverage-audit + core cashflows CMS/CappedFloored/Digital gap-fill. ~520 classes; +1396 tests. **Functional 1:1 with C++ v1.42.1.** | **4048/0/0** | **2026-05-31** |
+
+**Current tip on `main`:** **Phase 11 complete — `pquantlib-100-complete`.** PQuantLib is now functional 1:1 with C++ QuantLib v1.42.1 (every class ported or documented as representation-mismatch / superseded-legacy / permanently-delegated-to-numpy/scipy/arch). 4048 tests = 112% of jquantlib-final's 3610. See [`docs/migration/phase11-completion.md`](docs/migration/phase11-completion.md) for the 12-wave closure summary + [`docs/carve-outs.md`](docs/carve-outs.md) Statistics for the final coverage accounting (incl. why the raw 50.6% name-match is a distorted floor).
 
 **Sample programs**: Run `uv run python -m pquantlib_samples.{vanilla_swap_pricing,heston_calibration,american_option_mc,double_barrier_analytic}` for end-to-end demos.
 

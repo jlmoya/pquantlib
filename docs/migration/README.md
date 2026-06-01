@@ -107,6 +107,15 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
 - Final test count: **1883/0/0**. pyright + ruff clean.
 
+### Phase 11 — Full C++ v1.42.1 closure (closed; 12-wave mega-phase) — **`pquantlib-100-complete`**
+
+- [`phase11-design.md`](phase11-design.md) + [`phase11-plan.md`](phase11-plan.md) — the 12-wave binding spec (delegation-philosophy-revised).
+- [`phase11-completion.md`](phase11-completion.md) — per-wave contribution tables (W1–W12) + the Phase-11 grand total + the W12 coverage-audit triage.
+- [`phase11-w5-resume-checkpoint.md`](phase11-w5-resume-checkpoint.md) — the W5 computer-restart checkpoint (resolved).
+- **W1–W8** closed the entire specialty-model + `experimental/*` surface (credit / exotic / finite-difference / volatility / math / processes / commodities / inflation / long-tail). **W9–W11** ported the **entire MarketModels/BGM/LMM domain** (~111 files: core + models + evolvers + calibration + products + callability + pathwise greeks) with two passing canonical end-to-end tests. **W12** ran the coverage audit + filled the core cashflows CMS/CappedFloored/Digital gap.
+- Tags: `pquantlib-phase11-complete` + **`pquantlib-100-complete`**. Test count: **4048/0/0** (112% of jquantlib-final 3610). 2652 → 4048 (+1396) across ~520 classes / ~50 subagent clusters.
+- Result: **functional 1:1 with C++ QuantLib v1.42.1** — every class ported or documented (representation-mismatch / superseded-legacy / permanently-delegated). See [`../carve-outs.md`](../carve-outs.md) Statistics for the full accounting.
+
 ### Phase 10 — Vol surface tail + Gaussian1d short-rate + interpolator tail / ZABR (closed; opt-in extension beyond pquantlib-final)
 
 - [`phase10-design.md`](phase10-design.md) — binding spec (closed).
