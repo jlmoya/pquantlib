@@ -715,3 +715,20 @@ target_link_libraries(cluster_w12a_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     averaging, no forward curve (TIGHT). ===
 add_executable(cluster_w12c_probe cluster_w12c/probe.cpp)
 target_link_libraries(cluster_w12c_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W12-B cluster: core ql/cashflows gap-fill — capped/floored + digital
+#     coupon families that L2-D deferred. CappedFlooredIborCoupon.rate() with a
+#     cap / floor / collar (Black-vol-adjusted swaplet via BlackIborCouponPricer
+#     + ConstantOptionletVolatility on the canonical digitalcoupon.cpp setup —
+#     Euribor6M / flat 5% / fixingDays 2 / 10Y-forward coupon) is LOOSE;
+#     effectiveCap/effectiveFloor ((strike-spread)/gearing) TIGHT. DigitalCoupon
+#     callOptionRate/putOptionRate via call/put-spread replication at a small
+#     gap (LOOSE — replication ≈ Cox-Rubinstein asset-or-nothing) plus
+#     Central/Sub/Super replication-type rates and a cash-or-nothing call.
+#     StrippedCappedFlooredCoupon.rate() = the extracted caplet/floorlet
+#     optionality value, cross-checked against the underlying
+#     CappedFlooredCoupon's swaplet - underlying.rate() identity (TIGHT).
+#     CappedFlooredCmsCoupon uncapped degenerates to the AnalyticHaganPricer
+#     CMS swaplet rate (LOOSE — Hagan convexity adjustment). ===
+add_executable(cluster_w12b_probe cluster_w12b/probe.cpp)
+target_link_libraries(cluster_w12b_probe PRIVATE ${QUANTLIB_LIBRARY})
