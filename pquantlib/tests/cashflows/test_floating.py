@@ -260,7 +260,7 @@ def test_overnight_pricer_requires_overnight_coupon() -> None:
     idx = _FlatIborIndex(0.035, fixing_days=0)
     ic = IborCoupon(d2, 100_000.0, d1, d2, 0, idx)
     pricer = CompoundingOvernightIndexedCouponPricer()
-    with pytest.raises(LibraryException, match="requires OvernightIndexedCoupon"):
+    with pytest.raises(LibraryException, match="unsupported coupon type"):
         pricer.initialize(ic)
 
 
