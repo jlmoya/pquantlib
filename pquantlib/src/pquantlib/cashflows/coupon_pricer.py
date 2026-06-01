@@ -28,12 +28,20 @@ IborCoupon / OvernightIndexedCoupon use cases.
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from pquantlib import qassert
 from pquantlib.exceptions import LibraryException
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.patterns.observer import Observable
+from pquantlib.payoffs import OptionType
+from pquantlib.pricingengines.black_formula import (
+    bachelier_black_formula,
+    black_formula,
+)
+from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
 
@@ -42,6 +50,9 @@ if TYPE_CHECKING:
 
     from pquantlib.cashflows.cash_flow import CashFlow
     from pquantlib.cashflows.floating_rate_coupon import FloatingRateCoupon
+    from pquantlib.termstructures.volatility.optionlet.optionlet_volatility_structure import (
+        OptionletVolatilityStructure,
+    )
 
 
 # -----------------------------------------------------------------------
@@ -117,7 +128,9 @@ class IborCouponPricer(CouponPricer):
         self._gearing: float = 1.0
         self._spread: float = 0.0
         self._accrual_period: float = 0.0
-        self._discount: float = 1.0
+        # ``None`` marks "no forecast curve" — set by BlackIborCouponPricer when
+        # the index has no forwarding term structure (C++ Null<Real> discount_).
+        self._discount: float | None = 1.0
         self._use_indexed_coupons: bool = use_indexed_coupons
 
     # --- pricer wiring -------------------------------------------------
@@ -234,6 +247,8 @@ class IborCouponPricer(CouponPricer):
         return self._gearing * self._adjusted_fixing() + self._spread
 
     def swaplet_price(self) -> float:
+        qassert.require(self._discount is not None, "no forecast curve provided")
+        assert self._discount is not None
         return self.swaplet_rate() * self._accrual_period * self._discount
 
     def caplet_price(self, effective_cap: float) -> float:
@@ -263,17 +278,142 @@ class IborCouponPricer(CouponPricer):
 
 
 class BlackIborCouponPricer(IborCouponPricer):
-    """Black-formula IBOR coupon pricer (cap/floor handling deferred).
+    """Black-formula IBOR coupon pricer with cap/floor (optionlet) support.
 
-    C++ parity: ql/cashflows/couponpricer.hpp:111-146.
+    C++ parity: ql/cashflows/couponpricer.hpp:111-146 + couponpricer.cpp:120-236.
 
-    Without an OptionletVolatilityStructure (deferred carve-out), the
-    BlackIborCouponPricer behaves identically to IborCouponPricer for
-    plain swaplets — it differs from the base only by the (would-be)
-    cap/floor pricing surface. We expose the class so callers can pass
-    BlackIborCouponPricer() through the pricer slot, matching the C++
-    pattern, but cap/floor methods raise as in the base class.
+    For plain swaplets the behaviour matches ``IborCouponPricer`` (par-coupon
+    adjusted forecast). When an :class:`OptionletVolatilityStructure
+    <pquantlib.termstructures.volatility.optionlet.optionlet_volatility_structure.OptionletVolatilityStructure>`
+    is supplied, ``caplet_rate`` / ``floorlet_rate`` price the embedded
+    optionlet via the Black (ShiftedLognormal) or Bachelier (Normal) formula —
+    this is what drives ``CappedFlooredIborCoupon`` and the ``DigitalCoupon``
+    call/put-spread replication (W12-B).
+
+    # C++ parity divergences:
+    # - The C++ ``timingAdjustment_`` (Black76 / BivariateLognormal) +
+    #   ``adjustedFixing`` convexity correction is NOT ported. The base
+    #   ``IborCouponPricer._adjusted_fixing`` (par-coupon span) is used as the
+    #   Black forward, matching the C++ Black76 default for non-in-arrears
+    #   coupons whose pay date differs from the index maturity (the common
+    #   capped/floored case). In-arrears convexity is a deferred carve-out.
+    # - C++ stores ``Handle<OptionletVolatilityStructure>``; we thread the
+    #   structure directly (no relinkable-Handle indirection).
     """
+
+    def __init__(
+        self,
+        caplet_vol: OptionletVolatilityStructure | None = None,
+        use_indexed_coupons: bool = False,
+    ) -> None:
+        super().__init__(use_indexed_coupons)
+        self._caplet_vol: OptionletVolatilityStructure | None = caplet_vol
+
+    # --- vol wiring ----------------------------------------------------
+
+    def caplet_volatility(self) -> OptionletVolatilityStructure | None:
+        """C++ parity: ql/cashflows/couponpricer.hpp ``capletVolatility()``."""
+        return self._caplet_vol
+
+    def set_caplet_volatility(
+        self, caplet_vol: OptionletVolatilityStructure | None = None
+    ) -> None:
+        """Re-link the optionlet vol surface and notify observers.
+
+        C++ parity: ``IborCouponPricer::setCapletVolatility``.
+        """
+        self._caplet_vol = caplet_vol
+        self.update()
+
+    def initialize(self, coupon: FloatingRateCoupon) -> None:
+        """Capture per-coupon state + the payment-date discount.
+
+        C++ parity: ql/cashflows/couponpricer.cpp:120-136 — beyond the base
+        ``IborCouponPricer::initialize`` this additionally caches the discount
+        to the coupon's payment date (needed by ``caplet_price`` /
+        ``floorlet_price``).
+        """
+        super().initialize(coupon)
+        # Local import — see ``_par_coupon_fixing`` for the cycle note.
+        from pquantlib.cashflows.ibor_coupon import IborCoupon  # noqa: PLC0415
+
+        self._discount = 1.0
+        if isinstance(coupon, IborCoupon):
+            idx = coupon.ibor_index()
+            get_ts = getattr(idx, "forecast_term_structure", None)
+            ts = get_ts() if get_ts is not None else None
+            if ts is None:
+                # Discount unknown — flagged; checked lazily in *_price.
+                self._discount = None
+            else:
+                payment_date = coupon.date()
+                if payment_date > ts.reference_date():
+                    self._discount = ts.discount(payment_date)
+
+    # --- optionlet pricing ---------------------------------------------
+
+    def _optionlet_rate(self, option_type: OptionType, eff_strike: float) -> float:
+        """Optionlet (caplet/floorlet) rate via Black / Bachelier.
+
+        C++ parity: ql/cashflows/couponpricer.cpp:138-168
+        ``BlackIborCouponPricer::optionletRate``.
+        """
+        qassert.require(self._coupon is not None, "coupon not set")
+        assert self._coupon is not None
+        fixing_date = self._coupon.fixing_date()
+        today = ObservableSettings().evaluation_date_or_today()
+        if fixing_date <= today:
+            # the amount is determined — intrinsic value
+            if option_type == OptionType.Call:
+                a = self._coupon.index_fixing()
+                b = eff_strike
+            else:
+                a = eff_strike
+                b = self._coupon.index_fixing()
+            return max(a - b, 0.0)
+        # not yet determined — use the Black/Bachelier model
+        qassert.require(self._caplet_vol is not None, "missing optionlet volatility")
+        assert self._caplet_vol is not None
+        std_dev = math.sqrt(self._caplet_vol.black_variance(fixing_date, eff_strike))
+        shift = self._caplet_vol.displacement()
+        shifted_ln = self._caplet_vol.volatility_type() == VolatilityType.ShiftedLognormal
+        forward = self._adjusted_fixing()
+        if shifted_ln:
+            return black_formula(option_type, eff_strike, forward, std_dev, 1.0, shift)
+        return bachelier_black_formula(option_type, eff_strike, forward, std_dev, 1.0)
+
+    def caplet_rate(self, effective_cap: float) -> float:
+        """``gearing * optionletRate(Call, effCap)``.
+
+        C++ parity: ql/cashflows/couponpricer.hpp:224-226 — the gearing scales
+        the (raw-fixing) optionlet rate up to the geared-coupon convention.
+        """
+        return self._gearing * self._optionlet_rate(OptionType.Call, effective_cap)
+
+    def floorlet_rate(self, effective_floor: float) -> float:
+        """``gearing * optionletRate(Put, effFloor)``.
+
+        C++ parity: ql/cashflows/couponpricer.hpp:235-237.
+        """
+        return self._gearing * self._optionlet_rate(OptionType.Put, effective_floor)
+
+    def caplet_price(self, effective_cap: float) -> float:
+        """``capletRate * accrualPeriod * discount``.
+
+        C++ parity: ql/cashflows/couponpricer.hpp:219-222.
+        """
+        qassert.require(self._discount is not None, "no forecast curve provided")
+        assert self._discount is not None
+        return self.caplet_rate(effective_cap) * self._accrual_period * self._discount
+
+    def floorlet_price(self, effective_floor: float) -> float:
+        """``floorletRate * accrualPeriod * discount``.
+
+        C++ parity: ql/cashflows/couponpricer.hpp:229-232.
+        """
+        qassert.require(self._discount is not None, "no forecast curve provided")
+        assert self._discount is not None
+        return self.floorlet_rate(effective_floor) * self._accrual_period * self._discount
 
 
 # -----------------------------------------------------------------------
