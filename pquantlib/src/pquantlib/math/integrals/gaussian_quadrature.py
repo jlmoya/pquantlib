@@ -26,6 +26,7 @@ line-for-line.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Protocol
 
@@ -34,6 +35,7 @@ from scipy.linalg import (  # pyright: ignore[reportMissingTypeStubs]
     eigh_tridiagonal,  # pyright: ignore[reportUnknownVariableType]
 )
 
+from pquantlib import qassert
 from pquantlib.math.array import Array
 
 
@@ -104,4 +106,60 @@ class GaussianQuadrature:
         return total
 
 
-__all__ = ["GaussianOrthogonalPolynomial", "GaussianQuadrature"]
+class GaussHermitePolynomial:
+    """Gauss-Hermite orthogonal polynomial (weight ``|x|^{2mu} e^{-x^2}``).
+
+    # C++ parity: ql/math/integrals/gaussianorthogonalpolynomial.cpp
+    # ``GaussHermitePolynomial`` (v1.42.1).
+
+    Drives the Gauss-Hermite quadrature rule for
+    ``∫_{-∞}^{∞} f(x) |x|^{2mu} e^{-x²} dx``. With ``mu == 0`` this is the
+    classical Gauss-Hermite rule for ``∫ f(x) e^{-x²} dx``.
+    """
+
+    __slots__ = ("_mu",)
+
+    def __init__(self, mu: float = 0.0) -> None:
+        qassert.require(mu > -0.5, "mu must be bigger than -0.5")
+        self._mu = mu
+
+    def mu_0(self) -> float:
+        # C++ parity: exp(GammaFunction().logValue(mu + 0.5)).
+        from pquantlib.math.distributions.gamma_function import (  # noqa: PLC0415
+            GammaFunction,
+        )
+
+        return math.exp(GammaFunction.log_value(self._mu + 0.5))
+
+    def alpha(self, u: int) -> float:
+        del u
+        return 0.0
+
+    def beta(self, u: int) -> float:
+        # C++ parity: (i % 2) ? i/2 + mu : i/2.
+        if u % 2 != 0:
+            return u / 2.0 + self._mu
+        return u / 2.0
+
+    def w(self, x: float) -> float:
+        # C++ parity: |x|^{2 mu} e^{-x^2}.
+        return math.pow(abs(x), 2 * self._mu) * math.exp(-x * x)
+
+
+class GaussHermiteIntegration(GaussianQuadrature):
+    """``n``-point Gauss-Hermite quadrature for ``∫ f(x) e^{-x²} dx``.
+
+    # C++ parity: ql/math/integrals/gaussianquadratures.hpp
+    # ``GaussHermiteIntegration`` (v1.42.1).
+    """
+
+    def __init__(self, n: int, mu: float = 0.0) -> None:
+        super().__init__(n, GaussHermitePolynomial(mu))
+
+
+__all__ = [
+    "GaussHermiteIntegration",
+    "GaussHermitePolynomial",
+    "GaussianOrthogonalPolynomial",
+    "GaussianQuadrature",
+]

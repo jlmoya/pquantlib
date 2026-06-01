@@ -7,11 +7,11 @@ A :class:`~pquantlib.cashflows.floating_rate_coupon.FloatingRateCoupon` whose
 underlying index is a
 :class:`~pquantlib.indexes.swap_spread_index.SwapSpreadIndex`. The coupon is
 inert without a pricer (``rate()`` requires one); the bivariate-lognormal
-``LognormalCmsSpreadPricer`` that prices it is **deferred** in PQuantLib (it
-depends on the not-ported ``CmsCoupon`` / ``CmsCouponPricer`` family — see
-``docs/carve-outs.md``). This class ports the coupon shell so a CMS-spread leg
-can be *built* and inspected; pricing lands when the CMS-coupon foundation is
-ported.
+:class:`~pquantlib.cashflows.lognormal_cms_spread_pricer.LognormalCmsSpreadPricer`
+that prices it landed in W12-A (now that the ``CmsCoupon`` / ``CmsCouponPricer``
+foundation is ported). The capped/floored + digital CMS-spread coupon variants
+(``CappedFlooredCmsSpreadCoupon`` / ``DigitalCmsSpreadCoupon``) still wait for
+W12-B's ``CappedFlooredCoupon`` / ``DigitalCoupon`` bases.
 
 # C++ parity divergence (Visitability): the C++ ``accept`` /
 # ``AcyclicVisitor`` dispatch is not ported (PQuantLib does not port the
