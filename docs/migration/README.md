@@ -165,7 +165,7 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 - **L6-A** LongstaffSchwartz American MC (closes Phase 5 carve-out) — +41 tests.
 - **L6-B** BatesEngine (closes Phase 4 carve-out) — +14 tests.
 - **L6-C** DoubleBarrierOption + AnalyticDoubleBarrierEngine (closes Phase 5 carve-out) — +20 tests.
-- Tags: `pquantlib-phase6-complete` @ `998fed3`, **`pquantlib-final`** (final closure).
+- Tags: `pquantlib-phase6-complete` @ `998fed3` (the planned-migration milestone). _`pquantlib-final` originally pointed at the Phase 6 closure commit `45f4668`; it was re-pointed to the Phase 11 terminal (`1fdb1db`) on 2026-05-31 to denote the true end of the project._
 - Final test count: **1958/0/0**. pyright + ruff clean.
 - **`docs/carve-outs.md`** — comprehensive per-category carve-out documentation.
 - **`pquantlib-samples/`** — 4 end-to-end sample programs.

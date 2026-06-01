@@ -1,6 +1,6 @@
 # PQuantLib carve-outs
 
-Comprehensive list of C++ QuantLib v1.42.1 surface area NOT ported to PQuantLib through `pquantlib-final`. Each item includes the C++ source location, the rationale for deferral, and (where applicable) the access pattern for users who need the functionality.
+Comprehensive list of C++ QuantLib v1.42.1 surface area NOT ported to PQuantLib as of the terminal release (`pquantlib-final` / `pquantlib-100-complete` @ `1fdb1db`). Each item includes the C++ source location, the rationale for deferral, and (where applicable) the access pattern for users who need the functionality.
 
 Carve-out categories:
 
