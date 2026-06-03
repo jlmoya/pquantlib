@@ -48,7 +48,6 @@ if TYPE_CHECKING:
     from pquantlib.daycounters.day_counter import DayCounter
     from pquantlib.methods.lattices.binomial_tree import BinomialTree
     from pquantlib.time.date import Date
-    from pquantlib.time.time_grid import TimeGrid
 
 
 class BlackScholesDividendLattice(BlackScholesLattice):
@@ -65,7 +64,6 @@ class BlackScholesDividendLattice(BlackScholesLattice):
         end: float,
         steps: int,
         day_counter: DayCounter,
-        grid: TimeGrid,  # kept for ctor parity (escrow no longer grid-indexed)
         reference_date: Date,
         cash_flow: list[Dividend],
     ) -> None:

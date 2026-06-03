@@ -258,7 +258,6 @@ class BinomialDividendVanillaEngine(
             maturity,
             self._time_steps,
             rfdc,
-            grid,
             reference_date,
             cash_flow,
         )
@@ -304,7 +303,7 @@ class BinomialDividendVanillaEngine(
             value=p0,
             delta=delta0,
             gamma=results.gamma,
-            s0=s0,
+            s0=s0,  # BSM PDE theta uses the observable spot; escrowed-scale delta/gamma are the observable-spot greeks (dS'/dS=1)
             r=r_rate,
             q=q_rate,
             sigma=v,
