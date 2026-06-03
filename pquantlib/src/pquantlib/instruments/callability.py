@@ -19,6 +19,8 @@ from enum import IntEnum
 from pquantlib.instruments.bond import BondPrice
 from pquantlib.time.date import Date
 
+_NULL_DATE: Date = Date()
+
 
 class CallabilityType(IntEnum):
     """C++ parity: ``Callability::Type`` enum (callabilityschedule.hpp:42)."""
@@ -46,6 +48,28 @@ class Callability:
 
     def date(self) -> Date:
         return self._date
+
+    def has_occurred(
+        self,
+        ref_date: Date | None = None,
+        include_ref_date: bool | None = None,
+    ) -> bool:
+        """Whether this callability event has occurred at ``ref_date``.
+
+        # C++ parity: ``Event::hasOccurred`` (ql/event.cpp:28-39) — the
+        # ``Callability : public Event`` inherits it. Same semantics as
+        # :meth:`CashFlow.has_occurred`: None/null ``ref_date`` -> False;
+        # date < ref_date -> True; date > ref_date -> False; on equality
+        # returns ``not include_ref_date`` (default False).
+        """
+        if ref_date is None or ref_date == _NULL_DATE:
+            return False
+        if ref_date < self._date:
+            return False
+        if self._date < ref_date:
+            return True
+        include = include_ref_date if include_ref_date is not None else False
+        return not include
 
 
 # In the C++ source ``CallabilitySchedule`` is a ``typedef

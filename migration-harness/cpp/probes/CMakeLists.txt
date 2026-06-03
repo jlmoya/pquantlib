@@ -743,6 +743,16 @@ target_link_libraries(cluster_w12b_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(cluster_ws2_probe cluster_ws2/probe.cpp)
 target_link_libraries(cluster_ws2_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# === W-S4 cluster (sibling-packages): ConvertibleBond subsystem into pquantlib
+#     CORE. PRIMARY same-method same-N cross-validation: ConvertibleFixedCouponBond
+#     priced via BinomialConvertibleEngine<CoxRossRubinstein> (Tsiveriotis-Fernandes
+#     credit-adjusted lattice) at a FIXED N=801. European / American /
+#     American+SoftCallability+Put+FixedDividend NPVs are emitted for TIGHT
+#     tree-vs-identical-tree cross-validation (no analytic convertible value
+#     exists; the C++ same-engine value IS the reference). ===
+add_executable(cluster_ws4_probe cluster_ws4/probe.cpp)
+target_link_libraries(cluster_ws4_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # === WS3-FD1 cluster: legacy FD linear-algebra core. TridiagonalOperator
 #     (applyTo / solveFor / SOR / identity + operator algebra); BSMOperator
 #     coefficient stencil rebuilt into a real TridiagonalOperator;

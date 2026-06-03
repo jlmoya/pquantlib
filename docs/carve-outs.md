@@ -169,7 +169,7 @@ Still deferred (covered elsewhere in Phase 11 plan):
 
 - **BTP** (Italian government bond): specific BTP coupon conventions.
 - **CmsRateBond**: bond paying CMS coupons.
-- **ConvertibleBond**: bond convertible into equity (needs embedded option modeling).
+- ~~**ConvertibleBond**: bond convertible into equity (needs embedded option modeling).~~ **CLOSED (W-S4).** `ConvertibleBond` base + `ConvertibleFixedCouponBond` + `ConvertibleZeroCouponBond` + `SoftCallability` (`instruments/bonds/convertible_bonds.py`, `instruments/soft_callability.py`) + `DiscretizedConvertible` + `TsiveriotisFernandesLattice` + `BinomialConvertibleEngine` (`pricingengines/bond/`, `methods/lattices/`). Cross-validated TIGHT against the C++ `BinomialConvertibleEngine<CoxRossRubinstein>` at the identical N=801 (European / American / American+SoftCallability+Put+FixedDividend). `ConvertibleFloatingRateBond` is a straightforward follow-on (IborLeg in place of FixedRateLeg over the same base) — not yet ported.
 - **CpiBond**: inflation-linked bond (defers with all inflation).
 - **AmortizingCmsRateBond / AmortizingFloatingRateBond**: amortizing variants.
 

@@ -1,0 +1,14 @@
+{
+  "time_steps": 801,
+  "today_serial": 43832,
+  "issue_serial": 43837,
+  "maturity_serial": 47490,
+  "conversion_ratio": 2,
+  "conv_fixed_eu": 122.03448273552,
+  "conv_fixed_am": 123.28958973393154,
+    "call_serial": 45664,
+    "put_serial": 46394,
+    "div1_serial": 44203,
+    "div2_serial": 44935,
+  "conv_fixed_am_callput": 117.57603097268837
+}
