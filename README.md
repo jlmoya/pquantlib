@@ -380,6 +380,8 @@ pquantlib/                    # repo root
 │   └── (same shape)
 ├── pquantlib-samples/        # example scripts (not packaged for distribution)
 │   └── (same shape)
+├── pquantlib-showcase/       # interactive Streamlit demo app (see its README)
+│   └── app.py, pages/, src/, tests/
 ├── migration-harness/        # C++ ground-truth infrastructure
 │   ├── cpp/quantlib/         # git submodule → QuantLib v1.42.1 @ 099987f0
 │   ├── cpp/probes/           # one-off C++ probes emitting reference JSONs
@@ -387,7 +389,7 @@ pquantlib/                    # repo root
 │   ├── build-cpp.sh          # builds QuantLib + all probes
 │   └── generate-references.sh # runs all probes, emits JSONs
 ├── docs/migration/           # per-phase design / plan / progress / completion docs
-├── pyproject.toml            # workspace root (members = the 4 packages above)
+├── pyproject.toml            # workspace root (members = the 5 packages above)
 ├── .python-version           # 3.14
 ├── CLAUDE.md                 # binding instructions for Claude Code sessions
 ├── README.md                 # this file

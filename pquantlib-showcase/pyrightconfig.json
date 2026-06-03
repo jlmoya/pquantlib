@@ -1,0 +1,10 @@
+{
+  "typeCheckingMode": "basic",
+  "include": ["src", "tests", "app.py", "pages"],
+  "exclude": ["**/__pycache__", "**/.venv"],
+  "extraPaths": ["src"],
+  "venvPath": "..",
+  "venv": ".venv",
+  "reportMissingImports": "error",
+  "pythonVersion": "3.14"
+}

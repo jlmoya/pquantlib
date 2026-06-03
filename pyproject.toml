@@ -8,6 +8,7 @@ dependencies = [
     "pquantlib-contrib",
     "pquantlib-helpers",
     "pquantlib-samples",
+    "pquantlib-showcase",
 ]
 
 [tool.uv.workspace]
@@ -16,6 +17,7 @@ members = [
     "pquantlib-contrib",
     "pquantlib-helpers",
     "pquantlib-samples",
+    "pquantlib-showcase",
 ]
 
 [tool.uv.sources]
@@ -23,6 +25,14 @@ pquantlib = { workspace = true }
 pquantlib-contrib = { workspace = true }
 pquantlib-helpers = { workspace = true }
 pquantlib-samples = { workspace = true }
+pquantlib-showcase = { workspace = true }
+
+# pquantlib-showcase is the interactive demo app (streamlit/plotly/pandas).
+# It is a normal workspace member so `uv sync` + `uv run streamlit run
+# pquantlib-showcase/app.py` work out of the box. The core *library* package
+# `pquantlib` does NOT depend on it — only this dev workspace env does. Its
+# streamlit-boundary code carries its own basic-mode pyright + lighter ruff
+# config and is kept out of the root strict pyright / pytest scopes below.
 
 # === pyright (strict type-checking — analogue to javac compile-time enforcement) ===
 [tool.pyright]
