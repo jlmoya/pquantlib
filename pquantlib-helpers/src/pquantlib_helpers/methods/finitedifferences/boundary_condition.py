@@ -168,18 +168,45 @@ class BoundaryConditionSet:
 
     def __init__(self) -> None:
         """Create an empty set."""
-        self._bc_set: list[list[object]] = []
+        self._bc_set: list[list[BoundaryConditionLike]] = []
 
-    def push_back(self, a: list[object]) -> None:
+    def push_back(self, a: list[BoundaryConditionLike]) -> None:
         """Append a boundary-condition list (one system component)."""
         self._bc_set.append(a)
 
-    def get(self, i: int) -> list[object]:
+    def get(self, i: int) -> list[BoundaryConditionLike]:
         """Return the boundary-condition list for component ``i``."""
         return self._bc_set[i]
 
 
+if TYPE_CHECKING:
+    from typing import Protocol
+
+    class BoundaryConditionLike(Protocol):
+        """Structural type accepted by :class:`BoundaryConditionSet`.
+
+        Mirrors the :class:`~pquantlib_helpers.methods.finitedifferences.mixed_scheme.BoundaryCondition`
+        Protocol in ``mixed_scheme`` (the hook surface consumed by ``MixedScheme``).
+        Defined here so ``BoundaryConditionSet`` can express its element type
+        symmetrically with :class:`~pquantlib_helpers.methods.finitedifferences.step_condition.StepConditionSet`.
+        """
+
+        def set_time(self, t: float) -> None: ...
+
+        def apply_before_applying(self, op: TridiagonalOperator) -> None: ...
+
+        def apply_after_applying(self, a: Array) -> None: ...
+
+        def apply_before_solving(self, op: TridiagonalOperator, a: Array) -> None: ...
+
+        def apply_after_solving(self, a: Array) -> None: ...
+
+else:
+    BoundaryConditionLike = object
+
+
 __all__ = [
+    "BoundaryConditionLike",
     "BoundaryConditionSet",
     "DirichletBC",
     "NeumannBC",

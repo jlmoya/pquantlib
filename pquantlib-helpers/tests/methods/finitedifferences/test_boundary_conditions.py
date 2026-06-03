@@ -14,11 +14,13 @@ import numpy as np
 
 from pquantlib.testing import tolerance
 from pquantlib_helpers.methods.finitedifferences.boundary_condition import (
+    BoundaryConditionLike,
     BoundaryConditionSet,
     DirichletBC,
     NeumannBC,
     Side,
 )
+from pquantlib_helpers.methods.finitedifferences.crank_nicolson import CrankNicolson
 from pquantlib_helpers.methods.finitedifferences.tridiagonal_operator import (
     TridiagonalOperator,
 )
@@ -129,9 +131,57 @@ def test_neumann_after_solving_is_noop() -> None:
 
 def test_boundary_condition_set_stores_and_returns_lists_in_order() -> None:
     bc_set: BoundaryConditionSet = BoundaryConditionSet()
-    lo = [DirichletBC(1.0, Side.Lower)]
-    up = [DirichletBC(2.0, Side.Upper)]
-    bc_set.push_back(lo)  # type: ignore[arg-type]
-    bc_set.push_back(up)  # type: ignore[arg-type]
+    lo: list[BoundaryConditionLike] = [DirichletBC(1.0, Side.Lower)]
+    up: list[BoundaryConditionLike] = [DirichletBC(2.0, Side.Upper)]
+    bc_set.push_back(lo)
+    bc_set.push_back(up)
     assert bc_set.get(0) is lo
     assert bc_set.get(1) is up
+
+
+# --- End-to-end: Dirichlet BC through a real MixedScheme step ---------------
+
+
+def test_dirichlet_lower_preserved_through_crank_nicolson_step() -> None:
+    """A DirichletBC registered with CrankNicolson pins the boundary entry.
+
+    This is the end-to-end consistency check advertised in the module docstring:
+    after a full Crank-Nicolson ``step()``, the lower-boundary entry must equal
+    the Dirichlet value regardless of the interior evolution.
+
+    The four BC hooks fire in order:
+      explicit half: apply_before_applying → apply_to → apply_after_applying
+      implicit half: apply_before_solving  → solve_for → apply_after_solving
+
+    ``apply_after_applying`` hard-pins ``a[0]`` to ``value`` on the explicit
+    half; ``apply_before_solving`` rewrites the operator's first row to the
+    identity and sets ``rhs[0] = value``, so ``solve_for`` returns ``value``
+    at index 0 exactly. We verify both the lower boundary is pinned AND the
+    interior nodes have changed (i.e. the interior evolution did actually run).
+    """
+    pinned_value = 42.0
+    dt = 0.01
+
+    # 5-node grid.  Off-diagonals have length 4 (= n - 1).
+    # The boundary rows will be overwritten by the BC hooks.
+    op = TridiagonalOperator(
+        low=np.array([1.0, 1.0, 1.0, 1.0]),
+        mid=np.array([2.0, 2.0, 2.0, 2.0, 2.0]),
+        high=np.array([1.0, 1.0, 1.0, 1.0]),
+    )
+
+    bc = DirichletBC(pinned_value, Side.Lower)
+    scheme = CrankNicolson(op, bcs=[bc])
+    scheme.set_step(dt)
+
+    # Initial array: all ones except the boundary node.
+    a = np.array([99.0, 1.0, 1.0, 1.0, 1.0])
+    a_out = scheme.step(a, dt)
+
+    # Lower boundary must equal the Dirichlet value exactly.
+    tolerance.exact(float(a_out[0]), pinned_value)
+
+    # Sanity: interior nodes must have changed (scheme actually ran).
+    assert float(a_out[1]) != 1.0, (
+        "interior node 1 was not updated — the scheme may not have run"
+    )

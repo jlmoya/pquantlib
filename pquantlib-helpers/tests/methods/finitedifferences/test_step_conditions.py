@@ -10,6 +10,7 @@ checked against a hand-built payoff/array. ``NullCondition`` is a no-op.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.testing import tolerance
@@ -51,12 +52,8 @@ def test_american_condition_from_payoff_uses_plain_vanilla_intrinsic() -> None:
 
 
 def test_american_condition_requires_construction_args() -> None:
-    try:
+    with pytest.raises(ValueError, match="AmericanCondition requires"):
         AmericanCondition()
-    except ValueError:
-        pass
-    else:  # pragma: no cover
-        raise AssertionError("expected ValueError for empty AmericanCondition()")
 
 
 def test_step_condition_set_dispatches_per_component_in_order() -> None:
