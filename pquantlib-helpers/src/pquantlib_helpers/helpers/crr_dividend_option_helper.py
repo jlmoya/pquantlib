@@ -19,11 +19,14 @@ with ``time_steps = int((exercise.last_date() - reference_date) * 3)``.
 on the vol or r quote by ±v*1e-4 / ±r*1e-4 respectively), exactly matching the
 Java helper's finite-difference approach.
 
-``implied_volatility(target_price)`` delegates to the parent
-:class:`~pquantlib.instruments.vanilla_option.VanillaOption` solver, passing the
-internally-constructed process and standard bounds (accuracy=1e-4, max_eval=100,
-min_vol=1e-7, max_vol=4.0) — matching
-``DividendVanillaOption.impliedVolatility(price, stochProcess, ...)`` in Java.
+``implied_volatility(target_price)`` is solved through the already-wired CRR
+engine by bumping the internal ``_vol_quote`` directly (Brent 1D solve, bounds
+[1e-7, 4.0]).  It does **not** delegate to the parent
+:class:`~pquantlib.instruments.vanilla_option.VanillaOption` path (which would
+build a fresh plain engine whose ``OptionArguments`` are incompatible with
+``DividendVanillaOptionArguments``), nor does it call any Java-style
+``ImpliedVolatilityHelper.clone`` path — both being unavailable here, we
+re-price through the same observable chain that ``npv()`` uses.
 
 Default calendar: :class:`~pquantlib.time.calendars.null_calendar.NullCalendar`.
 Default day counter: :class:`~pquantlib.daycounters.actual_360.Actual360`.
@@ -161,7 +164,16 @@ class CRRDividendOptionHelper(DividendVanillaOption, ABC):
         ±v*1e-4, calls ``super.NPV()`` at each perturbation, returns the central
         finite difference, then restores the original value.
         """
+        from pquantlib.exceptions import LibraryException  # noqa: PLC0415
+
         v = self._vol_quote.value()
+        if v == 0.0:
+            # Java parity: the relative bump v*1e-4 degenerates to 0 at v==0,
+            # producing NaN (0/0) in JQuantLib.  We surface a clear exception
+            # instead of an opaque ZeroDivisionError or silent NaN.
+            raise LibraryException(
+                "vega is undefined at zero volatility (relative bump degenerates)"
+            )
         dv = v * 1.0e-4
         self._vol_quote.set_value(v + dv)
         value_p = self.npv()
@@ -177,7 +189,16 @@ class CRRDividendOptionHelper(DividendVanillaOption, ABC):
         ±r*1e-4, calls ``super.NPV()`` at each perturbation, returns the central
         finite difference, then restores the original value.
         """
+        from pquantlib.exceptions import LibraryException  # noqa: PLC0415
+
         r = self._r_quote.value()
+        if r == 0.0:
+            # Java parity: the relative bump r*1e-4 degenerates to 0 at r==0,
+            # producing NaN (0/0) in JQuantLib.  We surface a clear exception
+            # instead of an opaque ZeroDivisionError or silent NaN.
+            raise LibraryException(
+                "rho is undefined at zero rate (relative bump degenerates)"
+            )
         dr = r * 1.0e-4
         self._r_quote.set_value(r + dr)
         value_p = self.npv()
@@ -199,16 +220,15 @@ class CRRDividendOptionHelper(DividendVanillaOption, ABC):
         Java parity: ``CRRDividendOptionHelper.impliedVolatility(price)`` —
         delegates to ``impliedVolatility(price, stochProcess, 1e-4, 100, 1e-7, 4.0)``.
 
-        # C++ parity note: ``VanillaOption::impliedVolatility`` clones the
-        # process with a fresh ``BlackConstantVol``-backed quote and solves.
-        # That codepath hits ``DividendVanillaOption.setup_arguments``, which
-        # requires ``DividendVanillaOptionArguments`` — but the analytic/FD
-        # engines the parent creates use plain ``OptionArguments``.  The Java
-        # codepath avoids this because ``DividendVanillaOption.impliedVolatility``
-        # in jquantlib delegates straight to the instrument's own engine (which
-        # already carries ``DividendVanillaOptionArguments``).  We replicate
-        # that semantics by bumping our internal vol quote directly and
-        # re-pricing through our own wired engine (same observable chain).
+        # Java parity note: JQuantLib's DividendVanillaOption.impliedVolatility
+        # uses ImpliedVolatilityHelper.clone to wire a FRESH
+        # AnalyticDividendEuropeanEngine / FDDividendAmericanEngine — neither is
+        # ported into pquantlib-helpers yet.  The parent
+        # VanillaOption.implied_volatility path is also unavailable: it builds a
+        # plain AnalyticEuropeanEngine / FdBlackScholesVanillaEngine whose
+        # OptionArguments are incompatible with DividendVanillaOptionArguments.
+        # Both paths being unavailable, this override solves through the
+        # already-wired CRR engine by bumping _vol_quote directly.
         """
         saved_vol = self._vol_quote.value()
 

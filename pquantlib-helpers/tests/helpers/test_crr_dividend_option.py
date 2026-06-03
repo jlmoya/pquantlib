@@ -26,7 +26,10 @@ and magnitude are checked, not exact bit reproduction).
 
 from __future__ import annotations
 
+import pytest
+
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
+from pquantlib.exceptions import LibraryException
 from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.payoffs import OptionType
 from pquantlib.testing import reference_reader, tolerance
@@ -335,3 +338,54 @@ class TestCRRDefaultArgs:
         )
         npv = option.npv()
         assert npv > 0.0, f"expected positive NPV; got {npv}"
+
+
+# ---------------------------------------------------------------------------
+# GUARD tests — zero-vol / zero-rate degenerate cases
+# ---------------------------------------------------------------------------
+
+
+class TestZeroGreekGuards:
+    """Verify vega/rho raise LibraryException at zero vol/rate (review fix)."""
+
+    def test_vega_raises_at_zero_vol(self) -> None:
+        """vega() must raise LibraryException when vol=0 (relative bump = 0)."""
+        ObservableSettings().evaluation_date = _TODAY
+        div_dates, div_amounts = _build_dividend_schedule()
+        option = CRREuropeanDividendOptionHelper(
+            _OPTION_TYPE,
+            _UNDERLYING,
+            _STRIKE,
+            _RISK_FREE_RATE,
+            _DIVIDEND_YIELD,
+            0.0,  # zero vol — degenerate relative bump
+            _SETTLEMENT,
+            _MATURITY,
+            div_dates,
+            div_amounts,
+            _CALENDAR,
+            _DC,
+        )
+        with pytest.raises(LibraryException, match="zero volatility"):
+            option.vega()
+
+    def test_rho_raises_at_zero_rate(self) -> None:
+        """rho() must raise LibraryException when r=0 (relative bump = 0)."""
+        ObservableSettings().evaluation_date = _TODAY
+        div_dates, div_amounts = _build_dividend_schedule()
+        option = CRREuropeanDividendOptionHelper(
+            _OPTION_TYPE,
+            _UNDERLYING,
+            _STRIKE,
+            0.0,  # zero rate — degenerate relative bump
+            _DIVIDEND_YIELD,
+            _VOLATILITY,
+            _SETTLEMENT,
+            _MATURITY,
+            div_dates,
+            div_amounts,
+            _CALENDAR,
+            _DC,
+        )
+        with pytest.raises(LibraryException, match="zero rate"):
+            option.rho()
