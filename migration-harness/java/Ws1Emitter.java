@@ -18,8 +18,8 @@
  *   }
  *
  * next_double_bits allows EXACT-tier reconstruction in Python via:
- *   struct.unpack('!d', struct.pack('!Q', bits))[0]
- * where bits is treated as unsigned (hence '!Q' not '!q').
+ *   struct.unpack('!d', struct.pack('!q', bits))[0]
+ * where bits is the signed long emitted by Double.doubleToLongBits.
  */
 import org.jquantlib.math.randomnumbers.XorShiftRandom;
 

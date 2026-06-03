@@ -43,9 +43,12 @@ class XorShiftRandom:
     Parameters
     ----------
     seed:
-        Initial state.  Must be nonzero; a zero seed freezes the generator
-        at 0 forever (0 XOR anything-shifted = 0).  Provide any nonzero
-        64-bit integer.  Negative values are accepted (masked to 64 bits).
+        Initial state.  Any 64-bit integer; negative values are accepted
+        (masked to 64 bits).  A zero seed is a degenerate fixed point:
+        ``0 XOR (0 << k) = 0`` at every step, so every call to
+        ``next_long()`` returns 0 and every call to ``next_double()``
+        returns 0.0 — matching Java's behavior (no guard is raised).
+        Callers should provide a nonzero seed for a non-trivial sequence.
 
     Examples
     --------

@@ -168,3 +168,18 @@ class TestBehavioural:
         rng_pos = XorShiftRandom((1 << 64) - 1)
         for _ in range(16):
             assert rng_neg.next_long() == rng_pos.next_long()
+
+    def test_zero_seed_produces_zeros(self) -> None:
+        """Zero seed is a degenerate fixed point — matches Java behavior.
+
+        Java XorShiftRandom does NOT guard against a zero seed; xorshift
+        simply returns 0 forever (0 XOR 0 = 0 regardless of shift).  This
+        test documents and locks that degenerate behavior as intentional
+        parity with Java: no ValueError is raised, and every call returns 0.
+        """
+        rng = XorShiftRandom(0)
+        for _ in range(8):
+            assert rng.next_long() == 0, "zero-seed next_long() must return 0"
+        rng2 = XorShiftRandom(0)
+        for _ in range(8):
+            assert rng2.next_double() == 0.0, "zero-seed next_double() must return 0.0"
