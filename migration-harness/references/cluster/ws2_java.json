@@ -1,0 +1,58 @@
+{
+  "scenario": {
+    "type": "Put",
+    "underlying": 36.0,
+    "strike": 40.0,
+    "risk_free_rate": 0.06,
+    "dividend_yield": 0.0,
+    "volatility": 0.2,
+    "today_serial": 35930,
+    "settlement_serial": 35932,
+    "maturity_serial": 36297,
+    "day_counter": "Actual365Fixed",
+    "calendar": "Target",
+    "dividend_amount": 2.06,
+    "dividend_date_serials": [36037, 36129, 36221],
+    "time_steps": 1095
+  },
+  "crr_european": {
+    "npv": 4.446769899656748,
+    "npv_bits": 4616692636243162021,
+    "delta": -0.5915700130242456,
+    "delta_bits": -4619868428329060288,
+    "gamma": 0.05212208976474316,
+    "gamma_bits": 4587672405805147035,
+    "theta": 0.19359285539943483,
+    "theta_bits": 4596142937982043304
+  },
+  "crr_american": {
+    "npv": 4.878573685223225,
+    "npv_bits": 4617178804085105610,
+    "delta": -0.6502604621205421,
+    "delta_bits": -4619339791759699712,
+    "gamma": 0.05675693373512265,
+    "gamma_bits": 4588340357215640522,
+    "theta": 0.22613729686817918,
+    "theta_bits": 4597315475057816248
+  },
+  "fd_european": {
+    "npv": 8.084115674976763,
+    "npv_bits": 4620740570597439067,
+    "delta": -0.664969979814112,
+    "delta_bits": -4619207300202892590,
+    "gamma": 0.023780048621289525,
+    "gamma_bits": 4582511353767444210,
+    "theta": 0.0,
+    "theta_bits": 0
+  },
+  "fd_american": {
+    "npv": 4.485424210487617,
+    "npv_bits": 4616736157128125562,
+    "delta": -0.6964969291102026,
+    "delta_bits": -4618923330688688586,
+    "gamma": 0.08651006717333867,
+    "gamma_bits": 4590898127963735242,
+    "theta": 0.0,
+    "theta_bits": 0
+  }
+}

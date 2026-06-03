@@ -1,0 +1,25 @@
+{
+  "scenario": {
+    "type": "Put",
+    "underlying": 36,
+    "strike": 40,
+    "risk_free_rate": 0.059999999999999998,
+    "dividend_yield": 0,
+    "volatility": 0.20000000000000001,
+    "today_serial": 35930,
+    "settlement_serial": 35932,
+    "maturity_serial": 36297,
+    "dividend_amount": 2.06,
+    "dividend_date_serials": [36037, 36129, 36221]
+  },
+  "analytic_dividend_european": {
+    "npv": 8.0825570376995231,
+    "delta": -0.84982109069387091,
+    "gamma": 0.038869351710636893
+  },
+  "analytic_european_no_dividend": {
+    "npv": 3.8443077915968407,
+    "delta": -0.55045167248338511,
+    "gamma": 0.054964980970803802
+  }
+}

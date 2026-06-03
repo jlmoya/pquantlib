@@ -732,3 +732,13 @@ target_link_libraries(cluster_w12c_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     CMS swaplet rate (LOOSE — Hagan convexity adjustment). ===
 add_executable(cluster_w12b_probe cluster_w12b/probe.cpp)
 target_link_libraries(cluster_w12b_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === W-S2 cluster (sibling-packages): SECONDARY economic-sanity reference for
+#     the retired-API dividend-option compat layer (pquantlib-helpers).
+#     DividendVanillaOption / BinomialDividendVanillaEngine /
+#     BlackScholesDividendLattice do NOT exist in v1.42.1; this probe emits the
+#     closed-form AnalyticDividendEuropeanEngine(process, DividendSchedule)
+#     European value (+ no-dividend AnalyticEuropeanEngine context) as a LOOSE
+#     ~1e-3 economic check for the compat European CRR-tree NPV. ===
+add_executable(cluster_ws2_probe cluster_ws2/probe.cpp)
+target_link_libraries(cluster_ws2_probe PRIVATE ${QUANTLIB_LIBRARY})
