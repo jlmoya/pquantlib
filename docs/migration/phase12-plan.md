@@ -99,13 +99,25 @@ Single cluster (the three classes are tightly coupled). Hosted **in `pquantlib-h
 
 **Core primitives to reuse (verified present):** `OneAssetOption`/`VanillaOption` (`option.py`), `Dividend`/`FixedDividend` (`cashflows/dividend.py`), `BinomialVanillaEngine`, CRR + `ExtendedTian` lattices, `GeneralizedBlackScholesProcess`. **Verify at dispatch:** whether `DividendSchedule` needs adding (audit said MISSING) — if so add a thin `dividend_schedule.py` = `list[Dividend]` alias + builder in `pquantlib_helpers` (it is retired-API glue, not core).
 
-**Probe `cluster_ws2`** (C++ v1.42.1): price the exact scenarios from the Java `CRRDividendOptionTest`/`FDDividendOptionTest` (spot, strike, r, q, vol, dividend dates+amounts, expiry) using v1.42.1 `AnalyticDividendEuropeanEngine` (European) and `FdBlackScholesVanillaEngine` with a `DividendSchedule` (American/escrowed). Emit NPV + greeks to `references/cluster/ws2.json`.
+### Cross-validation strategy (corrected — same-algorithm peer)
 
-- [ ] **Step 1** — extract the test scenarios from the two Java test files; write `probe.cpp`; build; emit `ws2.json`.
-- [ ] **Step 2** — failing tests asserting the binomial/FD dividend engines reproduce the analytic NPV. **Tolerance:** binomial/FD-tree-vs-analytic does not converge to `loose` (1e-8); expect to need `tolerance.custom(..., reason="CRR/FD tree discretization vs C++ closed-form dividend engine; N steps")`. **If the required tolerance is looser than 1e-8 → A2 pause: stop and report the achieved tolerance for approval** before committing.
-- [ ] **Step 3** — implement the three classes.
-- [ ] **Step 4** — green triad + commit `feat(helpers/ws2): DividendVanillaOption + BinomialDividendVanillaEngine + BlackScholesDividendLattice (retired-API compat layer)`.
+These are **bucket-A retired-API** engines: C++ v1.42.1 deleted them, so there is no C++ same-method peer. A tree/FD price compared against a C++ *closed form* disagrees by **O(1/N) discretization error** (~1e-3 at the helper's N, ~10⁸ steps needed for 1e-8) **plus a possible dividend-model difference** (escrowed-spot vs dividend-node-shift) that no N closes. So tree-vs-analytic is the wrong gate. Instead:
+
+- **Primary gate — JQuantLib Java output, same algorithm + same N → TIGHT (target EXACT).** The Python port reproduces the Java `BinomialDividendVanillaEngine` / `FDDividend*Engine` step-for-step. This is the real parity test and needs **no A2 waiver**.
+- **Secondary economic sanity — C++ `AnalyticDividendEuropeanEngine`, European only**, at a documented ~1e-3 absolute tolerance via `tolerance.custom(..., reason="CRR/FD tree discretization vs C++ closed-form dividend engine at N=<steps>; O(1/N) convergence")`. This is a sanity bound, **not** the correctness gate, so its >1e-8 tolerance is acceptable by design rather than an A2 exception.
+
+**References:**
+- `references/cluster/ws2.json` (C++ v1.42.1): the test scenarios from the two Java suites priced via `AnalyticDividendEuropeanEngine` (European) + `FdBlackScholesVanillaEngine` with a `DividendSchedule` (American/escrowed). Used for the **secondary** sanity check only.
+- `references/cluster/ws2_java.json` (JQuantLib Java): the **same** scenarios priced via the Java `BinomialDividendVanillaEngine` / `FDDividend*Engine` at fixed `N` (NPV + greeks). Used for the **primary** TIGHT/EXACT gate. Emitted by a small `migration-harness/java/Ws2Emitter.java` run against the jquantlib classpath (the retired engines live there).
+
+- [ ] **Step 1a** — extract the scenarios from the two Java test files (`CRRDividendOptionTest`, `FDDividendOptionTest`); write the C++ `probe.cpp`; build; emit `ws2.json` (secondary sanity).
+- [ ] **Step 1b** — write `Ws2Emitter.java` pricing the same scenarios with the Java retired engines at fixed `N`; emit `ws2_java.json` (primary gate).
+- [ ] **Step 2** — failing tests: **primary** assertions against `ws2_java.json` via `tolerance.tight` (drop to `exact` where the arithmetic is deterministic across JVM↔CPython); **secondary** European assertions against `ws2.json` via `tolerance.custom(abs=~1e-3, reason=...)`. Run → FAIL.
+- [ ] **Step 3** — implement the three classes; match the Java tree construction (node count `N`, up/down/prob, dividend handling) exactly so the primary gate holds at TIGHT/EXACT.
+- [ ] **Step 4** — green triad + commit `feat(helpers/ws2): DividendVanillaOption + BinomialDividendVanillaEngine + BlackScholesDividendLattice (retired-API compat layer, Java same-algorithm cross-validated)`.
 - [ ] **Step 5** — tag `pquantlib-siblings-ws2-complete`.
+
+**A2 note:** the only >1e-8 tolerance here is the *secondary* economic sanity check, which is loose **by design** (tree-vs-closed-form), not a correctness gate. The correctness gate (primary) is TIGHT/EXACT, so **no A2 pause is expected in W-S2**. If the primary Java gate itself cannot reach TIGHT (e.g. an unavoidable JVM↔CPython float-order difference), *that* is the real surprise → pause and report.
 
 ---
 
@@ -127,7 +139,7 @@ Single cluster. Depends on W-S2.
 
 Each base builds a `BlackScholesMertonProcess` from flat r/q/vol `SimpleQuote`s (`FlatForward` + `BlackConstantVol`), attaches the W-S2 engine, exposes `vega`/`rho` (bump-and-revalue) + `implied_volatility`. Default `NullCalendar` + `Actual360` (per Java). Java constructor overload sets → Python keyword defaults (`cal=NullCalendar()`, `dc=Actual360()`).
 
-- [ ] **Step 1** — port the two test suites verbatim (same scenarios) against `ws2.json` where they assert numeric values; run → FAIL.
+- [ ] **Step 1** — port the two test suites verbatim (same scenarios). Numeric assertions follow the W-S2 strategy: **primary** TIGHT/EXACT against `ws2_java.json` (same-algorithm Java output), **secondary** European sanity at ~1e-3 against `ws2.json` (C++ analytic). Run → FAIL.
 - [ ] **Step 2** — implement the 2 bases + 4 concrete helpers.
 - [ ] **Step 3** — green triad + commit `feat(helpers/ws3): 6 dividend-option helper builders + test suites (1:1)`.
 - [ ] **Step 4** — tag `pquantlib-siblings-ws3-complete`.
@@ -145,13 +157,20 @@ Closes `docs/carve-outs.md:172`. Largest wave. May split into 2 clusters (instru
 - `instruments/bonds/convertible_bonds.py` — `ConvertibleBond` base + `ConvertibleFixedCouponBond` (+ `ConvertibleZeroCouponBond`, `ConvertibleFloatingRateBond` if the sample needs only the fixed-coupon variant, port just that one and note the others as follow-ons).
 - `pricingengines/bond/binomial_convertible_engine.py` — `BinomialConvertibleEngine[Tree]` (Tsiveriotis–Fernandes credit-adjusted tree).
 
-**Probe `cluster_ws4`** (C++ v1.42.1): construct the `ConvertibleBonds` sample's instrument (conversion ratio, credit spread, dividends, callability) and price via `BinomialConvertibleEngine`; emit NPV to `references/cluster/ws4.json`.
+### Cross-validation strategy (same-method tree-vs-tree)
+
+Unlike W-S2, `BinomialConvertibleEngine` **is a real v1.42.1 class**, so the proper peer is the **C++ same engine, same method, same `N`** — tree-vs-identical-tree, which agrees step-for-step (no model difference, only shared discretization that is identical on both sides). So the gate is **TIGHT** against C++, *not* a loose tree-vs-analytic comparison.
+
+- **Primary gate — C++ `BinomialConvertibleEngine`, same `N` → TIGHT.** Match the C++ tree construction (steps, lattice, Tsiveriotis–Fernandes credit-adjusted rollback) exactly. No A2 waiver expected.
+- No analytic closed form exists for a callable convertible, so there is no separate "analytic" sanity tier; the C++ same-engine value *is* the reference.
+
+**Probe `cluster_ws4`** (C++ v1.42.1): construct the `ConvertibleBonds` sample's instrument (conversion ratio, credit spread, dividends, callability) and price via `BinomialConvertibleEngine` at fixed `N`; emit NPV (and, if cheap, a few intermediate tree diagnostics) to `references/cluster/ws4.json`.
 
 - [ ] **Step 1** — verify which of `CallabilitySchedule`/convertible engine already exist in core (grep Python-idiom names); scope to only the genuinely-missing pieces.
-- [ ] **Step 2** — write `probe.cpp`; build; emit `ws4.json`.
-- [ ] **Step 3** — failing test asserting convertible NPV (tree convergence → likely `custom` tolerance with justification; **A2 pause if looser than 1e-8**).
-- [ ] **Step 4** — implement callability + instrument + engine.
-- [ ] **Step 5** — green triad + commit(s) `feat(core/ws4): ConvertibleFixedCouponBond + CallabilitySchedule + BinomialConvertibleEngine (closes carve-out)`.
+- [ ] **Step 2** — write `probe.cpp` (fixed `N`, record it in the JSON so the Python test uses the identical step count); build; emit `ws4.json`.
+- [ ] **Step 3** — failing test asserting convertible NPV via `tolerance.tight` against the **same-`N`** C++ value. (If TIGHT proves unreachable despite matching `N` and method, that signals an actual algorithm divergence to fix — not a tolerance to loosen. A documented `custom` >1e-8 tolerance here would be an **A2 pause**, but it should not be needed.)
+- [ ] **Step 4** — implement callability + instrument + engine, matching the C++ tree step-for-step.
+- [ ] **Step 5** — green triad + commit(s) `feat(core/ws4): ConvertibleFixedCouponBond + CallabilitySchedule + BinomialConvertibleEngine (closes carve-out, C++ same-method cross-validated)`.
 - [ ] **Step 6** — tag `pquantlib-siblings-ws4-complete`.
 
 ---
@@ -219,5 +238,5 @@ Per-sample TDD: smoke test (run-to-completion) is mandatory; add a numeric cross
 - "samples as runnable scripts + pytest smoke, complete/incomplete/pending" → W-S5 form + runner + smoke suite. ✓
 - ConvertibleBonds = COMPLETE sample (user chose port-subsystem) → W-S4 → W-S5-C. ✓
 - XorShift Java-output ground truth → W-S1 step 1. ✓
-- **A2 watch:** tree/FD-vs-analytic tolerances (W-S2, W-S4) may exceed 1e-8 → explicit pause-and-report gates inserted.
+- **A2 (corrected):** correctness gates now use **same-algorithm peers** — Java same-engine output for the retired W-S2/W-S3 dividend engines (TIGHT/EXACT), C++ same-`N` engine for the W-S4 convertible (TIGHT). No A2 pause is expected. The only >1e-8 tolerance is W-S2's *secondary* economic sanity check (tree-vs-C++-analytic, European-only), which is loose **by design**, not a correctness exception. A2 fires only if a *primary* same-algorithm gate cannot reach TIGHT — which would indicate a real bug to fix, not a tolerance to relax.
 - **Audit-accuracy risk:** W-S5-B first step re-verifies each "blocked" class before bucketing.
