@@ -72,7 +72,6 @@ class BlackScholesDividendLattice(BlackScholesLattice):
     ) -> None:
         # Java parity: ``super(tree, riskFreeRate, end, steps)``.
         super().__init__(tree, risk_free_rate, end, steps)
-        self._div_tree: BinomialTree = tree
 
         # Java parity (BlackScholesDividendLattice.java:55-77):
         # ``map`` maps each time-grid element to an index into ``list``;
@@ -103,8 +102,11 @@ class BlackScholesDividendLattice(BlackScholesLattice):
 
         Java parity: ``tree.underlying(i, index) - list[map[index]]``
         (note the ``index`` — not ``i`` — lookup; see module-level note).
+        ``super().underlying(i, index)`` delegates to ``self._tree.underlying(i, index)``
+        (BlackScholesLattice.underlying — bsm_lattice.py), behaviour-identical to the
+        former ``self._div_tree`` reference.
         """
-        return self._div_tree.underlying(i, index) - self._list[self._map[index]]
+        return super().underlying(i, index) - self._list[self._map[index]]
 
 
 __all__ = ["BlackScholesDividendLattice"]

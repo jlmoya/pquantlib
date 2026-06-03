@@ -163,7 +163,12 @@ class BinomialDividendVanillaEngine(
         super().__init__(
             DividendVanillaOptionArguments(), DividendVanillaOptionResults()
         )
-        qassert.require(time_steps > 0, "timeSteps must be positive")
+        qassert.require(
+            time_steps >= 2,
+            "at least 2 time steps required: calculate() reads grid.at(2), "
+            "lattice.underlying(2, 2), and grid.at(1) for the Odegaard "
+            "three-point greek extraction (matches BinomialVanillaEngine guard)",
+        )
         self._process: GeneralizedBlackScholesProcess = process
         self._time_steps: int = time_steps
         self._tree_builder: DividendTreeBuilder = tree_builder
@@ -296,6 +301,7 @@ class BinomialDividendVanillaEngine(
         )
 
 
+# duplicated from BinomialVanillaEngine._black_scholes_theta (binomial_engine.py)
 def _black_scholes_theta(
     *,
     value: float,

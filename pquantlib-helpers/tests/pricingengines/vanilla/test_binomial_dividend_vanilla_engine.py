@@ -45,7 +45,10 @@ sanity bracket, not a 1e-3 convergence gate.
 
 from __future__ import annotations
 
+import pytest
+
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
+from pquantlib.exceptions import LibraryException
 from pquantlib.exercise import AmericanExercise, EuropeanExercise
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.processes.black_scholes_merton_process import (
@@ -278,3 +281,52 @@ class TestSecondaryCppEconomicSanity:
                 "algorithm comparison)"
             ),
         )
+
+
+# ---------------------------------------------------------------------------
+# Guard test — time_steps < 2 must raise cleanly
+# ---------------------------------------------------------------------------
+
+
+class TestTimeStepsGuard:
+    """BinomialDividendVanillaEngine rejects time_steps < 2 at construction time.
+
+    calculate() reads grid.at(2), lattice.underlying(2, 2), and grid.at(1)
+    for the Odegaard three-point greek extraction, so time_steps == 1 would
+    crash with an IndexError deep in the rollback.  The guard must surface a
+    clean LibraryException before calculate() is ever called.
+    """
+
+    def _make_process(self) -> BlackScholesMertonProcess:
+        """Minimal BSM process for guard-only tests (no pricing performed)."""
+        dc = Actual365Fixed()
+        calendar = TARGET()
+        settlement = Date(int(_SCEN["settlement_serial"]))
+        spot = SimpleQuote(float(_SCEN["underlying"]))
+        return BlackScholesMertonProcess(
+            x0=spot,
+            dividend_ts=FlatForward.from_rate(settlement, float(_SCEN["dividend_yield"]), dc),
+            risk_free_ts=FlatForward.from_rate(settlement, float(_SCEN["risk_free_rate"]), dc),
+            black_vol_ts=BlackConstantVol(
+                reference_date=settlement,
+                calendar=calendar,
+                day_counter=dc,
+                volatility=float(_SCEN["volatility"]),
+            ),
+        )
+
+    def test_time_steps_zero_raises(self) -> None:
+        process = self._make_process()
+        with pytest.raises(LibraryException, match="at least 2 time steps required"):
+            BinomialDividendVanillaEngine(process, 0)
+
+    def test_time_steps_one_raises(self) -> None:
+        process = self._make_process()
+        with pytest.raises(LibraryException, match="at least 2 time steps required"):
+            BinomialDividendVanillaEngine(process, 1)
+
+    def test_time_steps_two_is_accepted(self) -> None:
+        """time_steps == 2 is the minimum accepted value — construction must succeed."""
+        process = self._make_process()
+        # Just assert no exception is raised; we do not price here.
+        BinomialDividendVanillaEngine(process, 2)
