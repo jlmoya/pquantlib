@@ -22,7 +22,7 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
 | Phase 6 (Python 3.14 modernization) | jquantlib `jdk25-modernization-design.md` (analogue: dataclasses, match-case, PEP 695 generics, t-strings) |
 | Phase 7 (final closure) | jquantlib `phase2-complete` + `truly-complete` + `final` tags |
 
-## Phase index (current state — 2026-05-26)
+## Phase index (current state — 2026-06-03)
 
 ### Phase 0 — Bootstrap (closed)
 
@@ -106,6 +106,15 @@ For every PQuantLib phase doc, there's a corresponding JQuantLib doc at `/Users/
   - [`phase5-l5-E-design.md`](phase5-l5-E-design.md) — exotic instruments + 6 analytic engines + BivariateCumulativeNormalDistribution (closes Phase 1 carve-out) (+97).
 - Tags: `pquantlib-phase5-l5-A-complete` @ `aa19340` (pilot), `pquantlib-phase5-complete` @ `d322fca` (final).
 - Final test count: **1883/0/0**. pyright + ruff clean.
+
+### Phase 12 — Sibling-packages migration (closed) — **`pquantlib-siblings-complete`**
+
+- [`phase12-design.md`](phase12-design.md) — binding spec (the API-era reconciliation + provenance buckets + wave structure).
+- [`phase12-plan.md`](phase12-plan.md) — executable plan.
+- [`phase12-completion.md`](phase12-completion.md) — per-wave contribution table (W-S1…W-S5) + the provenance-bucket framing + bugs found/surfaced.
+- The three JQuantLib sibling Maven modules (`jquantlib-contrib` / `jquantlib-helpers` / `jquantlib-samples`) ported into the workspace members `pquantlib-contrib` / `pquantlib-helpers` / `pquantlib-samples`. **W-S1** `XorShiftRandom` (`pquantlib-siblings-ws1-complete` @ `4b3d923`); **W-S2** dividend-option compat primitives (`@ e17d705`); **W-S3** 6 helper builders + retired pre-1.0 FD framework (`@ 3653f6e`); **W-S4** ConvertibleBond subsystem → **core** (closes the carve-out; `@ be001ae`); **W-S5** sample programs + `AllSamples` runner + smoke suite (`@ 553d4c1`, 12 COMPLETE + 1 INCOMPLETE + 3 PENDING).
+- API-era reconciliation: the siblings targeted ~QL-1.0; core stays pure v1.42.1, so retired-API classes are hosted in `pquantlib-helpers` (bucket A), the JQuantLib-original `XorShiftRandom` in `pquantlib-contrib` (bucket B), and the genuine-v1.42.1 ConvertibleBond in core (bucket C).
+- Tag: **`pquantlib-siblings-complete`**. Test count: **4237 passed / 0 failed / 3 skipped** (the 3 PENDING samples).
 
 ### Phase 11 — Full C++ v1.42.1 closure (closed; 12-wave mega-phase) — **`pquantlib-100-complete`**
 
