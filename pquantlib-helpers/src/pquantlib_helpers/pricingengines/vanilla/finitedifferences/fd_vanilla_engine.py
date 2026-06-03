@@ -16,14 +16,20 @@ and Neumann boundary-condition setup. Concrete schemes
 :class:`~pquantlib_helpers.pricingengines.vanilla.finitedifferences.fd_step_condition_engine.FDStepConditionEngine`)
 subclass it and override :meth:`calculate`.
 
-# Java arg-order note: the JQuantLib ``FDVanillaEngine`` constructor is
-# ``(process, timeSteps, gridPoints, timeDependent)``, but several JQuantLib
-# subclasses call ``super(process, gridPoints, timeSteps, timeDependent)`` with
-# the middle two SWAPPED. Because the FD dividend chain always passes
-# ``timeSteps == gridPoints`` from the helper (``new Engine(process, timeSteps)``
-# defaults ``gridPoints`` to the same value via the dividend-engine ctor chain),
-# the swap is benign on the cross-validated path. We keep the C++/declared order
-# ``(process, time_steps, grid_points, time_dependent)`` here.
+# Java arg-order note: this ``FDVanillaEngine`` constructor is
+# ``(process, timeSteps, gridPoints, timeDependent)``. The multi-period dividend
+# subclass ``FDMultiPeriodEngine`` declares its middle two parameters in the
+# REVERSE order ``(gridPoints, timeSteps)`` and is reached via
+# ``FDDividendEngineBase.super(process, timeSteps, gridPoints, ...)``, so
+# positionally its ``timeStepPerPeriod`` ends up bound to the *gridPoints* value
+# (the ``timeSteps`` ctor arg becomes a dead parameter on that path). That swap
+# is NOT benign when ``timeSteps != gridPoints`` (e.g. the W-S2 ts=1095/gp=100
+# scenario): it is exactly why the Java European result is bit-invariant to
+# ``timeSteps``. The swap is reproduced where Java performs it, inside
+# ``FDMultiPeriodEngine.__init__``; this base keeps the declared
+# ``(process, time_steps, grid_points, time_dependent)`` order. The single-period
+# ``FDStepConditionEngine`` (American) does NOT swap — it genuinely rolls back
+# with ``timeSteps``.
 """
 
 from __future__ import annotations

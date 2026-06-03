@@ -56,15 +56,32 @@ class FDMultiPeriodEngine(FDVanillaEngine):
         grid_points: int,
         time_dependent: bool,
     ) -> None:
-        """Bind the process + grid sizing; record steps-per-period."""
+        """Bind the process + grid sizing; record steps-per-period.
+
+        Java parity — the parameter-name SWAP. ``FDMultiPeriodEngine``'s Java
+        constructor declares its middle two parameters as ``(gridPoints,
+        timeSteps)`` — the reverse of its ``FDVanillaEngine`` superclass
+        ``(timeSteps, gridPoints)`` — and is reached from
+        ``FDDividendEngineBase`` via ``super(process, timeSteps, gridPoints,
+        timeDependent)`` (FDDividendEngineBase.java:85). Positionally, that maps
+        the caller's ``gridPoints`` into the Java ``timeSteps`` parameter, and
+        Java then sets ``timeStepPerPeriod = timeSteps`` (FDMultiPeriodEngine.java:92).
+        Net effect: ``timeStepPerPeriod`` is bound to the *gridPoints* value, and
+        the ``timeSteps`` ctor argument is a dead parameter on the multi-period
+        dividend path (only ``gridPoints`` drives both the spatial grid and the
+        steps-per-period). This is WHY the Java European result is bit-invariant
+        to ``timeSteps``. We keep the declared ``(time_steps, grid_points)``
+        order on our own signature for readability, then reproduce the swap here
+        so ``_time_step_per_period`` tracks ``grid_points`` exactly as Java does.
+        """
         super().__init__(process, time_steps, grid_points, time_dependent)
         self.events: list[Dividend] = []
         self.stopping_times: list[float] = []
         self.prices: SampledCurve = SampledCurve(0)
         self.step_condition: StepCondition = NullCondition()
         self.model: StandardFiniteDifferenceModel | None = None
-        # Java records timeStepPerPeriod = the timeSteps ctor arg.
-        self._time_step_per_period: int = time_steps
+        # Java parity: timeStepPerPeriod := gridPoints (see the ctor swap above).
+        self._time_step_per_period: int = grid_points
 
     # ------------------------------------------------------------------
     def setup_arguments_with_schedule(
