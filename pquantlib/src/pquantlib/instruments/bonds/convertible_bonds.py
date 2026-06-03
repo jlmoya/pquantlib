@@ -230,6 +230,8 @@ class ConvertibleZeroCouponBond(ConvertibleBond):
         # !!! notional forcibly set to 100 (C++ convertiblebonds.cpp:69-72).
         self._cashflows = []
         self._set_single_redemption(100.0, redemption, self._maturity_date)
+        for cf in self._cashflows:
+            cf.register_with(self)
 
 
 class ConvertibleFixedCouponBond(ConvertibleBond):
