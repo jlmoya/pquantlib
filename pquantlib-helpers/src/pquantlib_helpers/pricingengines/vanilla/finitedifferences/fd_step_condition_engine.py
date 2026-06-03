@@ -98,6 +98,19 @@ class FDStepConditionEngine(FDVanillaEngine):
         self.prices = SampledCurve(self.intrinsic_values)
         self.control_prices = SampledCurve(self.intrinsic_values)
         # A deep copy of the FD operator: same coefficients, independent arrays.
+        # Java parity: ``FDStepConditionEngine.calculate`` (jquantlib-final) takes
+        # the same snapshot — ``new TridiagonalOperator(finiteDifferenceOperator)``
+        # — at this point in calculate().  The control operator is therefore a
+        # constant-coefficient snapshot of the BSM operator evaluated at t=T.
+        # When ``time_dependent=True`` the *main* operator's coefficients are
+        # refreshed each time step (via ``operator.set_time(t)``), but the control
+        # operator has no ``time_setter`` and its coefficients NEVER update.  This
+        # silently produces an inaccurate control-variate result for time-varying
+        # vol/rate/dividend curves.  ``time_dependent=True`` is therefore NOT a
+        # validated or accurate execution path for ``FDStepConditionEngine`` (it is
+        # not covered by any reference probe).  The only validated path is
+        # ``time_dependent=False`` (the constructor default), where both operators
+        # hold the same constant-coefficient snapshot throughout the rollback.
         self.control_operator = TridiagonalOperator(
             low=self.finite_difference_operator.lower_diagonal(),
             mid=self.finite_difference_operator.diagonal(),

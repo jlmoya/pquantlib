@@ -127,6 +127,55 @@ class TestFDDividendEuropeanEngine:
         tolerance.tight(option.gamma(), float(_JAVA["fd_european"]["gamma"]))
 
 
+class TestFDDividendEuropeanBitInvariance:
+    """FDDividendEuropeanEngine NPV is bit-invariant to ``time_steps``.
+
+    The ``FDMultiPeriodEngine`` param-swap fix sets ``_time_step_per_period :=
+    grid_points`` (= 100), making ``time_steps`` irrelevant to the European
+    rollback grid.  This test re-prices at a completely different ``time_steps``
+    (200 instead of 1095) and asserts the NPV still matches the Java reference
+    to TIGHT tolerance.  A future revert of the swap fix would make the two
+    engines diverge because the per-period step count would track ``time_steps``
+    instead of ``grid_points``, causing a measurable NPV drift (~7e-8 relative)
+    that this test would catch.
+    """
+
+    def test_npv_invariant_to_time_steps(self) -> None:
+        """European NPV matches Java reference regardless of time_steps value."""
+        underlying = float(_SCEN["underlying"])
+        strike = float(_SCEN["strike"])
+        r = float(_SCEN["risk_free_rate"])
+        q = float(_SCEN["dividend_yield"])
+        vol = float(_SCEN["volatility"])
+        dc = Actual365Fixed()
+        calendar = TARGET()
+
+        settlement = Date(int(_SCEN["settlement_serial"]))
+        maturity = Date(int(_SCEN["maturity_serial"]))
+        div_dates = [Date(int(s)) for s in _SCEN["dividend_date_serials"]]
+        div_amounts = [float(_SCEN["dividend_amount"])] * len(div_dates)
+
+        spot = SimpleQuote(underlying)
+        r_ts = FlatForward.from_rate(settlement, r, dc)
+        q_ts = FlatForward.from_rate(settlement, q, dc)
+        vol_ts = BlackConstantVol(
+            reference_date=settlement, calendar=calendar, day_counter=dc, volatility=vol
+        )
+        process = BlackScholesMertonProcess(
+            x0=spot, dividend_ts=q_ts, risk_free_ts=r_ts, black_vol_ts=vol_ts
+        )
+
+        payoff = PlainVanillaPayoff(OptionType.Put, strike)
+        exercise = EuropeanExercise(maturity)
+        option = DividendVanillaOption(payoff, exercise, div_dates, div_amounts)
+        # Use a completely different time_steps (200 vs the reference 1095).
+        # grid_points stays at its default (100), which is what actually controls
+        # the FDMultiPeriodEngine per-period step count after the param-swap fix.
+        option.set_pricing_engine(FDDividendEuropeanEngine(process, time_steps=200))
+
+        tolerance.tight(option.npv(), float(_JAVA["fd_european"]["npv"]))
+
+
 class TestFDDividendAmericanEngine:
     """FDDividendAmericanEngine reproduces JQuantLib's FD American NPV."""
 
