@@ -742,3 +742,11 @@ target_link_libraries(cluster_w12b_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     ~1e-3 economic check for the compat European CRR-tree NPV. ===
 add_executable(cluster_ws2_probe cluster_ws2/probe.cpp)
 target_link_libraries(cluster_ws2_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === WS3-FD1 cluster: legacy FD linear-algebra core. TridiagonalOperator
+#     (applyTo / solveFor / SOR / identity + operator algebra); BSMOperator
+#     coefficient stencil rebuilt into a real TridiagonalOperator;
+#     FiniteDifferenceModel + CrankNicolson<TridiagonalOperator> rollback of a
+#     BSM operator over a payoff vector (deprecated old-FD-framework headers). ===
+add_executable(cluster_ws3fd1_probe cluster_ws3fd1/probe.cpp)
+target_link_libraries(cluster_ws3fd1_probe PRIVATE ${QUANTLIB_LIBRARY})
