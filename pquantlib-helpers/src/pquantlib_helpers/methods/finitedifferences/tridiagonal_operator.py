@@ -272,7 +272,6 @@ class TridiagonalOperator:
             )
             err = float(temp * temp)
             result[0] += temp
-            i = 1
             for i in range(1, n - 1):
                 temp = (
                     omega
@@ -307,6 +306,8 @@ class TridiagonalOperator:
 
         C++ parity: ``static TridiagonalOperator identity(Size)``.
         """
+        if size == 0:
+            raise LibraryException("cannot create identity operator of size 0")
         return TridiagonalOperator(
             low=np.zeros(size - 1, dtype=np.float64),
             mid=np.ones(size, dtype=np.float64),
@@ -342,12 +343,13 @@ class TridiagonalOperator:
 
 
 def _close(a: float, b: float) -> bool:
-    """C++ ``close(a, b)`` — 42-ULP-ish proximity; here a tight isclose.
+    """C++ ``close(a, b)`` — tight isclose; sufficient to detect a near-zero diagonal pivot.
 
     C++ uses ``QuantLib::close`` (a 42-ULP relative comparison). For the
     zero-division guards in solveFor we only need ``b == 0.0`` detection, for
     which ``math.isclose`` with a tiny absolute floor is equivalent in
-    practice. The guard never fires on well-posed operators.
+    practice. The ``rel_tol=4.2e-15`` threshold is ~19 ULPs (not 42), which is
+    tight enough for pivot detection. The guard never fires on well-posed operators.
     """
     return math.isclose(a, b, rel_tol=4.2e-15, abs_tol=0.0) or a == b
 

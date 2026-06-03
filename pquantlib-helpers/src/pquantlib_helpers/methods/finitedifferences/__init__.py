@@ -22,15 +22,21 @@ from pquantlib_helpers.methods.finitedifferences.explicit_euler import ExplicitE
 from pquantlib_helpers.methods.finitedifferences.finite_difference_model import (
     FiniteDifferenceModel,
     StandardFiniteDifferenceModel,
+    StepCondition,
 )
-from pquantlib_helpers.methods.finitedifferences.mixed_scheme import MixedScheme
+from pquantlib_helpers.methods.finitedifferences.mixed_scheme import (
+    BoundaryCondition,
+    MixedScheme,
+)
 from pquantlib_helpers.methods.finitedifferences.operator import Operator
 from pquantlib_helpers.methods.finitedifferences.tridiagonal_operator import (
+    TimeSetter,
     TridiagonalOperator,
 )
 
 __all__ = [
     "BSMOperator",
+    "BoundaryCondition",
     "CrankNicolson",
     "DMinus",
     "DPlus",
@@ -41,5 +47,7 @@ __all__ = [
     "MixedScheme",
     "Operator",
     "StandardFiniteDifferenceModel",
+    "StepCondition",
+    "TimeSetter",
     "TridiagonalOperator",
 ]

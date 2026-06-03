@@ -24,7 +24,7 @@ class DPlusMinus(TridiagonalOperator):
         """Build the second-difference operator on ``grid_points`` nodes, step ``h``."""
         super().__init__(grid_points)
         h2 = h * h
-        # boundaries left at zero (linear extrapolation).
+        # boundaries left at zero (natural second-derivative boundary).
         self.set_first_row(0.0, 0.0)
         self.set_mid_rows(1.0 / h2, -2.0 / h2, 1.0 / h2)
         self.set_last_row(0.0, 0.0)

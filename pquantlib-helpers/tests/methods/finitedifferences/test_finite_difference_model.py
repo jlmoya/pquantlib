@@ -24,6 +24,7 @@ from pquantlib_helpers.methods.finitedifferences.explicit_euler import ExplicitE
 from pquantlib_helpers.methods.finitedifferences.finite_difference_model import (
     FiniteDifferenceModel,
     StandardFiniteDifferenceModel,
+    StepCondition,
 )
 from pquantlib_helpers.methods.finitedifferences.mixed_scheme import MixedScheme
 
@@ -128,3 +129,62 @@ def test_crank_nicolson_step_combines_both_halves() -> None:
     expected = ident.add(op.multiply(0.5 * dt)).solve_for(intermediate)
     for g, w in zip(got, expected, strict=True):
         tolerance.tight(float(g), float(w))
+
+
+# --- stopping-time interior hit (dividend-date logic) -----------------------
+#
+# A stopping time strictly inside a step interval triggers the sub-step split
+# in _rollback_impl: the evolver advances to the stop, the condition fires at
+# the stop, then the remainder of the big step completes.  This path is the
+# foundation for dividend-date application in FD-beta.
+
+
+class _RecordingCondition:
+    """StepCondition that records every (array, t) pair it receives.
+
+    Satisfies the :class:`StepCondition` Protocol: ``apply_to(a, t) -> None``.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[float] = []
+
+    def apply_to(self, a: np.ndarray, t: float) -> None:
+        self.calls.append(t)
+
+
+# mypy/pyright structural check: _RecordingCondition satisfies StepCondition.
+_: StepCondition = _RecordingCondition()
+
+
+def test_rollback_stopping_time_inside_step_triggers_sub_step() -> None:
+    """A stopping time strictly inside a step interval splits the big step.
+
+    Setup: 4 steps from t=1.0 to t=0.0  →  dt = 0.25.
+    Step 0 covers [1.0 → 0.75], step 1 covers [0.75 → 0.50], etc.
+    We plant a stopping time at t=0.60, which lies strictly inside step 1
+    (0.50 < 0.60 < 0.75).
+
+    Expected behaviour:
+    - The condition fires once at t=0.60 (the interior stop).
+    - It also fires at each regular step boundary (0.75, 0.50, 0.25, 0.0)
+      for a total of 5 calls.
+    - In particular the call at 0.60 must appear, proving the sub-step split
+      occurred and not merely the boundary fires.
+    """
+    op = BSMOperator(7, 0.1, 0.05, 0.01, 0.20)
+    stopping_time = 0.60
+    model = FiniteDifferenceModel(CrankNicolson(op), [stopping_time])
+    cond = _RecordingCondition()
+    model.rollback(_payoff(), 1.0, 0.0, 4, cond)
+
+    # The interior stop must have been visited.
+    assert stopping_time in cond.calls, (
+        f"stopping time {stopping_time} not found in condition call times: {cond.calls}"
+    )
+    # It must appear exactly once (only one stopping time was registered).
+    assert cond.calls.count(stopping_time) == 1
+    # The fragment split means more calls occurred than there are whole steps
+    # (4 steps produce 4 boundary fires plus 1 interior fire = 5 total).
+    assert len(cond.calls) == 5, (
+        f"expected 5 condition calls (4 boundaries + 1 interior), got: {cond.calls}"
+    )
