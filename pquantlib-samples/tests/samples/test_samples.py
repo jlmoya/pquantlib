@@ -44,7 +44,8 @@ def test_complete_samples_run(mod: str, capsys: pytest.CaptureFixture[str]) -> N
     _run_sample(mod, capsys)
 
 
-@pytest.mark.parametrize("mod", all_samples.INCOMPLETE)
+@pytest.mark.skipif(not all_samples.INCOMPLETE, reason="no incomplete samples yet")
+@pytest.mark.parametrize("mod", all_samples.INCOMPLETE or ("__none__",))
 def test_incomplete_samples_run(mod: str, capsys: pytest.CaptureFixture[str]) -> None:
     _run_sample(mod, capsys)
 

@@ -20,32 +20,42 @@ corresponding name out of ``PENDING`` into ``COMPLETE`` / ``INCOMPLETE``.
 
 from __future__ import annotations
 
-# --- W-S5-A: foundation + simplest samples (this cluster) -----------------
+# Fully-ported samples whose ``run()`` executes to completion (Java ``complete``
+# plus everything W-S5-B verified runs cleanly in pquantlib).
 COMPLETE: tuple[str, ...] = (
     "calendars",
     "dates",
     "swap",
     "repo",
+    "convertible_bonds",
+    "processes",
+    "yield_curve_term_structures",
+    "fra",
+    "discrete_hedging",
+    "sobol_chart_sample",
+    "volatility_term_structures",
+    "bermudan_swaption",
 )
 
-INCOMPLETE: tuple[str, ...] = ()
+# Samples that run but whose port is not exhaustive (mirrors Java ``incomplete``).
+# ``equity_options``: the American analytic approximations (Barone-Adesi/Whaley,
+# Bjerksund/Stensland, Ju Quadratic, Integral) are not ported in pquantlib, so
+# those rows print N/A; everything else (Black-Scholes, 4 binomial trees, FD,
+# Monte Carlo) runs.
+INCOMPLETE: tuple[str, ...] = ("equity_options",)
 
-# Names of samples slated for later W-S5 clusters. Kept as forward references
-# so the runner mirrors Java ``AllSamples.pending``; they are skipped (not
-# imported) by the smoke suite until their module files land.
+# Samples genuinely blocked by a core class that does NOT exist in pquantlib
+# (verified by re-inspection). Their modules exist but ``run()`` raises
+# NotImplementedError; the smoke suite skips them (see ``docs/carve-outs.md``):
+#   * bonds                   — needs a functional FixedRateBondHelper /
+#                               BondHelper.implied_quote (deferred core stub).
+#   * replication             — needs CompositeInstrument (not ported).
+#   * cox_ross_with_hull_white — needs the extended binomial-tree family
+#                               (ExtendedCoxRossRubinstein) over a HullWhiteProcess.
 PENDING: tuple[str, ...] = (
     "bonds",
-    "yield_curve_term_structures",
-    "bermudan_swaption",
-    "fra",
-    "processes",
     "replication",
-    "discrete_hedging",
     "cox_ross_with_hull_white",
-    "sobol_chart_sample",
-    "equity_options",
-    "volatility_term_structures",
-    "convertible_bonds",
 )
 
 __all__: list[str] = ["COMPLETE", "INCOMPLETE", "PENDING"]

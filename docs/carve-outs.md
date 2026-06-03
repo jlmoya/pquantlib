@@ -293,3 +293,42 @@ The audit script matches by `class Name`. The ~1000 raw "missing" names split in
 The **complete** vanilla + American + analytic-exotic + calibration surface, plus: all short-rate models (Vasicek/HullWhite/CIR/ExtendedCIR/G2++/BlackKarasinski/Gsr/**MarkovFunctional**) + equity stochastic-vol (Heston/Bates + **all Bates variants** + **GjrGarch** + **PiecewiseTimeDependentHeston** + **HestonSLV** MC) + Gaussian1d (model + engines + swaption vol) + the full SABR/ZABR/SVI/NoArbSABR smile-cube family + full inflation (Tier-1 + piecewise + experimental YoY-optionlet-stripping) + full credit (Tier-1 CDS + experimental CDO/basket/NthToDefault) + the complete commodity/energy stack + variance-gamma + FFT engines + CLV models + **the entire MarketModels/BGM/LMM domain** (W9–W11, with two passing canonical end-to-end validations) + the experimental finite-difference / exotic-option / heuristic-optimizer trees + the core cashflows CMS/CappedFloored/Digital coupon families (W12).
 
 **Remaining backlog (none blocking; all documented):** EquityCashFlow batch; CMS/overnight cap-floor pricing; PathwiseVegasAccountingEngine (Giles-Glasserman); MarkovFunctional caplet-calibration + Gaussian1d-engine edge cases; the W8-B `cluster_w8b/probe.cpp` reconstruction (reference JSON committed, tests pass). These are small follow-ups against a functionally-complete library.
+
+## Sample programs (`pquantlib-samples`) — PENDING samples
+
+The sibling-migration W-S5 wave ports the JQuantLib `org.jquantlib.samples`
+programs into `pquantlib-samples/src/pquantlib_samples/`. Most run to completion
+(COMPLETE) or run with a documented minor gap (INCOMPLETE: `equity_options` — the
+American analytic approximations Barone-Adesi/Whaley, Bjerksund/Stensland, Ju
+Quadratic, IntegralEngine are not ported, so those rows print `N/A`). Three are
+genuinely blocked by a core class that does not exist in pquantlib (verified by
+re-inspection); their modules exist with a `run()` that raises
+`NotImplementedError`, and they sit in `all_samples.PENDING` (skipped by the
+smoke suite):
+
+- **`bonds`** — QuantLib `Examples/Bonds`. Bootstraps a depo-bond discounting
+  curve from fixed-rate bond helpers. Blocked: pquantlib ships `BondHelper` but
+  its `implied_quote()` is an explicit deferred stub (`"requires L3 Bond +
+  DiscountingBondEngine (deferred to L3)"`, never closed) and there is no
+  functional `FixedRateBondHelper`. The deposit/swap helper legs bootstrap, but
+  the depo-bond curve — the spine of the sample — does not. (Java AllSamples also
+  kept Bonds in its `pending` bucket.)
+- **`replication`** — QuantLib `Examples/Replication` (static replication of a
+  down-and-out barrier via `CompositeInstrument`). Blocked: `CompositeInstrument`
+  is not ported to pquantlib (no class of that name in any module). The Java
+  original was itself an incomplete stub.
+- **`cox_ross_with_hull_white`** — prices options with a
+  `BinomialVanillaEngine<ExtendedCoxRossRubinstein>` over a `HullWhiteProcess`.
+  Blocked: pquantlib ports neither the *extended* binomial-tree family
+  (`ExtendedCoxRossRubinstein` etc., which accept a time-varying drift — the
+  ported `BinomialVanillaEngine` only accepts a constant-coefficient
+  `GeneralizedBlackScholesProcess`) nor an equity-style `HullWhiteProcess` (only
+  `HullWhiteForwardProcess` + the short-rate `HullWhite` model exist). The Java
+  original threw `UnsupportedOperationException` for the same reason.
+
+Note also: `bermudan_swaption` (COMPLETE) calibrates Hull-White with
+`TreeSwaptionEngine` rather than the analytic Jamshidian engine, because
+pquantlib's `JamshidianSwaptionEngine` → `OneFactorAffineModel.discount_bond`
+path has a multi-factor signature issue (`'float' object is not subscriptable`)
+that surfaces during calibration; the tree-engine calibration path is exercised
+instead (matching the C++ HW2 / Black-Karasinski legs). Small core follow-up.

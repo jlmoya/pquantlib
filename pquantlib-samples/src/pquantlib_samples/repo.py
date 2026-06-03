@@ -159,9 +159,7 @@ def compute() -> RepoResult:
 
     spot_income = bond_fwd.spot_income(repo_curve)
     fwd_income = spot_income / repo_curve.discount(repo_delivery_date)
-    market_repo_rate = repo_curve.zero_rate(
-        repo_delivery_date, repo_compounding, repo_compound_freq
-    ).rate()
+    market_repo_rate = repo_curve.zero_rate(repo_delivery_date, repo_compounding, repo_compound_freq).rate()
 
     return RepoResult(
         bond_clean_price=bond.clean_price(),

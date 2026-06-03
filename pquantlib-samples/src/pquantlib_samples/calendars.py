@@ -37,16 +37,13 @@ def run() -> None:
     advanced = today + 90
     holidays = nyse.holiday_list(today, advanced, True)
     print(
-        f"The holidays between dateToday = {today} till the date dateAdvanced = {advanced} "
-        "are as shown below"
+        f"The holidays between dateToday = {today} till the date dateAdvanced = {advanced} are as shown below"
     )
     buffer = "".join(f"{d}::" for d in holidays)
     print(f"The holidays separated by :: are = {buffer}")
 
     # Business days via the is_business_day loop.
-    business_via_is_bus_day = [
-        d for d in _date_range(today, advanced) if nyse.is_business_day(d)
-    ]
+    business_via_is_bus_day = [d for d in _date_range(today, advanced) if nyse.is_business_day(d)]
     size_via_loop = len(business_via_is_bus_day)
 
     # Business days via the calendar API.
@@ -55,14 +52,9 @@ def run() -> None:
         print("The sizes are same")
 
     # Business days via the is_holiday loop.
-    business_via_is_hol_day = [
-        d for d in _date_range(today, advanced) if not nyse.is_holiday(d)
-    ]
+    business_via_is_hol_day = [d for d in _date_range(today, advanced) if not nyse.is_holiday(d)]
     if business_via_is_bus_day == business_via_is_hol_day:
-        print(
-            "The lists businessDaysInBetweenUsingIsBusDay and "
-            "businessDaysInBetweenUsingIsHolDay are same"
-        )
+        print("The lists businessDaysInBetweenUsingIsBusDay and businessDaysInBetweenUsingIsHolDay are same")
 
     # --- Calendar arithmetic ---------------------------------------------
     # First holiday on/after today.
@@ -75,9 +67,7 @@ def run() -> None:
     # Next business day after that holiday.
     next_business_day = nyse.advance_period(first_holiday, Period(1, TimeUnit.Days))
     if nyse.is_business_day(next_business_day):
-        print(
-            f"NextBusinessDayFromFirstHolidayFromToday = {next_business_day} is a business date"
-        )
+        print(f"NextBusinessDayFromFirstHolidayFromToday = {next_business_day} is a business date")
 
     # Adjust today under each business-day convention.
     _print_adjust_conventions(nyse, today)
@@ -92,9 +82,7 @@ def run() -> None:
     holidays_from_api = joint.holiday_list(today, advanced, True)
     holidays_from_loop = tuple(d for d in _date_range(today, advanced) if joint.is_holiday(d))
     if holidays_from_api == holidays_from_loop:
-        print(
-            "Lists listOfHoliDays and holidayListObtainedUsingCalAPI of joint calendar are same"
-        )
+        print("Lists listOfHoliDays and holidayListObtainedUsingCalAPI of joint calendar are same")
 
     clock.stop_clock()
     clock.log()
@@ -119,11 +107,9 @@ def _print_adjust_conventions(nyse: UnitedStates, today: Date) -> None:
         print(f"NextModified_PrecidingBusinessDay = {mod_preceding} from today is a business date")
 
     unadjusted = nyse.adjust(today, BusinessDayConvention.Unadjusted)
+    # Java parity: Calendars.java:152 uses the modified-preceding day as the guard here; reproduced verbatim.
     if nyse.is_business_day(mod_preceding):
-        print(
-            f"NextUnadjustedBusinessDay = {unadjusted} from today is a business date "
-            "and is same as today"
-        )
+        print(f"NextUnadjustedBusinessDay = {unadjusted} from today is a business date and is same as today")
 
 
 def _print_advance_overloads(nyse: UnitedStates, today: Date) -> None:
