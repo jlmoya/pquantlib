@@ -254,6 +254,7 @@ class BinomialDividendVanillaEngine(
         lattice = BlackScholesDividendLattice(
             tree,
             r_rate,
+            q_rate,
             maturity,
             self._time_steps,
             rfdc,
@@ -284,12 +285,21 @@ class BinomialDividendVanillaEngine(
         p0 = option.present_value()
         s1 = lattice.underlying(1, 1)
 
-        delta0 = (p1 - p0) / (s1 - s0)
+        # Escrowed-spot model: the lattice runs on the escrowed spot
+        # (lattice.underlying(0, 0) == S0 - D), and a unit move in the
+        # observable spot S maps one-for-one onto the escrowed spot (D is
+        # fixed). So the Odegaard finite differences must all be taken on the
+        # lattice's escrowed scale; the denominator anchor is the escrowed root,
+        # NOT the raw process spot s0. (Under the old node-indexed escrow s0
+        # coincided with the root; under the multiplicative escrow it does not.)
+        s_root = lattice.underlying(0, 0)
+
+        delta0 = (p1 - p0) / (s1 - s_root)
         delta1 = (p2h - p1) / (s2 - s1)
 
         results.value = p0
         results.delta = delta0
-        results.gamma = 2.0 * (delta1 - delta0) / (s2 - s0)
+        results.gamma = 2.0 * (delta1 - delta0) / (s2 - s_root)
         results.theta = _black_scholes_theta(
             value=p0,
             delta=delta0,

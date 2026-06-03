@@ -35,7 +35,9 @@ Marsaglia 2003 xorshift64 RNG. **No C++ equivalent** — a JQuantLib convenience
 
 ## W-S2 — dividend-option compat primitives → `pquantlib-helpers` (bucket A)
 
-`DividendVanillaOption` + `BinomialDividendVanillaEngine` + `BlackScholesDividendLattice`. These classes were **removed from C++ v1.42.1**; hosted in the helpers package (as the Java siblings do, not in jquantlib core), built on v1.42.1 core primitives, cross-validated TIGHT vs JQuantLib Java same-engine output (`migration-harness/references/cluster/ws2_java.json`). **Faithfully reproduces a real JQuantLib bug** — the lattice drops the dividend amount — for behavioral parity with the Java sibling.
+`DividendVanillaOption` + `BinomialDividendVanillaEngine` + `BlackScholesDividendLattice`. These classes were **removed from C++ v1.42.1**; hosted in the helpers package (as the Java siblings do, not in jquantlib core), built on v1.42.1 core primitives, cross-validated TIGHT vs JQuantLib Java same-engine output (`migration-harness/references/cluster/ws2_java.json`).
+
+**Correctness fix (cross-repo, post-Phase-12).** `BlackScholesDividendLattice` originally reproduced a real JQuantLib bug — the escrow accumulator dropped the dividend cash amount and used a node-`index`-keyed shift, giving a European NPV (~4.45) that converged to nothing meaningful. This was **fixed in BOTH JQuantLib and PQuantLib** to the standard, provably-convergent **escrowed-spot** binomial: the lattice scales every CRR node by `(S0 − D)/S0` where `D = Σ amountᵢ·exp(−(r−q)·tᵢ)` over dividends in `(referenceDate, expiry]`. Because a CRR tree is multiplicative, this reproduces the tree built from the escrowed spot `S0 − D` — exactly the model C++ `AnalyticDividendEuropeanEngine` prices in closed form. The European binomial NPV now **converges to that analytic value** (~8.0826; rel diff ~1.8e-5 at N=1095) and agrees with the FD European (~8.0841). The Odegaard greek extraction was re-anchored on the escrowed root `lattice.underlying(0,0)` (under the multiplicative escrow it no longer coincides with the raw spot), so delta/gamma are taken consistently on the escrowed scale (European delta ≈ −0.84, gamma ≈ 0.037, both tracking the analytic). American is the consistent escrowed approximation (~9.98 = intrinsic; the escrowed spot ~30 sits at the early-exercise boundary, so the put is at intrinsic with delta −1 / gamma 0 / vega 0 — no analytic oracle exists). The Java same-algorithm reference was regenerated against the rebuilt JQuantLib classpath; the FD `fd_*` values were verified byte-identical (the FD engine was untouched).
 
 ## W-S3 — 6 helper builders + the legacy FD framework (bucket A)
 
@@ -71,7 +73,7 @@ Foundation (`StopClock` timing helper, `AllSamples` runner with COMPLETE/INCOMPL
 
 **Found + fixed:**
 - W-S3-FD param-swap (above) — reproduced faithfully for Java behavioral parity.
-- W-S2 lattice dividend-drop bug — reproduced faithfully for Java behavioral parity.
+- W-S2 lattice dividend-drop bug — **corrected in BOTH JQuantLib and PQuantLib** to the escrowed-spot model (see the W-S2 section). The European binomial now converges to C++ `AnalyticDividendEuropeanEngine`; the libraries are correct, not bug-reproduced.
 
 **Surfaced core follow-ups** (documented in `docs/carve-outs.md`; not re-discovered here):
 1. `JamshidianSwaptionEngine` → `OneFactorAffineModel.discount_bond` has a multi-factor signature issue (`'float' object is not subscriptable`) that surfaces during Hull-White calibration; the `bermudan_swaption` sample uses the tree-engine calibration path instead. Small core follow-up.

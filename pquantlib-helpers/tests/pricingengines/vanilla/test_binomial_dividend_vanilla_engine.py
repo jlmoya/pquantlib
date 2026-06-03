@@ -1,46 +1,42 @@
-"""Cross-validation tests for the retired-API dividend-option compat layer.
+"""Cross-validation tests for the dividend-option compat layer.
 
 These exercise pquantlib-helpers' DividendVanillaOption +
 BinomialDividendVanillaEngine + BlackScholesDividendLattice against two
 references.
 
-PRIMARY gate (correctness) — JQuantLib Java same-algorithm output
------------------------------------------------------------------
-``migration-harness/references/cluster/ws2_java.json`` holds the NPV + greeks
-produced by the JQuantLib ``CRR{European,American}DividendOptionHelper`` (which
-drive ``BinomialDividendVanillaEngine<CoxRossRubinstein>``) on the canonical
-test scenario. The Python compat engine is a line-for-line port of that Java
-engine, so it must reproduce these values.
-
-Tolerance: NPV / delta / gamma all reach ``tight`` (abs 1e-14 / rel 1e-12) for
-both European and American — the algorithm is bit-faithful to Java; the only
-JVM<->CPython divergence is libm transcendental last-bit noise (``exp`` /
-``log`` / ``sqrt``) accumulated over 1095 tree steps, which stays inside
-``tight``. Theta is the one exception: it is derived from value/delta/gamma via
-the BSM PDE, whose ``-0.5*sigma^2*S0^2*gamma`` term amplifies gamma's last-bit
-rounding by ~25.9x, producing a ~1e-11 gap — a documented LOOSE-tier
-``custom`` check, not an algorithm divergence. The ``*_bits`` fields are
-retained in the reference for forensic comparison, not asserted.
-
-SECONDARY gate (economic sanity) — C++ v1.42.1 analytic, European only
-----------------------------------------------------------------------
+CORRECTNESS gate — European converges to the C++ analytic
+---------------------------------------------------------
 ``migration-harness/references/cluster/ws2.json`` holds the v1.42.1
-``AnalyticDividendEuropeanEngine`` (escrowed-dividend closed form) NPV and the
-no-dividend ``AnalyticEuropeanEngine`` NPV for the European scenario.
+``AnalyticDividendEuropeanEngine`` European NPV (~8.0826). The fixed
+``BlackScholesDividendLattice`` now implements the escrowed-spot model: it runs
+a plain CRR tree on the escrowed spot ``S0 - D`` (``D`` = PV of dividends in
+``(referenceDate, expiry]``), which is exactly the model the C++ analytic engine
+prices in closed form. The European binomial NPV therefore *converges* to that
+analytic value as the tree refines (O(1/N) discretization). At N=1095 the
+relative difference is ~1.8e-5, and the binomial European also agrees with the
+FD European (~8.0841) — three mutually-confirming estimates of the same number.
+This is the proof the fix is correct.
 
-NOTE (notable finding): the original plan expected the European compat NPV to
-match the C++ analytic value within ~1e-3. It does NOT, and CANNOT, because the
-retired JQuantLib ``BlackScholesDividendLattice`` uses a structurally different
-dividend model: its escrow accumulator sums the *bare discount factor*
-``exp(-r t)`` per dividend and drops the dividend cash amount
-(BlackScholesDividendLattice.java:67). With a 2.06 dividend amount this
-under-subtracts the escrow, so the lattice NPV (~4.45) sits strictly between
-the no-dividend analytic (~3.84) and the full-escrow C++ analytic (~8.08).
-Reproducing this Java behaviour verbatim is the whole point of a compat layer,
-so the meaningful economic check here is a *bracketing* one: the dividend
-lattice NPV must exceed the no-dividend analytic value (the discrete dividends
-do raise a put), and must stay below the full-escrow analytic value. This is a
-sanity bracket, not a 1e-3 convergence gate.
+SAME-ALGORITHM gate — JQuantLib Java same-algorithm output
+----------------------------------------------------------
+``migration-harness/references/cluster/ws2_java.json`` holds the NPV + greeks
+produced by the (now-corrected) JQuantLib
+``CRR{European,American}DividendOptionHelper`` on the canonical scenario. The
+Python compat engine is a line-for-line port of that Java engine, so it must
+reproduce these values. NPV / delta / gamma reach ``tight`` (abs 1e-14 / rel
+1e-12); the only JVM<->CPython divergence is libm transcendental last-bit noise
+over 1095 tree steps, which stays inside ``tight``. Theta is the one exception:
+derived from value/delta/gamma via the BSM PDE, whose ``-0.5*sigma^2*S0^2*gamma``
+term amplifies gamma's last-bit rounding, producing a ~1e-11 gap — a documented
+LOOSE-tier ``custom`` check, not an algorithm divergence.
+
+American (escrowed approximation; no analytic oracle)
+-----------------------------------------------------
+The escrowed spot (~30.02) is deep below the strike (40), so the American put
+sits at the early-exercise boundary: its value (~9.98) is essentially the
+intrinsic value (40 - 30.02), with delta -1 and gamma 0. This is the correct
+escrowed-American result; it is checked TIGHT against the regenerated Java
+reference (there is no closed-form American oracle).
 """
 
 from __future__ import annotations
@@ -130,7 +126,55 @@ def _build_option(exercise_kind: str) -> DividendVanillaOption:
 
 
 # ---------------------------------------------------------------------------
-# PRIMARY gate — Java same-algorithm
+# CORRECTNESS gate — European converges to the C++ analytic escrowed value
+# ---------------------------------------------------------------------------
+
+
+class TestEuropeanConvergesToAnalytic:
+    """The fixed escrowed-spot engine converges to AnalyticDividendEuropeanEngine.
+
+    This is the proof of correctness. The escrowed-spot binomial prices the same
+    model the C++ ``AnalyticDividendEuropeanEngine`` solves in closed form, so
+    the European NPV must converge to the C++ analytic value (~8.0826) as the
+    tree refines (O(1/N) discretization). It must also agree with the FD
+    European estimate (~8.0841) — three independent estimates of one number.
+    """
+
+    def test_european_converges_to_cpp_analytic(self) -> None:
+        option = _build_option("european")
+        analytic = float(_CPP["analytic_dividend_european"]["npv"])
+        tolerance.custom(
+            option.npv(),
+            analytic,
+            abs_tol=0.0,
+            rel_tol=5e-5,
+            reason=(
+                "CRR tree vs C++ escrowed analytic; O(1/N) discretization at "
+                "N=1095 (observed rel diff ~1.8e-5). The escrowed-spot binomial "
+                "prices the exact model AnalyticDividendEuropeanEngine solves in "
+                "closed form, so it converges to ~8.0826"
+            ),
+        )
+
+    def test_european_agrees_with_fd(self) -> None:
+        """CRR European ≈ FD European — two discretizations of the same model."""
+        option = _build_option("european")
+        fd_european = float(_JAVA["fd_european"]["npv"])
+        tolerance.custom(
+            option.npv(),
+            fd_european,
+            abs_tol=0.0,
+            rel_tol=5e-4,
+            reason=(
+                "CRR vs FD discretization of the same escrowed-dividend European "
+                "option; both converge to the C++ analytic ~8.0826, and agree "
+                "with each other to O(1/N) tree + FD grid error"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# SAME-ALGORITHM gate — Java same-algorithm
 # ---------------------------------------------------------------------------
 
 
@@ -199,34 +243,12 @@ class TestPrimaryJavaCrossValidation:
 
 
 # ---------------------------------------------------------------------------
-# SECONDARY gate — C++ analytic economic sanity (European bracket)
+# Degenerate-limit sanity — empty dividend schedule reduces to plain CRR
 # ---------------------------------------------------------------------------
 
 
-class TestSecondaryCppEconomicSanity:
-    """European compat NPV brackets between no-dividend and full-escrow analytic.
-
-    See the module docstring: the retired JQuantLib lattice's escrow model
-    differs structurally from the C++ analytic engine, so this is a bracket
-    sanity check, not a convergence gate. The bracket itself uses LOOSE-tier
-    margins (>1e-8) BY DESIGN — tree-vs-analytic + model divergence.
-    """
-
-    def test_european_npv_brackets_analytic(self) -> None:
-        option = _build_option("european")
-        npv = option.npv()
-        no_div = float(_CPP["analytic_european_no_dividend"]["npv"])
-        full_escrow = float(_CPP["analytic_dividend_european"]["npv"])
-        # Discrete dividends raise a put above the no-dividend value.
-        assert npv > no_div, (
-            f"dividend lattice NPV {npv} should exceed no-dividend "
-            f"analytic {no_div}"
-        )
-        # ...but the JQuantLib escrow under-subtracts vs full escrow.
-        assert npv < full_escrow, (
-            f"dividend lattice NPV {npv} should stay below full-escrow "
-            f"analytic {full_escrow}"
-        )
+class TestNoDividendLimit:
+    """With zero dividends the escrow scale is 1.0 → plain CRR European."""
 
     def test_no_dividend_limit_matches_analytic(self) -> None:
         """With zero dividends the lattice should converge to the plain CRR.

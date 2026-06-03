@@ -266,17 +266,32 @@ class TestCRREuropeanGreeksSanity:
 
 
 class TestCRRAmericanGreeksSanity:
-    """Sanity checks for bump-and-revalue greeks (American)."""
+    """Sanity checks for bump-and-revalue greeks (American).
 
-    def test_vega_positive(self) -> None:
+    Under the corrected escrowed-spot model the escrowed spot (~30.02) is deep
+    below the strike (40), so the American put sits exactly at the early-exercise
+    boundary: its value is the intrinsic value (~9.98), independent of
+    volatility. Hence vega is ~0 here — a correct economic consequence of the
+    escrowed model, not a bug.
+    """
+
+    def test_vega_is_zero_at_exercise_boundary(self) -> None:
+        """Deep-ITM escrowed American put = intrinsic ⇒ vega ≈ 0."""
         option = _make_american()
         vega = option.vega()
-        assert vega > 0.0, f"vega expected positive; got {vega}"
+        assert abs(vega) < 1e-6, (
+            f"deep-ITM escrowed American put is at the early-exercise boundary "
+            f"(value = intrinsic), so vega should be ~0; got {vega}"
+        )
 
-    def test_vega_order_of_magnitude(self) -> None:
+    def test_value_is_intrinsic(self) -> None:
+        """The escrowed American put prices at its intrinsic value."""
         option = _make_american()
-        vega = option.vega()
-        assert 0.0 < vega < 100.0, f"vega out of expected range: {vega}"
+        # escrowed spot = S0 - PV(dividends) ≈ 30.018; intrinsic = K - escrowed.
+        npv = option.npv()
+        assert 9.9 < npv < 10.1, (
+            f"escrowed American put expected at intrinsic ~9.98; got {npv}"
+        )
 
     def test_rho_negative(self) -> None:
         """Higher r → lower American put price → rho < 0."""

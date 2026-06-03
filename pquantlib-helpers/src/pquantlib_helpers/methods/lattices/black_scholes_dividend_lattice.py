@@ -1,41 +1,38 @@
 """BlackScholesDividendLattice — binomial BSM lattice with discrete dividends.
 
-# Retired-API compat layer — NOT a port of C++ QuantLib v1.42.1.
+# Retired-API compat layer — NOT a port of C++ QuantLib v1.42.1, but
+# functionally equivalent: it converges to the same escrowed-dividend value
+# that v1.42.1 ``AnalyticDividendEuropeanEngine`` computes in closed form.
 
 Java parity:
 ``org.jquantlib.methods.lattices.BlackScholesDividendLattice`` (jquantlib-helpers).
 
-Extends pquantlib core's
-:class:`~pquantlib.methods.lattices.bsm_lattice.BlackScholesLattice` by shifting
-every node's underlying price down by the accumulated escrow of future
-dividends. The escrow is built once in the constructor from the dividend
-schedule and a per-time-grid index ``map`` so ``underlying(i, index)`` is a
-single array lookup, exactly as in the Java original.
+Escrowed-spot model
+-------------------
+The discrete-dividend option is priced by running a plain CRR binomial tree on
+an *escrowed* initial spot ``S0' = S0 - D``, where ``D`` is the present value of
+all dividends paid in ``(referenceDate, expiry]``::
 
-# Java-bug parity (DELIBERATE — required for the primary cross-validation gate)
-#
-# Two faithful reproductions of quirks in the Java source:
-#
-# 1. The escrow accumulator ``_list[k]`` sums ``exp(-r * t_k)`` — the *bare
-#    discount factor* of each dividend date — and does NOT multiply by the
-#    dividend cash amount.  The Java line is
-#        list[i] = list[i-1] + Math.exp(-riskFreeRate * time);
-#    (BlackScholesDividendLattice.java:67).  Economically this under-subtracts
-#    the escrow for dividends whose amount != 1.0, so the resulting NPV is a
-#    JQuantLib-specific approximation, NOT the C++ analytic escrowed-dividend
-#    value.  We reproduce it verbatim because pquantlib-helpers' job is to be a
-#    behaviour-identical compat layer for the retired JQuantLib API.
-#
-# 2. ``underlying(i, index)`` subtracts ``_list[_map[index]]`` — indexed by the
-#    node ``index`` rather than the time slice ``i``.  The Java line is
-#        return tree.underlying(i, index) - list[map[index]];
-#    (BlackScholesDividendLattice.java:81).  We keep the same indexing so the
-#    grid the discretized option reads (and the Greek-extraction probes) match
-#    Java bit-for-bit.
-#
-# These are documented, intentional divergences from economically-correct
-# behaviour; the v1.42.1 ``AnalyticDividendEuropeanEngine`` is the correct
-# model and is what pquantlib core ships for new code.
+    D = sum_i amount_i * riskFreeDiscount(t_i) / dividendYieldDiscount(t_i)
+      = sum_i amount_i * exp(-(r_rate - q_rate) * t_i)   (continuous flat rates).
+
+A CRR tree is multiplicative — every node value is ``S0 * u^a * d^b`` — so
+scaling every node by ``scale = (S0 - D) / S0`` yields ``(S0 - D) * u^a * d^b``,
+i.e. exactly the tree that would be built starting from the escrowed spot
+``S0 - D``. The escrow adjustment therefore stays entirely inside
+:meth:`underlying` as a single multiplicative scale, with no per-node
+``map``/``list`` machinery.
+
+For European options this converges (as ``steps -> infinity``) to the C++
+``AnalyticDividendEuropeanEngine`` (plain Black on the escrowed spot). For
+American options it is the consistent escrowed approximation (no closed-form
+oracle exists).
+
+This corrects the previous implementation, which (a) dropped the dividend cash
+amount from the escrow accumulator and (b) subtracted a node-``index``-keyed
+escrow rather than a uniform spot shift — neither of which converged to the
+analytic escrowed-dividend value. The fix is mirrored in JQuantLib's
+``BlackScholesDividendLattice``.
 """
 
 from __future__ import annotations
@@ -43,6 +40,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from pquantlib import qassert
 from pquantlib.methods.lattices.bsm_lattice import BlackScholesLattice
 
 if TYPE_CHECKING:
@@ -54,7 +52,7 @@ if TYPE_CHECKING:
 
 
 class BlackScholesDividendLattice(BlackScholesLattice):
-    """Binomial BSM lattice with a discrete-dividend escrow adjustment.
+    """Binomial BSM lattice with a discrete-dividend escrowed-spot adjustment.
 
     Java parity: ``BlackScholesDividendLattice<T>``.
     """
@@ -63,50 +61,41 @@ class BlackScholesDividendLattice(BlackScholesLattice):
         self,
         tree: BinomialTree,
         risk_free_rate: float,
+        q_rate: float,
         end: float,
         steps: int,
         day_counter: DayCounter,
-        grid: TimeGrid,
+        grid: TimeGrid,  # kept for ctor parity (escrow no longer grid-indexed)
         reference_date: Date,
         cash_flow: list[Dividend],
     ) -> None:
         # Java parity: ``super(tree, riskFreeRate, end, steps)``.
         super().__init__(tree, risk_free_rate, end, steps)
 
-        # Java parity (BlackScholesDividendLattice.java:55-77):
-        # ``map`` maps each time-grid element to an index into ``list``;
-        # ``list`` accumulates the (bare) discount factor of each dividend.
-        grid_size = len(grid)
-        # map from TimeGrid element to internal list of dividend amounts.
-        self._map: list[int] = [0] * grid_size
-        # list of total amount of dividends to be discounted; list[0] = 0.
-        self._list: list[float] = [0.0] * (len(cash_flow) + 1)
+        # Escrowed-dividend PV over dividends in (referenceDate, expiry].
+        d = 0.0
+        for dividend in cash_flow:
+            time = day_counter.year_fraction(reference_date, dividend.date())
+            # keep only dividends strictly after the reference date, up to maturity
+            if time > 0.0 and time <= end:
+                d += dividend.amount() * math.exp(-(risk_free_rate - q_rate) * time)
 
-        last_idx = 0
-        for i in range(1, len(self._list)):
-            # Java parity: time = dc.yearFraction(referenceDate, cashFlow[i-1].date()).
-            time = day_counter.year_fraction(reference_date, cash_flow[i - 1].date())
-            # Java parity: list[i] = list[i-1] + exp(-r * time).  NOTE the
-            # missing dividend amount — see module-level Java-bug parity note.
-            self._list[i] = self._list[i - 1] + math.exp(-risk_free_rate * time)
-            # grid element immediately greater than current dividend time.
-            curr_idx = grid.closest_index(time) + 1
-            for j in range(last_idx, curr_idx):
-                self._map[j] = i - 1
-            last_idx = curr_idx
-        for j in range(last_idx, len(self._map)):
-            self._map[j] = len(self._list) - 1
+        # Root node = initial spot (CRR tree is centred: underlying(0,0) == S0).
+        s0 = tree.underlying(0, 0)
+        escrowed_spot = s0 - d
+        qassert.require(
+            escrowed_spot > 0.0, "negative underlying after subtracting dividends"
+        )
+        self._scale: float = escrowed_spot / s0
 
     def underlying(self, i: int, index: int) -> float:
-        """Tree underlying minus the accumulated dividend escrow.
+        """Tree underlying scaled by the multiplicative dividend escrow.
 
-        Java parity: ``tree.underlying(i, index) - list[map[index]]``
-        (note the ``index`` — not ``i`` — lookup; see module-level note).
-        ``super().underlying(i, index)`` delegates to ``self._tree.underlying(i, index)``
-        (BlackScholesLattice.underlying — bsm_lattice.py), behaviour-identical to the
-        former ``self._div_tree`` reference.
+        Java parity: ``tree.underlying(i, index) * scale`` where
+        ``scale = (S0 - D) / S0``. Scaling every CRR node reproduces the tree
+        built from the escrowed spot ``S0 - D``.
         """
-        return super().underlying(i, index) - self._list[self._map[index]]
+        return super().underlying(i, index) * self._scale
 
 
 __all__ = ["BlackScholesDividendLattice"]
