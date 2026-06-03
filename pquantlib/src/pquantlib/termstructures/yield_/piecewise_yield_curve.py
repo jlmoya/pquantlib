@@ -13,7 +13,10 @@ quantity is the bootstrap state — and therefore which
 In Python we take ``traits`` as either a class (auto-instantiated) or
 an instance, and pick the matching ``InterpolatedXxxCurve`` at
 construction time. The bootstrap is lazy: it runs on the first call to
-``discount`` / ``zero_rate`` / ``forward_rate``.
+``discount`` / ``zero_rate`` / ``forward_rate``. **Important divergence:**
+post-construction mutations of ``SimpleQuote`` rate helpers are silently
+ignored — the curve bootstraps once on first access and does NOT re-trigger
+on subsequent quote changes. Rebuild the curve to reflect changed quotes.
 
 The class subclasses ``YieldTermStructure`` directly and forwards
 ``discount_impl`` to the underlying interpolated curve. The

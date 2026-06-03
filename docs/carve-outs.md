@@ -319,10 +319,12 @@ smoke suite):
   original was itself an incomplete stub.
 - **`cox_ross_with_hull_white`** — prices options with a
   `BinomialVanillaEngine<ExtendedCoxRossRubinstein>` over a `HullWhiteProcess`.
-  Blocked: pquantlib ports neither the *extended* binomial-tree family
-  (`ExtendedCoxRossRubinstein` etc., which accept a time-varying drift — the
-  ported `BinomialVanillaEngine` only accepts a constant-coefficient
-  `GeneralizedBlackScholesProcess`) nor an equity-style `HullWhiteProcess` (only
+  Blocked: The extended binomial-tree family (`ExtendedCoxRossRubinstein` etc.)
+  IS ported at `pquantlib.experimental.lattices.extended_binomial_tree`. However,
+  no engine wires the extended binomial trees to a diffusion process (the ported
+  `BinomialVanillaEngine` only accepts a constant-coefficient
+  `GeneralizedBlackScholesProcess`, not the extended trees or a short-rate
+  process), and there is no equity-style `HullWhiteProcess` (only
   `HullWhiteForwardProcess` + the short-rate `HullWhite` model exist). The Java
   original threw `UnsupportedOperationException` for the same reason.
 

@@ -1,17 +1,19 @@
-"""CoxRossWithHullWhite sample — PENDING (blocked on extended binomial trees).
+"""CoxRossWithHullWhite sample — PENDING (blocked on engine wiring + HullWhiteProcess).
 
 Port target: QuantLib's equity-option example variant that prices European /
 Bermudan / American options with a ``BinomialVanillaEngine<ExtendedCoxRossRubinstein>``
 built over a ``HullWhiteProcess`` (a stochastic-rate binomial tree).
 
-This sample is genuinely blocked. pquantlib core does **not** port:
+This sample is genuinely blocked. The extended binomial-tree family
+(``ExtendedCoxRossRubinstein``, ``ExtendedJarrowRudd``, etc.) IS ported at
+``pquantlib.experimental.lattices.extended_binomial_tree``. However:
 
-* the *extended* binomial-tree family (``ExtendedCoxRossRubinstein`` /
-  ``ExtendedJarrowRudd`` / etc.) that accept a time-varying drift; the ported
+* No engine wires the extended binomial trees to a diffusion process. The ported
   ``BinomialVanillaEngine`` only accepts a :class:`GeneralizedBlackScholesProcess`
-  (constant-coefficient trees), not a short-rate ``HullWhiteProcess``;
-* an equity-style ``HullWhiteProcess`` usable as the binomial diffusion (only
-  ``HullWhiteForwardProcess`` and the short-rate ``HullWhite`` model exist).
+  (constant-coefficient trees), not the extended trees or a short-rate process.
+* There is no equity-style ``HullWhiteProcess`` usable as the binomial diffusion.
+  Only ``HullWhiteForwardProcess`` and the short-rate ``HullWhite`` model are
+  ported.
 
 The Java original threw ``UnsupportedOperationException`` for the same reason
 (its binomial-with-Hull-White lines were commented out).
