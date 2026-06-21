@@ -484,7 +484,7 @@ wheels = [
 
 [[package]]
 name = "pquantlib"
-version = "1.0.0"
+version = "1.42.1"
 source = { editable = "pquantlib" }
 dependencies = [
     { name = "mpmath" },
