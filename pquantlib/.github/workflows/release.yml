@@ -1,0 +1,57 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']            # a pushed v* tag publishes to PyPI
+  workflow_dispatch:        # manual run — used for the TestPyPI dry-run
+    inputs:
+      target:
+        description: 'Publish target (testpypi for the dry-run)'
+        required: true
+        default: 'testpypi'
+        type: choice
+        options: [testpypi, pypi]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'   # build is version-independent (pure-Python, py3-none-any wheel)
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-testpypi:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write          # OIDC — Trusted Publishing, no token
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    needs: build
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write          # OIDC — Trusted Publishing, no token
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1

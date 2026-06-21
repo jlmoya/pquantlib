@@ -1,17 +1,31 @@
 [project]
 name = "pquantlib"
-version = "1.0.0"
+version = "1.42.1"
 description = "PQuantLib core — Python port of QuantLib v1.42.1"
 authors = [{ name = "Jose Moya", email = "jlmoya@gmail.com" }]
-license = { text = "BSD" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE.TXT"]
 requires-python = ">=3.14"
-readme = "../README.md"
+readme = "README.md"
 dependencies = [
     "numpy>=2.1",
     "mpmath>=1.3",
     "scipy>=1.13",
 ]
 keywords = ["quantitative-finance", "derivatives", "quantlib", "options", "fixed-income"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://github.com/jlmoya/pquantlib"
+Repository = "https://github.com/jlmoya/pquantlib"
+Issues = "https://github.com/jlmoya/pquantlib/issues"
 
 [build-system]
 requires = ["hatchling"]
