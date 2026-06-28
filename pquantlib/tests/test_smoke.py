@@ -6,11 +6,16 @@ C++-cross-validated math primitive tests.
 
 from __future__ import annotations
 
+from importlib.metadata import version
+
 import pquantlib
 
 
-def test_version_is_present() -> None:
-    assert pquantlib.__version__ == "1.0.0"
+def test_version_matches_package_metadata() -> None:
+    # __version__ is sourced dynamically from the installed package metadata,
+    # so it always tracks pyproject's version with no manual bump to drift.
+    assert pquantlib.__version__ == version("pquantlib")
+    assert pquantlib.__version__ not in ("", "0.0.0+unknown")
 
 
 def test_import_does_not_raise() -> None:
