@@ -1,5 +1,9 @@
 # PQuantLib
 
+[![PyPI](https://img.shields.io/pypi/v/pquantlib)](https://pypi.org/project/pquantlib/)
+[![Python](https://img.shields.io/pypi/pyversions/pquantlib)](https://pypi.org/project/pquantlib/)
+[![License](https://img.shields.io/pypi/l/pquantlib)](https://github.com/jlmoya/pquantlib/blob/main/pquantlib/LICENSE.TXT)
+
 A pure-Python port of the industry-standard **[QuantLib](https://github.com/lballabio/QuantLib)**
 quantitative-finance library, tracking C++ QuantLib **v1.42.1** (pinned commit `099987f0`) as
 the ground truth. Every ported class is cross-validated against the C++ reference across
