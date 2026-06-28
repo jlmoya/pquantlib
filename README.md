@@ -2,6 +2,7 @@
 
 > A 100%-Python port of [QuantLib](https://www.quantlib.org/) — the de-facto open-source library for quantitative finance — being systematically rebuilt from C++ v1.42.1 with bit-exact precision guarantees.
 
+[![PyPI](https://img.shields.io/pypi/v/pquantlib)](https://pypi.org/project/pquantlib/)
 [![Tag](https://img.shields.io/badge/tag-pquantlib--siblings--complete-blue)](#migration-status)
 [![Tests](https://img.shields.io/badge/tests-4237%20passed%2C%203%20skipped-brightgreen)](#migration-status)
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
