@@ -50,6 +50,19 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 
 ## Migration status
 
+Per-phase scoping follows JQuantLib's L1–L5 layer sequencing, then adds opt-in extensions and a full-closure mega-phase:
+
+- **Phase 0:** bootstrap — uv workspace, packages, migration-harness scaffold
+- **Phase 1:** L1 — math primitives, time, foundations
+- **Phase 2:** L2 — termstructures + indexes + cashflows + quotes
+- **Phase 3:** L3 — instruments + pricingengines
+- **Phase 4:** L4 — models (short-rate + equity stochastic-vol + calibration + swaption/capfloor engines)
+- **Phase 5:** L5 — tree/lattice + Monte Carlo + finite-difference + exotic instruments
+- **Phase 6:** high-impact Phase 4+5 carve-outs (American MC, Bates, DoubleBarrier) — end of the planned migration
+- **Phases 7–10:** opt-in extensions — inflation, credit (CDS/CDO), cap/floor + SABR/ZABR vol surfaces, Gaussian1d short-rate
+- **Phase 11:** full C++ v1.42.1 closure — the 12-wave MarketModels/LMM mega-phase → `pquantlib-final` / `pquantlib-100-complete`
+- **Phase 12:** sibling packages — `pquantlib-contrib` / `-helpers` / `-samples`
+
 | Phase | Tag | What landed | Tests | Date |
 |-------|-----|-------------|-------|------|
 | 0 | `pquantlib-phase0-bootstrap` | Project skeleton (uv workspace, 4 packages, pyright strict, ruff lint+format, pytest), CLAUDE.md, migration-harness/ scaffold, BSD LICENSE | 2/0/0 (smoke) | 2026-05-23 |
@@ -75,16 +88,6 @@ The two projects are independent but borrow heavily from each other's plans. Bug
 | 8 piecewise inflation + credit + capfloor-vol (opt-in extension) | `pquantlib-phase8-complete` | **L8-A** Piecewise{Zero,YoY}InflationCurve + IterativeBootstrap (closes L7-Bb + L2-B); **L8-B** Tier-1 credit (DefaultProbabilityTermStructure family + FlatHazardRate + 3 interpolated curves + probability traits + PiecewiseDefaultCurve scaffold + Spread/UpfrontCdsHelper + CreditDefaultSwap + Claim + MidPoint/Integral CDS engines); **L8-C** capfloor/optionlet/swaption vol surfaces (CapFloorTermVolatilityStructure family + OptionletVolatilityStructure family + OptionletStripper1 + SwaptionVolatilityStructure family + SwaptionVolatilityMatrix; closes Phase 2 capfloor-vol). 3 parallel-no-pilot clusters, ~60 min wall-clock. ~40 classes; +194 tests. | **2303/0/0** | **2026-05-28** |
 | 9 cubic/bicubic + post-L8 ergonomics + SABR cube (opt-in extension) | `pquantlib-phase9-complete` | **L9-A pilot** Cubic + Bicubic spline interpolators (CubicNaturalSpline + MonotonicCubicNaturalSpline + BicubicSpline via scipy delegation; opt-in `interpolator=` kwarg on L8-C surfaces; closes L1-E cubic-family); **L9-B** post-L8 ergonomics (PiecewiseYieldCurve + Discount/ZeroYield/ForwardRate traits + PiecewiseDefaultCurve bootstrap wiring + IsdaCdsEngine + implied_hazard_rate + conventional_spread + MakeCDS); **L9-C** SABR swaption smile cube (sabr_volatility + sabr_normal_volatility (Hagan 2002) + SabrInterpolation + SmileSection abstract + Flat/Interpolated/Sabr/Spreaded SmileSection + SwaptionVolatilityCube + SabrSwaptionVolatilityCube + InterpolatedSwaptionVolatilityCube; closes Phase-8 SABR). Pilot + 2-parallel, ~90 min wall-clock. ~22 classes; +161 tests. | **2464/0/0** | **2026-05-28** |
 | 10 vol surface tail + Gaussian1d short-rate + interpolator tail / ZABR (opt-in extension) | `pquantlib-phase10-complete` | **L10-A** vol surface tail (Kahale + Atm + AtmAdjusted + SabrInterpolated SmileSection + OptionletStripper2 + SabrInterpolation Halton multi-start + HaltonRsg; closes Phase 9 vol-tail residuals + L1-D HaltonRsg); **L10-B** Gaussian1d short-rate (Gaussian1dModel + Gsr + GsrProcess + Gaussian1dSwaptionVolatility; closes Tier-1 specialty short-rate, MarkovFunctional deferred); **L10-C** interpolator tail + ZABR (HymanFilteredCubic + ChebyshevInterpolation + MultiCubicSpline + AbcdInterpolation + zabr_volatility + ZabrSmileSection; closes L1-E interpolator tail + ZABR family). 3 parallel-no-pilot clusters, ~75 min wall-clock. ~17 classes; +188 tests. | **2652/0/0** | **2026-05-29** |
-
-Per-phase scoping mirrors JQuantLib's layer sequencing:
-- **Phase 1:** L1 — math primitives (`Array` via numpy, `Date`, `Calendar`, `DayCounter`, distributions, integrals, interpolations, RNGs)
-- **Phase 2:** L2 — termstructures + indexes
-- **Phase 3:** L3 — instruments + pricingengines
-- **Phase 4:** L4 — models
-- **Phase 5:** L5 — experimental + L6 test-suite parity
-- **Phase 6:** Python 3.14 modernization sweep
-- **Phase 7:** Final closure + carve-out documentation + tag `pquantlib-final`
-
 | 11 full C++ v1.42.1 closure (12-wave mega-phase) | `pquantlib-phase11-complete` + **`pquantlib-100-complete`** + **`pquantlib-final`** | The complete-closure phase. W1 specialty models (MarkovFunctional + Gaussian1d engines + Bates variants + Heston SLV/GjrGarch); W2 ZABR/smile/bootstrap tail; W3 `experimental/credit/*` (copulas + 5 loss models + CDO + NthToDefault); W4 exotic/barrier/variance options; W5 `experimental/finitedifferences/*`; W6 NoArbSABR + SVI + vol surfaces + copulas + heuristic optimizers; W7 processes + full commodity/energy stack + experimental inflation + variance-gamma + FFT; W8 long-tail experimental (CMS-spread, callable/cat bonds, **VannaVolga**, CLV, xccy); **W9–W11 the entire MarketModels/BGM/LMM domain** (core + models + evolvers + calibration + products + callability + pathwise greeks — 2 canonical end-to-end tests pass); W12 coverage-audit + core cashflows CMS/CappedFloored/Digital gap-fill. ~520 classes; +1396 tests. **Functional 1:1 with C++ v1.42.1.** | **4048/0/0** | **2026-05-31** |
 | 12 sibling-packages migration | `pquantlib-siblings-complete` | The three JQuantLib sibling Maven modules ported into the workspace members. **W-S1** `XorShiftRandom` → `pquantlib-contrib` (JQuantLib-original, no C++ equiv); **W-S2** dividend-option compat primitives (`DividendVanillaOption` + `BinomialDividendVanillaEngine` + `BlackScholesDividendLattice`) + **W-S3** 6 helper builders + the retired pre-1.0 FD framework (~35 classes) → `pquantlib-helpers` (retired-API classes hosted in the helpers package, on v1.42.1 primitives, TIGHT vs Java); **W-S4** ConvertibleBond subsystem (`Convertible{FixedCoupon,ZeroCoupon}Bond` + `SoftCallability` + `DiscretizedConvertible` + `TsiveriotisFernandesLattice` + `BinomialConvertibleEngine`) → pquantlib **core**, closing the carve-out (TIGHT vs C++ N=801); **W-S5** sample programs + `AllSamples` runner + smoke suite → `pquantlib-samples` (12 COMPLETE + 1 INCOMPLETE + 3 PENDING). API-era reconciliation: siblings targeted ~QL-1.0; core stays pure v1.42.1. ~45 classes; +189 tests / +3 skips. | **4237 passed, 3 skipped** | **2026-06-03** |
 
@@ -92,7 +95,7 @@ Per-phase scoping mirrors JQuantLib's layer sequencing:
 
 **Sample programs**: Run `uv run python -m pquantlib_samples.{vanilla_swap_pricing,heston_calibration,american_option_mc,double_barrier_analytic}` for end-to-end demos.
 
-## What's available today (Phase 1 L1 + Phase 2 L2 + Phase 3 L3 + Phase 4 L4 + Phase 5 L5)
+## What's available today (detailed catalog of the L1–L5 foundation — Phases 1–5; later phases are summarized in the migration table above)
 
 Phase 1 ships the foundation: math primitives, time machinery, day counters, currencies, distributions, random number generators, simple optimization scaffolding, and a starter set of 1-D/2-D interpolations. Importable as `pquantlib.<module>`.
 
