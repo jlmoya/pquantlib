@@ -11,6 +11,10 @@
 [![Sister%20project](https://img.shields.io/badge/sister-jquantlib-blueviolet)](#sister-project)
 [![License](https://img.shields.io/badge/license-BSD-green)](#license)
 
+> [!TIP]
+> **📦 Released — PQuantLib `v1.42.1` is on [PyPI](https://pypi.org/project/pquantlib/).**
+> Install it in any Python&nbsp;≥&nbsp;3.14 project — `uv add pquantlib` (or `pip install pquantlib`) — and price an option in a few lines; see the [package README](pquantlib/README.md). The publish process is documented in [RELEASING.md](RELEASING.md).
+
 ---
 
 ## What is PQuantLib?
