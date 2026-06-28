@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/Python-3.14-blue)](#migration-status)
 [![Build](https://img.shields.io/badge/build-uv%20workspace-success)](#repo-layout)
 [![C%2B%2B%20pin](https://img.shields.io/badge/C%2B%2B%20pin-v1.42.1-informational)](#ground-truth)
-[![Sister project: jquantlib](https://img.shields.io/badge/sister%20project-jquantlib-007396?logo=openjdk&logoColor=white)](https://github.com/jlmoya/jquantlib)
+[![Sister%20project](https://img.shields.io/badge/sister-jquantlib-blueviolet)](#sister-project)
 [![License](https://img.shields.io/badge/license-BSD-green)](#license)
 
 > [!TIP]
