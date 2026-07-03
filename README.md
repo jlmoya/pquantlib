@@ -29,7 +29,7 @@ PQuantLib is being built as a **systematic, full-fidelity port from C++ QuantLib
 
 ## Sister project
 
-This port is the **Python sibling of JQuantLib** (tag `jquantlib-final`). Both projects:
+This port is the **Python sibling of JQuantLib** (tag `jquantlib-final`; on [Maven Central](https://central.sonatype.com/artifact/cc.sosonline.jquantlib/jquantlib) as `cc.sosonline.jquantlib:jquantlib:1.42.1`). Both projects:
 
 - Pin the same C++ ground truth (`v1.42.1` @ `099987f0`)
 - Use the same migration patterns (subagent-driven, worktree-parallel, tier-stratified tolerances, probe-based cross-validation, direct-to-main per cluster)
