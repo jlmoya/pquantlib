@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build QuantLib v1.42.1 submodule + all probe binaries.
+# Build QuantLib v1.43 submodule + all probe binaries.
 # Run once after `git submodule update --init`.
 
 set -euo pipefail
@@ -17,7 +17,7 @@ fi
 
 mkdir -p "$QL_BUILD" "$PROBES_BUILD"
 
-echo "=== Building QuantLib v1.42.1 ==="
+echo "=== Building QuantLib v1.43 ==="
 cd "$QL_BUILD"
 cmake "$QL_SRC" \
   -DCMAKE_BUILD_TYPE=Release \
