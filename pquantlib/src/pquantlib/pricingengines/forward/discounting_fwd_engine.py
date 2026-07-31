@@ -107,8 +107,15 @@ class DiscountingFwdEngine(GenericEngine[FxForwardArguments, FxForwardResults]):
             maturity_date
         ) / self._target_discount.discount(settlement_date)
 
+        # Discount factors to settlement (v1.43: the NPV is reported as of the
+        # curve reference date, so the settlement-date PV is discounted back).
+        df_source_settlement = self._source_discount.discount(settlement_date)
+        df_target_settlement = self._target_discount.discount(settlement_date)
+
         # Fair forward rate.
-        results.fair_forward_rate = spot_fx_rate * df_target / df_source
+        # v1.43 inverted this ratio: F = S * dfSource / dfTarget (was
+        # S * dfTarget / dfSource in v1.42.1).
+        results.fair_forward_rate = spot_fx_rate * df_source / df_target
 
         # PV in each currency.
         qassert.require(args.source_nominal is not None, "source nominal missing")
@@ -120,19 +127,26 @@ class DiscountingFwdEngine(GenericEngine[FxForwardArguments, FxForwardResults]):
         pv_target_in_source = pv_target / spot_fx_rate
 
         if args.pay_source_currency:
-            npv_in_source = -pv_source + pv_target_in_source
+            npv_at_settlement_in_source = -pv_source + pv_target_in_source
         else:
-            npv_in_source = pv_source - pv_target_in_source
+            npv_at_settlement_in_source = pv_source - pv_target_in_source
+
+        # v1.43: discount the settlement-date PV back to the curve reference
+        # date, in each currency's own numeraire.
+        npv_in_source = npv_at_settlement_in_source * df_source_settlement
+        npv_in_target = npv_at_settlement_in_source * spot_fx_rate * df_target_settlement
 
         results.value = npv_in_source
         results.error_estimate = None
         results.npv_source_currency = npv_in_source
-        results.npv_target_currency = npv_in_source * spot_fx_rate
+        results.npv_target_currency = npv_in_target
         # Additional results for inspection.
         results.additional_results = {
             "spotFx": spot_fx_rate,
             "sourceCurrencyDiscountFactor": df_source,
             "targetCurrencyDiscountFactor": df_target,
+            "sourceCurrencySettlementDiscountFactor": df_source_settlement,
+            "targetCurrencySettlementDiscountFactor": df_target_settlement,
             "sourceCurrencyPV": pv_source,
             "targetCurrencyPV": pv_target,
         }
