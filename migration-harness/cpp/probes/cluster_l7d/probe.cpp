@@ -60,6 +60,7 @@
 #include <ql/time/calendars/unitedkingdom.hpp>
 #include <ql/time/daycounters/actual360.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
+#include <ql/time/daycounters/actualactual.hpp>
 #include <ql/time/daycounters/thirty360.hpp>
 #include <ql/time/schedule.hpp>
 
@@ -149,7 +150,7 @@ int main() {
         Rate fixedRate = 0.025;
         Real expectedFixedAmount = nominal * (std::pow(1.0 + fixedRate, T) - 1.0);
 
-        auto ukrpi = ext::make_shared<UKRPI>(false);  // not interpolated by default
+        auto ukrpi = ext::make_shared<UKRPI>();  // not interpolated by default
         // Add the base and observation fixings.
         // ZCIIS uses observationInterpolation = AsIndex (here equiv. Flat),
         // so we store fixings at the start-of-period for the obs date.
@@ -174,7 +175,7 @@ int main() {
             ActualActual(ActualActual::ISDA), TARGET(),
             pillarDates, pillarRates);
         Handle<ZeroInflationTermStructure> zeroHandle(zeroCurve);
-        ukrpi = ext::make_shared<UKRPI>(false, zeroHandle);
+        ukrpi = ext::make_shared<UKRPI>(zeroHandle);
         ukrpi->addFixing(basePeriod.first, 100.0, true);
 
         auto swap = ext::make_shared<ZeroCouponInflationSwap>(
@@ -223,7 +224,7 @@ int main() {
         Schedule yoySchedule(startDate, endDate, Period(1, Years), cal, bdc, bdc,
                              DateGeneration::Backward, false);
 
-        auto yyeu = ext::make_shared<YYEUHICP>(false);
+        auto yyeu = ext::make_shared<YYEUHICP>();
 
         // Build a flat YoY curve at 2.5%.
         Date baseDate = startDate - obsLag;
@@ -235,7 +236,7 @@ int main() {
             pillarDates, pillarRates);
         Handle<YoYInflationTermStructure> yoyHandle(yoyCurve);
 
-        auto yyeu2 = ext::make_shared<YYEUHICP>(false, yoyHandle);
+        auto yyeu2 = ext::make_shared<YYEUHICP>(yoyHandle);
 
         Leg yoyLeg = yoyInflationLeg(yoySchedule, cal, yyeu2, obsLag, CPI::AsIndex)
             .withNotionals(nominal)

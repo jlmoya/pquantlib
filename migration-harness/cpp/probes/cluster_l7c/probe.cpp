@@ -229,7 +229,7 @@ int main() {
         std::cout << "  \"yoy_inflation_coupon\": {\n";
 
         // Build YYEUHICP (quoted-mode YoY).
-        auto yoy = ext::make_shared<YYEUHICP>(/*interpolated=*/false);
+        auto yoy = ext::make_shared<YYEUHICP>();
         // Seed 2 years of YoY history (2021..2022) at 0.020 + 0.005 * (m-1)
         // -> simple linear ramp.
         for (int y = 2021; y <= 2022; ++y) {
