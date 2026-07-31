@@ -37,7 +37,7 @@
     "modified_duration": 1.8353825369772281,
     "macaulay_duration": 1.9271516638260895,
     "convexity": 5.1894231165952132,
-    "irr": 0.050000000000232817
+    "irr": 0.050000000000000086
   },
   "overnight_coupon": {
     "start_serial": 46037,

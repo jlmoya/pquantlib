@@ -1,0 +1,15 @@
+{
+  "cr_sector0_exposure": 1000,
+  "cr_sector1_exposure": 2000,
+  "cr_sector0_el": 39.999999999999325,
+  "cr_sector1_el": 39.999999999999325,
+  "cr_sector0_ul": 30.659419433510696,
+  "cr_sector1_ul": 31.304951684997224,
+  "cr_exposure": 3000,
+  "cr_expected_loss": 80.000000000001307,
+  "cr_unexpected_loss": 53.103672189405131,
+  "cr_relative_default_variance": 0.42187499999995531,
+  "cr_loss_quantile_99": 249.99970318796161,
+  "cr_loss_quantile_999": 342.96067728087075,
+  "cr_loss_0": 0.00043021921727501614
+}

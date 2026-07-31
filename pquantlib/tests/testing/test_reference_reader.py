@@ -19,7 +19,7 @@ def test_load_returns_dict() -> None:
 
 def test_load_carries_quantlib_version() -> None:
     data = reference_reader.load("harness/sentinel")
-    assert data["quantlib_version"] == "1.42.1"
+    assert data["quantlib_version"] == "1.43"
 
 
 def test_load_carries_sqrt_two_at_full_precision() -> None:

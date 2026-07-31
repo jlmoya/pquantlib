@@ -43,12 +43,12 @@
     "annuity": 7.32267153541334,
     "fwd_rate_3m": 0.029701194500805089,
     "swp_npv_atm_payer": 0.22827493174244029,
-    "opt_price_atm": 2.5981210258641233e-316,
+    "opt_price_atm": 2.5971910460989563e-316,
     "strike_otm_call": 0.035480361780216609,
-    "opt_price_call": 1.917244811552618e-316,
+    "opt_price_call": 1.9165585543705445e-316,
     "vol_otm_call": 0,
     "strike_otm_put": 0.02548036178021661,
-    "opt_price_put": 1.8953871991609075e-316,
+    "opt_price_put": 1.8947087482160383e-316,
     "vol_otm_put": 0,
     "expiry_serial": 47983
   }
