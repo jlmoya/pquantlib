@@ -289,4 +289,21 @@ def _is_year_specific_nse_holiday(day: int, m: Month, y: int) -> bool:
             or (day == 22 and m == Month.October)
             or (day == 5 and m == Month.November)
         )
+    if y == 2026:
+        return (
+            (day == 15 and m == Month.January)
+            or (day == 19 and m == Month.February)
+            or (day == 3 and m == Month.March)
+            or (day == 19 and m == Month.March)
+            or (day == 26 and m == Month.March)
+            or (day == 31 and m == Month.March)
+            or (day == 1 and m == Month.April)
+            or (day == 28 and m == Month.May)
+            or (day == 26 and m == Month.June)
+            or (day == 26 and m == Month.August)
+            or (day == 14 and m == Month.September)
+            or (day == 20 and m == Month.October)
+            or (day == 10 and m == Month.November)
+            or (day == 24 and m == Month.November)
+        )
     return False

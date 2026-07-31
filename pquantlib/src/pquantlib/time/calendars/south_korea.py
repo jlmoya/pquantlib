@@ -288,6 +288,7 @@ def _is_special_holiday(d: int, m: Month, y: int) -> bool:
         or (d == 17 and m == Month.August and y == 2020)
         or (d == 2 and m == Month.October and y == 2023)
         or (d == 1 and m == Month.October and y == 2024)
+        or (d == 27 and m == Month.January and y == 2025)
     )
 
 
