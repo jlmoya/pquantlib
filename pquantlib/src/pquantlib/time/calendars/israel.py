@@ -13,6 +13,7 @@ Jewish New Year) are hard-coded from the C++ source.
 
 from __future__ import annotations
 
+import warnings
 from enum import IntEnum
 from typing import Final
 
@@ -30,7 +31,12 @@ _MIN_SAFE_HOLIDAY_SERIAL: Final[int] = 400
 
 
 class IsraelMarket(IntEnum):
-    Settlement = 0  # generic settlement calendar
+    #: .. deprecated:: 1.43
+    #:    C++ QuantLib v1.43 removed the Settlement market from Israel::Market
+    #:    (the default is now TASE). Retained here for source compatibility and
+    #:    still behaves as TASE, but it will be removed in a future release.
+    #:    Use :attr:`TASE` instead.
+    Settlement = 0  # generic settlement calendar (deprecated in v1.43)
     TASE = 1  # Tel-Aviv stock exchange calendar
     SHIR = 2  # SHIR fixing calendar
 
@@ -414,6 +420,20 @@ def _is_simchat_torah(d: Date) -> bool:
     return _is_sukkot(d - 7)
 
 
+#: v1.43 moved the Tel-Aviv weekend from Friday+Saturday to Saturday+Sunday.
+#: C++ (israel.cpp, TelAvivImpl::isBusinessDay) pins the changeover to this
+#: exact date rather than a year boundary.
+_TASE_WEEKEND_SWITCH = Date.from_ymd(5, Month.January, 2026)
+
+
+def _tase_is_weekend_on(d: Date) -> bool:
+    """Weekend test for TASE, which depends on the date, not just the weekday."""
+    w = d.weekday()
+    if d >= _TASE_WEEKEND_SWITCH:
+        return w in (Weekday.Saturday, Weekday.Sunday)
+    return w in (Weekday.Friday, Weekday.Saturday)
+
+
 class _IsraelTelAvivCalendar(Calendar):
     """Tel-Aviv Stock Exchange (also used for the Settlement market)."""
 
@@ -421,7 +441,9 @@ class _IsraelTelAvivCalendar(Calendar):
         return "Tel Aviv stock exchange"
 
     def _is_weekend(self, w: Weekday) -> bool:
-        return w in (Weekday.Friday, Weekday.Saturday)
+        # v1.43: TASE reports the post-switch weekend from the weekday-only
+        # query; the date-dependent rule lives in _is_business_day below.
+        return w in (Weekday.Saturday, Weekday.Sunday)
 
     def _is_business_day(self, d: Date) -> bool:
         # Defensive: the Israeli-holiday helpers chain up to 21 days of
@@ -431,13 +453,12 @@ class _IsraelTelAvivCalendar(Calendar):
         # Israeli holiday tables only cover years 2000+ in C++, so we
         # short-circuit "no holiday possible" before 1901-02-01 here.
         if d.serial < _MIN_SAFE_HOLIDAY_SERIAL:
-            return not self._is_weekend(d.weekday())
+            return not _tase_is_weekend_on(d)
 
-        w = d.weekday()
         y = d.year()
 
         return not (
-            self._is_weekend(w)
+            _tase_is_weekend_on(d)
             or _is_purim(d)
             or (y <= 2020 and _is_passover_1st(d + 1))  # Eve of Passover, until 2020
             or _is_passover_1st(d)
@@ -515,8 +536,15 @@ class Israel(Calendar):
     it. The composed sub-calendars are themselves ``Calendar`` instances.
     """
 
-    def __init__(self, market: IsraelMarket = IsraelMarket.Settlement) -> None:
+    def __init__(self, market: IsraelMarket = IsraelMarket.TASE) -> None:
         super().__init__()
+        if market is IsraelMarket.Settlement:
+            warnings.warn(
+                "IsraelMarket.Settlement was removed from C++ QuantLib v1.43's "
+                "Israel::Market; use IsraelMarket.TASE instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         if market in (IsraelMarket.Settlement, IsraelMarket.TASE):
             self._impl: Calendar = _IsraelTelAvivCalendar()
         elif market == IsraelMarket.SHIR:
