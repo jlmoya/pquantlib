@@ -66,7 +66,12 @@ static std::ostream& kv(std::ostream& os, const std::string& key, Real v, bool c
 }
 
 int main() {
-    std::ofstream out("references/cluster/w8d.json");
+    // Harness contract: a probe prints its JSON to stdout and
+    // generate-references.sh redirects that into the reference path. This
+    // probe used to open the file itself AND log to stdout, so the
+    // generator's redirect overwrote the JSON with the log line, corrupting
+    // the reference and erroring every test that loaded cluster/w8d.
+    std::ostream& out = std::cout;
     out << "{\n";
 
     // ============================================================
@@ -348,7 +353,5 @@ int main() {
     }
 
     out << "}\n";
-    out.close();
-    std::cout << "Wrote references/cluster/w8d.json\n";
     return 0;
 }
