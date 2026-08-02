@@ -56,6 +56,14 @@
 #include <ql/time/calendars/ukraine.hpp>
 #include <ql/time/calendars/unitedkingdom.hpp>
 #include <ql/time/calendars/unitedstates.hpp>
+// v1.43 additions
+#include <ql/time/calendars/croatia.hpp>
+#include <ql/time/calendars/malta.hpp>
+#include <ql/time/calendars/montenegro.hpp>
+#include <ql/time/calendars/northmacedonia.hpp>
+#include <ql/time/calendars/serbia.hpp>
+#include <ql/time/calendars/slovenia.hpp>
+#include <ql/time/calendars/uzbekistan.hpp>
 #include <ql/time/date.hpp>
 #include <ql/time/calendar.hpp>
 
@@ -137,7 +145,15 @@ int main() {
     emit("turkey",         Turkey(),        true);
     emit("ukraine",        Ukraine(),       true);
     emit("united_kingdom", UnitedKingdom(), true);
-    emit("united_states",  UnitedStates(UnitedStates::Settlement),  false);
+    emit("united_states",  UnitedStates(UnitedStates::Settlement),  true);
+    // v1.43 additions
+    emit("croatia",         Croatia(),        true);
+    emit("malta",           Malta(),          true);
+    emit("montenegro",      Montenegro(),     true);
+    emit("north_macedonia", NorthMacedonia(), true);
+    emit("serbia",          Serbia(),         true);
+    emit("slovenia",        Slovenia(),       true);
+    emit("uzbekistan",      Uzbekistan(),     false);
 
     std::cout << "}\n";
     return 0;
