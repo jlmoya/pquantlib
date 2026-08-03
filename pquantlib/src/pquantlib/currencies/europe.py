@@ -2,7 +2,8 @@
 
 # C++ parity: ql/currencies/europe.hpp + europe.cpp (v1.42.1).
 
-Ports only the currencies the L1-B probe references (EUR, GBP, CHF).
+Ports the currencies referenced by the probes: EUR, GBP, CHF, and NOK
+(added in v1.43 for the NOK-NIBOR index).
 """
 
 from __future__ import annotations
@@ -56,6 +57,23 @@ class CHFCurrency(Currency):
             code="CHF",
             numeric_code=756,
             symbol="SwF",
+            fraction_symbol="",
+            fractions_per_unit=100,
+            rounding=Rounding(),
+        )
+
+
+class NOKCurrency(Currency):
+    """Norwegian krone — ISO 578 — 100 oere."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="Norwegian krone",
+            code="NOK",
+            numeric_code=578,
+            symbol="NKr",
             fraction_symbol="",
             fractions_per_unit=100,
             rounding=Rounding(),

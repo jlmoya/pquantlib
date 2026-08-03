@@ -760,3 +760,7 @@ target_link_libraries(cluster_ws4_probe PRIVATE ${QUANTLIB_LIBRARY})
 #     BSM operator over a payoff vector (deprecated old-FD-framework headers). ===
 add_executable(cluster_ws3fd1_probe cluster_ws3fd1/probe.cpp)
 target_link_libraries(cluster_ws3fd1_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 additions: the three new interest-rate indexes (NIBOR / SHIR / ZARONIA)
+add_executable(v143_indexes_probe v143_indexes/probe.cpp)
+target_link_libraries(v143_indexes_probe PRIVATE ${QUANTLIB_LIBRARY})

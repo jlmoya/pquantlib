@@ -1,0 +1,50 @@
+{
+  "nibor_3m": {
+    "name": "NOK-NIBOR3M Actual/360",
+    "fixing_days": 2,
+    "currency_code": "NOK",
+    "fixing_calendar": "Norway",
+    "day_counter": "Actual/360",
+    "business_day_convention": 1,
+    "end_of_month": false,
+    "fixing_serial": 46188,
+    "value_date_serial": 46190,
+    "maturity_date_serial": 46282
+  },
+  "nibor_6m": {
+    "name": "NOK-NIBOR6M Actual/360",
+    "fixing_days": 2,
+    "currency_code": "NOK",
+    "fixing_calendar": "Norway",
+    "day_counter": "Actual/360",
+    "business_day_convention": 1,
+    "end_of_month": false,
+    "fixing_serial": 46188,
+    "value_date_serial": 46190,
+    "maturity_date_serial": 46373
+  },
+  "shir": {
+    "name": "ShirON Actual/365 (Fixed)",
+    "fixing_days": 0,
+    "currency_code": "ILS",
+    "fixing_calendar": "SHIR fixing calendar",
+    "day_counter": "Actual/365 (Fixed)",
+    "business_day_convention": 0,
+    "end_of_month": false,
+    "fixing_serial": 46188,
+    "value_date_serial": 46188,
+    "maturity_date_serial": 46189
+  },
+  "zaronia": {
+    "name": "ZARONIAON Actual/365 (Fixed)",
+    "fixing_days": 0,
+    "currency_code": "ZAR",
+    "fixing_calendar": "South Africa",
+    "day_counter": "Actual/365 (Fixed)",
+    "business_day_convention": 0,
+    "end_of_month": false,
+    "fixing_serial": 46188,
+    "value_date_serial": 46188,
+    "maturity_date_serial": 46190
+  }
+}

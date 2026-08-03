@@ -30,3 +30,20 @@ class JPYCurrency(Currency):
             fractions_per_unit=100,
             rounding=Rounding(),
         )
+
+
+class ILSCurrency(Currency):
+    """Israeli shekel — ISO 376 — 100 agorot."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="Israeli shekel",
+            code="ILS",
+            numeric_code=376,
+            symbol="NIS",
+            fraction_symbol="",
+            fractions_per_unit=100,
+            rounding=Rounding(),
+        )
