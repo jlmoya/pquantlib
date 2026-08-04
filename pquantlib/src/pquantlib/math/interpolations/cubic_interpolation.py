@@ -32,24 +32,22 @@ of the library actually exercises:
   inclusive one.
 * ``Spline + SecondDerivative=0 BC + monotonic=true`` → monotonic
   cubic (``MonotonicCubicNaturalSpline``). Delegated to
-  ``scipy.interpolate.PchipInterpolator``.
+  :class:`pquantlib.math.interpolations.hyman_filter.HymanFilteredCubic`
+  — a native port of the C++ algorithm: solve the natural-spline
+  tridiagonal system for the pillar first derivatives, then apply the
+  Hyman (1983) monotonicity filter to them, then emit cubic-Hermite
+  coefficients (cubicinterpolation.hpp:402-770).
 
-  **Documented divergence — monotonic-cubic algorithm.** scipy's
-  ``PchipInterpolator`` is the Fritsch-Carlson PCHIP — slopes are
-  derived from scratch from a one-sided three-point formula plus the
-  Fritsch-Carlson monotonicity filter. QuantLib's "Spline +
-  monotonic=true" instead solves the natural-spline tridiagonal system
-  *first*, then applies the Hyman (1983) monotonicity filter to the
-  resulting C^2 slopes (cubicinterpolation.hpp:507-560). Both
-  algorithms guarantee monotonicity at the input but produce
-  measurably different intermediate values (~1e-2 magnitude on the
-  L9-A probe). We accept scipy's PCHIP because (a) the API contract —
-  "monotonic cubic spline through the input knots" — is satisfied,
-  (b) PCHIP is the standard monotonic cubic in scientific Python,
-  (c) porting QuantLib's exact Hyman-filtered natural-cubic algorithm
-  would require a custom implementation. Pillar nodes still agree to
-  TIGHT (both pass through the input data); intermediate values are
-  tier-LOOSE in cross-validation.
+  This used to delegate to ``scipy.interpolate.PchipInterpolator``,
+  which is the *Fritsch-Carlson* PCHIP: it derives its slopes from
+  scratch via a one-sided three-point formula rather than filtering a
+  C² natural spline. Both are monotonicity-preserving cubics through
+  the same knots, so it passed at pillars, but the intermediate values
+  are a different function — off by O(1e-2) on the L9-A probe data,
+  and by ~1.1 in log-strike when the knots are sparse (the ``nStrikes
+  = 4`` quantile grid of
+  ``SmileSectionRNDCalculator``). PCHIP therefore satisfied the *name*
+  of the C++ class but not its *values*, so it is no longer used here.
 
 All other ``DerivativeApprox`` + ``BoundaryCondition`` combinations
 raise ``LibraryException("not implemented in this port")`` from the
@@ -64,13 +62,15 @@ raise ``LibraryException("not implemented in this port")`` from the
 * Boundary conditions ``FirstDerivative``, non-zero
   ``SecondDerivative``, ``Periodic``, ``Lagrange``; mixing two
   different boundary conditions across the two ends; and ``NotAKnot``
-  combined with ``monotonic=true`` (``PchipInterpolator`` has no
-  boundary-condition knob at all, so honouring the request is
-  impossible rather than merely unported).
+  combined with ``monotonic=true`` (the ported monotonic algorithm
+  solves the *natural*-BC tridiagonal system before filtering, so it
+  has no not-a-knot variant).
 
-The validation hook is the C++ probe at
-``migration-harness/cpp/probes/cluster_l9a/probe.cpp``. Spline values
-at pillar nodes agree EXACT to TIGHT; intermediate values agree TIGHT.
+The validation hooks are the C++ probes at
+``migration-harness/cpp/probes/cluster_l9a/probe.cpp`` (both splines)
+and ``migration-harness/cpp/probes/cluster_l10c/probe.cpp`` (the
+Hyman-filtered monotonic cubic). Spline values at pillar nodes agree
+EXACT to TIGHT; intermediate values agree TIGHT.
 
 # C++ parity: convenience classes
 #   CubicNaturalSpline (cubicinterpolation.hpp:206-217)
@@ -84,11 +84,11 @@ from typing import Any
 
 from scipy.interpolate import (  # type: ignore[import-untyped]
     CubicSpline,
-    PchipInterpolator,
 )
 
 from pquantlib.exceptions import LibraryException
 from pquantlib.math.array import Array
+from pquantlib.math.interpolations.hyman_filter import HymanFilteredCubic
 from pquantlib.math.interpolations.interpolation import Interpolation
 
 
@@ -155,7 +155,7 @@ def _validate_supported(
         if monotonic:
             raise LibraryException(
                 "BoundaryCondition.NotAKnot with monotonic=True is not supported: "
-                "PchipInterpolator has no boundary-condition parameter"
+                "the ported Hyman filter runs on the natural-BC spline"
             )
         return
     if left_condition != BoundaryCondition.SecondDerivative or left_value != 0.0:
@@ -185,8 +185,9 @@ class CubicInterpolation(Interpolation):
     ``BoundaryCondition.SecondDerivative`` with value 0.0 (the natural
     spline) and ``BoundaryCondition.NotAKnot`` (whose end-condition value
     C++ ignores, as does this port). The ``monotonic`` flag selects
-    ``scipy.PchipInterpolator`` (monotonic Hyman/Fritsch-Carlson cubic)
-    over ``scipy.CubicSpline``, and is only available with the natural BC.
+    :class:`~pquantlib.math.interpolations.hyman_filter.HymanFilteredCubic`
+    (C++'s natural spline plus the Hyman 1983 filter) over
+    ``scipy.CubicSpline``, and is only available with the natural BC.
     """
 
     def __init__(
@@ -223,27 +224,47 @@ class CubicInterpolation(Interpolation):
         self.update()
 
     def update(self) -> None:
-        """Rebuild scipy spline (call after mutating x_seq / y_seq).
+        """Rebuild the underlying spline (call after mutating x_seq / y_seq).
 
         # C++ parity: ``CubicInterpolation::update()`` (PIMPL).
         """
         if self._monotonic:
-            # PCHIP — scipy's Hyman/Fritsch-Carlson monotonic cubic.
-            # PchipInterpolator does not accept bc_type (its boundary
-            # behaviour is encoded in the PCHIP slope formula itself —
-            # one-sided three-point at the endpoints).
-            self._spline = PchipInterpolator(self._xs, self._ys, extrapolate=True)
-        else:
-            # "natural"      — second derivative = 0 at both ends.
-            # "not-a-knot"   — third derivative continuous across the first
-            #                  and last interior knots, so the endpoint second
-            #                  derivative is generally NONZERO.
-            bc_type = (
-                "not-a-knot"
-                if self._left_condition == BoundaryCondition.NotAKnot
-                else "natural"
-            )
-            self._spline = CubicSpline(self._xs, self._ys, bc_type=bc_type, extrapolate=True)
+            # C++ parity: the natural-spline tridiagonal solve followed by the
+            # Hyman 1983 monotonicity filter (cubicinterpolation.hpp:402-770).
+            # ``HymanFilteredCubic`` *is* that algorithm and is an
+            # ``Interpolation`` in its own right, so the four evaluators just
+            # forward to its public API with its own range check disabled —
+            # this class already ran the identical one on the same knots.
+            hyman = HymanFilteredCubic(self._xs, self._ys)
+
+            def value(x: float) -> float:
+                return hyman(x, allow_extrapolation=True)
+
+            def d1(x: float) -> float:
+                return hyman.derivative(x, allow_extrapolation=True)
+
+            def d2(x: float) -> float:
+                return hyman.second_derivative(x, allow_extrapolation=True)
+
+            def prim(x: float) -> float:
+                return hyman.primitive(x, allow_extrapolation=True)
+
+            self._spline = value
+            self._d1 = d1
+            self._d2 = d2
+            self._prim = prim
+            return
+
+        # "natural"      — second derivative = 0 at both ends.
+        # "not-a-knot"   — third derivative continuous across the first
+        #                  and last interior knots, so the endpoint second
+        #                  derivative is generally NONZERO.
+        bc_type = (
+            "not-a-knot"
+            if self._left_condition == BoundaryCondition.NotAKnot
+            else "natural"
+        )
+        self._spline = CubicSpline(self._xs, self._ys, bc_type=bc_type, extrapolate=True)
         self._d1 = self._spline.derivative(1)
         self._d2 = self._spline.derivative(2)
         # scipy's ``antiderivative()`` returns a PPoly whose value at x is
@@ -284,16 +305,17 @@ class CubicNaturalSpline(CubicInterpolation):
 
 
 class MonotonicCubicNaturalSpline(CubicInterpolation):
-    """Monotonic cubic Hermite interpolation (PCHIP).
+    """Natural cubic spline with the Hyman 1983 monotonicity filter.
 
     # C++ parity: ``MonotonicCubicNaturalSpline`` (cubicinterpolation.hpp:219-230).
 
-    Implemented via ``scipy.interpolate.PchipInterpolator`` — Fritsch-Carlson
-    PCHIP. See the module-level docstring for the documented divergence
-    from QuantLib's Hyman-on-natural-cubic algorithm: both are
-    monotonicity-preserving cubics through the same knots, but they
-    use different intermediate-slope formulas, so off-pillar values
-    agree only at LOOSE tier.
+    Implemented by
+    :class:`~pquantlib.math.interpolations.hyman_filter.HymanFilteredCubic`,
+    a native port of C++'s ``Spline + monotonic=true + natural BC`` arm:
+    solve the natural-spline tridiagonal system for the pillar slopes,
+    filter them for monotonicity, then emit cubic-Hermite coefficients.
+    Not the Fritsch-Carlson PCHIP — that is a different function off the
+    pillars.
     """
 
     def __init__(self, x_seq: Array, y_seq: Array) -> None:

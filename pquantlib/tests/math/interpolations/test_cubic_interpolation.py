@@ -5,8 +5,8 @@ Reference: ``migration-harness/references/cluster/l9a.json`` —
 
 The probe uses 5 sorted x-knots at integer positions and assorted
 y-values. C++ values at the pillar nodes equal the input y to EXACT;
-scipy reproduces y[i] to TIGHT (round-off). Intermediate values agree
-TIGHT across both implementations.
+this port reproduces y[i] to TIGHT (round-off). Intermediate values agree
+TIGHT for both splines.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ def test_cubic_natural_spline_update_refreshes() -> None:
 
 
 # ---------------------------------------------------------------------------
-# MonotonicCubicNaturalSpline — PCHIP / Hyman-Fritsch-Carlson.
+# MonotonicCubicNaturalSpline — natural cubic spline + Hyman 1983 filter.
 # ---------------------------------------------------------------------------
 
 
@@ -141,31 +141,23 @@ def test_monotonic_cubic_pillars_match_cpp_tight(cpp: dict[str, Any]) -> None:
         tolerance.tight(interp(float(x)), float(p))
 
 
-def test_monotonic_cubic_intermediates_match_cpp_loose(cpp: dict[str, Any]) -> None:
-    # Custom tolerance: scipy's PchipInterpolator is the Fritsch-Carlson
-    # PCHIP; C++ QuantLib's "Spline + monotonic=true" applies the Hyman 1983
-    # filter to a natural-cubic-spline solution. Both algorithms are
-    # monotonicity-preserving cubics through the same knots, but they use
-    # different intermediate slope formulas — off-pillar values can differ
-    # by O(1e-2) magnitude on the L9-A probe data. We accept that
-    # divergence at module-docstring level and assert here only that the
-    # interpolant is in the same neighborhood (relative error < 0.2).
+def test_monotonic_cubic_intermediates_match_cpp_tight(cpp: dict[str, Any]) -> None:
+    # TIGHT. Off-pillar values are where the monotonic cubic's *algorithm*
+    # shows, and this port now runs C++'s own one — the natural-spline
+    # tridiagonal solve plus the Hyman 1983 filter. It previously delegated
+    # to scipy's Fritsch-Carlson PCHIP, which shares the pillars but is a
+    # different function between them (relative error up to ~0.2 here), so
+    # this assertion was a 0.2-wide envelope. It is now plain agreement.
     block = cpp["monotonic_cubic_natural_spline"]
     mids_x = block["mids_x"]
     mids_y = block["mids_y"]
     interp = _make_monotonic(cpp)
     for x, y_cpp in zip(mids_x, mids_y, strict=True):
-        y_scipy = interp(float(x))
-        # Custom rel-error envelope — see test docstring.
-        rel_err = abs(y_scipy - float(y_cpp)) / max(abs(float(y_cpp)), 1.0)
-        assert rel_err < 0.2, (
-            f"scipy PCHIP and C++ Hyman-filtered Spline diverged by {rel_err:.4f} "
-            f"at x={x}: scipy={y_scipy} cpp={y_cpp}"
-        )
+        tolerance.tight(interp(float(x)), float(y_cpp))
 
 
 def test_monotonic_cubic_preserves_monotonicity() -> None:
-    # Canonical PCHIP test: monotone-increasing y → strictly increasing
+    # The filter's contract: monotone-increasing y → strictly increasing
     # values on a fine grid (no overshoot / no oscillation).
     xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0], dtype=np.float64)
     ys = np.array([0.0, 0.5, 1.5, 3.0, 3.2], dtype=np.float64)
@@ -191,7 +183,7 @@ def test_cubic_interpolation_default_is_natural() -> None:
         tolerance.tight(a(x), b(x))
 
 
-def test_cubic_interpolation_monotonic_matches_pchip() -> None:
+def test_cubic_interpolation_monotonic_matches_convenience_class() -> None:
     xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0], dtype=np.float64)
     ys = np.array([0.0, 0.5, 1.5, 3.0, 3.2], dtype=np.float64)
     a = CubicInterpolation(xs, ys, monotonic=True)
@@ -282,7 +274,7 @@ def test_not_a_knot_is_supported_and_ignores_the_end_condition_value() -> None:
 def test_not_a_knot_with_monotonic_raises() -> None:
     xs = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
     ys = np.array([0.0, 1.0, 4.0, 9.0], dtype=np.float64)
-    with pytest.raises(LibraryException, match="PchipInterpolator has no boundary-condition"):
+    with pytest.raises(LibraryException, match="Hyman filter runs on the natural-BC spline"):
         CubicInterpolation(
             xs,
             ys,

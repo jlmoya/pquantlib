@@ -19,13 +19,13 @@ QuantLib's ``CubicInterpolation`` with ``DerivativeApprox::Spline``,
 3. Re-emit cubic-Hermite coefficients from the *filtered* derivatives,
    piecewise on each interval ``[x_i, x_{i+1}]``.
 
-The PCHIP-based ``MonotonicCubicNaturalSpline`` (delegated to
-``scipy.interpolate.PchipInterpolator``) lives in
-:mod:`pquantlib.math.interpolations.cubic_interpolation`; that one
-derives slopes from scratch via Fritsch-Carlson. This module ports the
-*natural-spline-then-filter* algorithm used by QuantLib's C++ source.
-On C^2-smooth inputs the two algorithms agree at pillars (exact) but
-disagree at intermediate points by ~1e-2 magnitude.
+This is the algorithm behind ``MonotonicCubicNaturalSpline`` in
+:mod:`pquantlib.math.interpolations.cubic_interpolation`, which delegates
+here. It is *not* the Fritsch-Carlson PCHIP
+(``scipy.interpolate.PchipInterpolator``), which derives slopes from
+scratch rather than filtering a C^2 natural spline: on C^2-smooth inputs
+the two agree at pillars (exact) but disagree at intermediate points by
+~1e-2 magnitude.
 
 The Hyman criterion is described in:
 

@@ -118,27 +118,27 @@ def test_primitive_monotone_for_positive_y() -> None:
         prev = val
 
 
-def test_versus_pchip_differs_on_intermediates() -> None:
-    """Hyman-natural-spline differs from scipy PCHIP at intermediate points.
+def test_monotonic_cubic_natural_spline_is_this_algorithm() -> None:
+    """``MonotonicCubicNaturalSpline`` must be exactly this interpolant.
 
-    Both algorithms produce monotone-preserving cubics through the
-    same knots, but PCHIP (Fritsch-Carlson) derives slopes directly
-    from one-sided three-point formulas, while
-    HymanFilteredCubic solves the natural-spline tridiagonal first
-    then filters. The two diverge at intermediate points, documented
-    in the cubic_interpolation module docstring.
-
-    This test certifies the divergence is *observable* (not a near-
-    equality) on the L10-C reference grid.
+    C++'s ``MonotonicCubicNaturalSpline`` is ``CubicInterpolation(Spline,
+    monotonic=true, natural BC)`` — the very thing this module ports — so
+    the two classes must agree bit for bit, not merely closely. This used
+    to be a *divergence* test: the public class delegated to scipy's
+    Fritsch-Carlson PCHIP, which is a different function off the pillars
+    (it differed here by >1e-3, and by ~1.1 in log-strike on the sparse
+    quantile grids ``SmileSectionRNDCalculator`` builds). Asserting
+    equality is what keeps that from silently coming back.
     """
     xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0], dtype=np.float64)
     ys = np.array([0.0, 0.5, 1.5, 3.0, 3.2], dtype=np.float64)
     hyman = HymanFilteredCubic(xs, ys)
-    pchip = MonotonicCubicNaturalSpline(xs, ys)
-    diffs = [abs(hyman(x) - pchip(x)) for x in (0.5, 1.25, 2.7, 3.4)]
-    # At least one intermediate point should differ by >= 1e-3 to
-    # confirm we're not accidentally reproducing PCHIP.
-    assert max(diffs) >= 1.0e-3, f"Hyman and PCHIP unexpectedly agree: {diffs}"
+    public = MonotonicCubicNaturalSpline(xs, ys)
+    for x in (0.5, 1.25, 2.7, 3.4):
+        tolerance.exact(public(x), hyman(x))
+        tolerance.exact(public.derivative(x), hyman.derivative(x))
+        tolerance.exact(public.second_derivative(x), hyman.second_derivative(x))
+        tolerance.exact(public.primitive(x), hyman.primitive(x))
 
 
 def test_update_with_different_data() -> None:
