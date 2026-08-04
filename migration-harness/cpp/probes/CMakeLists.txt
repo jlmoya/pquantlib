@@ -765,6 +765,15 @@ target_link_libraries(cluster_ws3fd1_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_indexes_probe v143_indexes/probe.cpp)
 target_link_libraries(v143_indexes_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# v1.43 addition: LBFGSB — the limited-memory bound-constrained quasi-Newton
+# optimizer (Byrd/Lu/Nocedal/Zhu 1995). The generalized Cauchy point and the
+# subspace minimization live in an anonymous namespace and cannot be probed
+# directly, so coverage is layered: many distinct bound/start configurations,
+# a truncated-iteration iterate trajectory (maxIterations = 3..12), and the
+# full Problem::valueAndGradient evaluation trace.
+add_executable(v143_lbfgsb_probe v143_lbfgsb/probe.cpp)
+target_link_libraries(v143_lbfgsb_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # v1.43 addition: the constant-notional cross-currency swap family —
 # ConstNotionalCrossCurrencySwap (base), ...BasisSwap (float/float),
 # ...FixedVsFloatingSwap and DiscountingConstNotionalCrossCurrencySwapEngine.
