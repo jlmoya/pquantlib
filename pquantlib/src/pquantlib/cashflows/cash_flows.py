@@ -223,6 +223,41 @@ class CashFlows:
         return total / discount_curve.discount(npv_d)
 
     @classmethod
+    def npvbps(
+        cls,
+        leg: Sequence[CashFlow],
+        discount_curve: YieldTermStructureProtocol,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+    ) -> tuple[float, float]:
+        """NPV and BPS of a leg, computed together.
+
+        C++ parity: ``CashFlows::npvbps`` (cashflows.cpp). Upstream computes
+        both in a single pass "for performance reason" and returns
+        ``std::pair<Real, Real>``; here a ``(npv, bps)`` tuple.
+
+        Required by ``DiscountingConstNotionalCrossCurrencySwapEngine``, new in
+        v1.43.
+        """
+        npv = 0.0
+        bps = 0.0
+        if not leg:
+            return (npv, bps)
+        settle = settlement_date if settlement_date is not None else discount_curve.reference_date()
+        npv_d = npv_date if npv_date is not None else settle
+        for cf in leg:
+            if not cf.has_occurred(settle, include_settlement_date_flows) and not cf.trading_ex_coupon(
+                settle
+            ):
+                df = discount_curve.discount(cf.date())
+                npv += cf.amount() * df
+                if isinstance(cf, Coupon):
+                    bps += cf.nominal() * cf.accrual_period() * df
+        d = discount_curve.discount(npv_d)
+        return (npv / d, _BASIS_POINT * bps / d)
+
+    @classmethod
     def npv_yield(
         cls,
         leg: Sequence[CashFlow],
