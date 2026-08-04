@@ -12,10 +12,12 @@ import sys
 import numpy as np
 import pytest
 
+from pquantlib.exceptions import LibraryException
 from pquantlib.math.optimization.constraint import (
     BoundaryConstraint,
     Constraint,
     NoConstraint,
+    NonhomogeneousBoundaryConstraint,
     PositiveConstraint,
 )
 
@@ -82,3 +84,31 @@ def test_boundary_constraint_empty_array() -> None:
     # Vacuously true.
     assert c.test(_arr())
     assert c.upper_bound(_arr()).shape == (0,)
+
+
+def test_nonhomogeneous_boundary_constraint_is_per_coordinate() -> None:
+    c = NonhomogeneousBoundaryConstraint(_arr(0.0, -1.0, 2.0), _arr(1.0, 1.0, 2.0))
+    assert c.test(_arr(0.0, -1.0, 2.0))  # boundaries inclusive
+    assert c.test(_arr(0.5, 0.5, 2.0))
+    assert not c.test(_arr(-0.1, 0.0, 2.0))  # below its own low
+    assert not c.test(_arr(0.5, 1.1, 2.0))  # above its own high
+
+
+def test_nonhomogeneous_boundary_constraint_bounds_are_the_stored_arrays() -> None:
+    low = _arr(0.0, -1.0)
+    high = _arr(1.0, 5.0)
+    c = NonhomogeneousBoundaryConstraint(low, high)
+    # The parameter vector is ignored — C++ returns the stored arrays.
+    assert np.array_equal(c.lower_bound(_arr(9.0, 9.0)), low)
+    assert np.array_equal(c.upper_bound(_arr(9.0, 9.0)), high)
+
+
+def test_nonhomogeneous_boundary_constraint_rejects_mismatched_sizes() -> None:
+    with pytest.raises(LibraryException, match="boundaries sizes are inconsistent"):
+        NonhomogeneousBoundaryConstraint(_arr(0.0, 0.0), _arr(1.0))
+
+
+def test_nonhomogeneous_boundary_constraint_rejects_wrong_parameter_count() -> None:
+    c = NonhomogeneousBoundaryConstraint(_arr(0.0, 0.0), _arr(1.0, 1.0))
+    with pytest.raises(LibraryException, match="parameters and boundaries sizes"):
+        c.test(_arr(0.5))

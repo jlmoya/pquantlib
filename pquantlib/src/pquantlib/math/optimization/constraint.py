@@ -8,11 +8,12 @@ that to a single abstract base ``Constraint`` whose subclasses
 override ``test``, ``upper_bound``, ``lower_bound`` directly — there
 is no need for a separate Impl layer.
 
-L1-D ports only the simple constraints used by the optimization
+L1-D ported the simple constraints used by the optimization
 scaffolding: ``NoConstraint``, ``PositiveConstraint``,
-``BoundaryConstraint``. ``CompositeConstraint`` and
-``NonhomogeneousBoundaryConstraint`` are deferred to a later cluster
-that needs them.
+``BoundaryConstraint``. ``NonhomogeneousBoundaryConstraint`` follows
+here — it is the per-coordinate box that ``LBFGSB`` reads its bounds
+from. ``CompositeConstraint`` is still deferred to a later cluster
+that needs it.
 """
 
 from __future__ import annotations
@@ -123,3 +124,45 @@ class BoundaryConstraint(Constraint):
 
     def lower_bound(self, params: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         return np.full(params.shape, self._low, dtype=np.float64)
+
+
+class NonhomogeneousBoundaryConstraint(Constraint):
+    """The i-th component lies in its own interval ``[low_i, high_i]``.
+
+    # C++ parity: ``class NonhomogeneousBoundaryConstraint`` in
+    # ql/math/optimization/constraint.hpp:176-203 (v1.43).
+
+    Unlike ``BoundaryConstraint`` the interval varies per coordinate, so
+    the bounds are arrays rather than scalars. Use ``+/-sys.float_info.max``
+    for a coordinate that is unbounded on that side — that is the sentinel
+    the default ``Constraint`` returns, and the one ``LBFGSB`` recognises.
+    """
+
+    __slots__ = ("_high", "_low")
+
+    def __init__(self, low: npt.NDArray[np.float64], high: npt.NDArray[np.float64]) -> None:
+        low_arr = np.ascontiguousarray(low, dtype=np.float64)
+        high_arr = np.ascontiguousarray(high, dtype=np.float64)
+        qassert.require(
+            low_arr.size == high_arr.size,
+            "Upper and lower boundaries sizes are inconsistent.",
+        )
+        self._low: npt.NDArray[np.float64] = low_arr
+        self._high: npt.NDArray[np.float64] = high_arr
+
+    def test(self, params: npt.NDArray[np.float64]) -> bool:
+        qassert.require(
+            params.size == self._low.size,
+            "Number of parameters and boundaries sizes are inconsistent.",
+        )
+        return bool(np.all((params >= self._low) & (params <= self._high)))
+
+    def upper_bound(self, params: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        # C++ parity: constraint.hpp:194 — the stored array, ignoring ``params``.
+        del params
+        return self._high
+
+    def lower_bound(self, params: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        # C++ parity: constraint.hpp:195 — the stored array, ignoring ``params``.
+        del params
+        return self._low
