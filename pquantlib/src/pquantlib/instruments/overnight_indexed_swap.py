@@ -82,16 +82,21 @@ class OvernightIndexedSwap(FixedVsFloatingSwap):
             floating_day_count=overnight_index.day_counter(),
             payment_convention=payment_adjustment,
             payment_calendar=payment_calendar,
+            # C++ parity: overnightindexedswap.cpp:146-147 — the lag reaches
+            # the fixed leg through the base class too. It was dropped here.
+            payment_lag=payment_lag,
         )
         self._overnight_index: OvernightIndexProtocol = overnight_index
 
         # Build the overnight floating leg now.
+        # C++ parity: overnightindexedswap.cpp:154-167 — ``withPaymentLag``.
         self._legs[1] = overnight_leg(
             ov_sched,
             overnight_index,
             nominals_list,
             payment_adjustment=payment_adjustment,
             payment_calendar=payment_calendar,
+            payment_lag=payment_lag,
             spreads=spread,
         )
         for cf in self._legs[1]:

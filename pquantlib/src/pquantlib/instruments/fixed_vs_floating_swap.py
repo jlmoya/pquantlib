@@ -144,6 +144,10 @@ class FixedVsFloatingSwap(Swap):
             day_counter=self._fixed_day_count,
             payment_adjustment=self._payment_convention,
             payment_calendar=pay_cal,
+            # C++ parity: fixedvsfloatingswap.cpp:61-66 — ``withPaymentLag``.
+            # The lag was accepted and stored here but never reached the leg,
+            # so a lagged swap paid on its accrual end dates.
+            payment_lag=self._payment_lag,
         )
         for cf in self._legs[0]:
             cf.register_with(self)
