@@ -774,6 +774,13 @@ target_link_libraries(v143_indexes_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_lbfgsb_probe v143_lbfgsb/probe.cpp)
 target_link_libraries(v143_lbfgsb_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# v1.43 addition: FlatExtrapolator — the header-only 1-D interpolation
+# decorator that clamps outside [xMin, xMax], zeroes the derivatives strictly
+# outside the range, and extends the primitive linearly. Probed over three
+# underlyings (natural cubic spline, not-a-knot cubic spline, linear).
+add_executable(v143_flatextrapolation_probe v143_flatextrapolation/probe.cpp)
+target_link_libraries(v143_flatextrapolation_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # v1.43 addition: the constant-notional cross-currency swap family —
 # ConstNotionalCrossCurrencySwap (base), ...BasisSwap (float/float),
 # ...FixedVsFloatingSwap and DiscountingConstNotionalCrossCurrencySwapEngine.

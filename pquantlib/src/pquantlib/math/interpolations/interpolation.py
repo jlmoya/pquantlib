@@ -108,6 +108,24 @@ class Interpolation(ABC):
     def x_max(self) -> float:
         return float(self._xs[-1])
 
+    @property
+    def x_values(self) -> Array:
+        """The abscissae, as a copy.
+
+        # C++ parity: ``Interpolation::xValues()`` (interpolation.hpp), which
+        # returns a ``std::vector<Real>`` by value. The copy keeps callers
+        # from mutating interpolation state behind ``update()``'s back.
+        """
+        return self._xs.copy()
+
+    @property
+    def y_values(self) -> Array:
+        """The ordinates, as a copy.
+
+        # C++ parity: ``Interpolation::yValues()``.
+        """
+        return self._ys.copy()
+
     def is_in_range(self, x: float) -> bool:
         x1 = self.x_min
         x2 = self.x_max
