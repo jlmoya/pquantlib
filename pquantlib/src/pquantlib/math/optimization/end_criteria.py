@@ -10,12 +10,24 @@ convergence), root epsilon (x-variation), function epsilon
 (y-variation), and gradient-norm epsilon. ``Type`` is the discrete
 outcome of an optimization run.
 
-L1-D only ports the dataclass + enum; the C++ checker methods
-(``operator()``, ``checkMaxIterations``, ``checkStationaryPoint``,
-``checkStationaryFunctionValue``, ``checkStationaryFunctionAccuracy``,
-``checkZeroGradientNorm``, ``succeeded``) are deferred — they are
-only used by Levenberg-Marquardt / Simplex / BFGS, all carved out
-of L1-D.
+L1-D ported the dataclass + enum only. ``checkMaxIterations`` and
+``checkZeroGradientNorm`` follow here: they are the two checks
+``LBFGSB`` consults, and the LBFGSB probe cross-validates both (one
+case stops on each). The remaining checkers (``operator()``,
+``checkStationaryPoint``, ``checkStationaryFunctionValue``,
+``checkStationaryFunctionAccuracy``, ``succeeded``) stay deferred —
+they carry the ``statStateIterations`` in-out counter and no ported
+method calls them yet.
+
+C++ signals a fired criterion through an ``EndCriteria::Type&``
+out-parameter plus a ``bool`` return. Python has no out-parameters, so
+the checkers return ``Type | None``: the ``Type`` to adopt when the
+criterion fires, ``None`` when it does not. Callers read as::
+
+    hit = end_criteria.check_max_iterations(iteration)
+    if hit is not None:
+        ec_type = hit
+        break
 """
 
 from __future__ import annotations
@@ -68,3 +80,28 @@ class EndCriteria:
     root_epsilon: float
     function_epsilon: float
     gradient_norm_epsilon: float
+
+    def check_max_iterations(self, iteration: int) -> Type | None:
+        """``Type.MaxIterations`` once ``iteration`` reaches the cap, else ``None``.
+
+        # C++ parity: endcriteria.cpp:57-63 — ``checkMaxIterations``. The
+        # test is ``iteration < maxIterations_`` -> not fired, so the
+        # criterion trips on the iteration *index* equalling the cap, i.e.
+        # after exactly ``max_iterations`` completed iterations.
+        """
+        if iteration < self.max_iterations:
+            return None
+        return Type.MaxIterations
+
+    def check_zero_gradient_norm(self, gradient_norm: float) -> Type | None:
+        """``Type.ZeroGradientNorm`` when ``gradient_norm`` is below the epsilon.
+
+        # C++ parity: endcriteria.cpp:110-116 — ``checkZeroGradientNorm``.
+
+        The argument is the gradient norm itself, not its square: callers
+        that cache a squared norm (as ``Problem.gradient_norm_value``
+        does) must pass the unsquared value here.
+        """
+        if gradient_norm >= self.gradient_norm_epsilon:
+            return None
+        return Type.ZeroGradientNorm

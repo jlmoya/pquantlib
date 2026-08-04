@@ -58,3 +58,26 @@ def test_end_criteria_equality_by_value() -> None:
     c = EndCriteria(1001, 100, 1e-8, 1e-9, 1e-7)
     assert a == b
     assert a != c
+
+
+# --- checkers ---------------------------------------------------------------
+
+
+def test_check_max_iterations_fires_only_at_the_cap() -> None:
+    # C++ parity: endcriteria.cpp:57-63 — ``iteration < maxIterations_``
+    # means "not fired", so the trip happens AT the cap, not past it.
+    ec = EndCriteria(5, 2, 1e-8, 1e-9, 1e-7)
+    assert ec.check_max_iterations(0) is None
+    assert ec.check_max_iterations(4) is None
+    assert ec.check_max_iterations(5) is Type.MaxIterations
+    assert ec.check_max_iterations(6) is Type.MaxIterations
+
+
+def test_check_zero_gradient_norm_fires_strictly_below_the_epsilon() -> None:
+    # C++ parity: endcriteria.cpp:110-116 — ``gradientNorm >= eps`` means
+    # "not fired", so equality does NOT trip the criterion.
+    ec = EndCriteria(1000, 100, 1e-8, 1e-9, 1e-7)
+    assert ec.check_zero_gradient_norm(1e-6) is None
+    assert ec.check_zero_gradient_norm(1e-7) is None
+    assert ec.check_zero_gradient_norm(9.9e-8) is Type.ZeroGradientNorm
+    assert ec.check_zero_gradient_norm(0.0) is Type.ZeroGradientNorm
