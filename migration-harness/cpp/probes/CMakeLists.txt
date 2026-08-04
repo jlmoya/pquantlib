@@ -765,6 +765,16 @@ target_link_libraries(cluster_ws3fd1_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_indexes_probe v143_indexes/probe.cpp)
 target_link_libraries(v143_indexes_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# PiecewiseBlackVarianceSurface — a Black-vol surface carrying one SmileSection
+# per tenor, interpolated linearly in total variance. v1.43 added its
+# smileSectionImpl override, which is what lets GaussianCopulaSpreadEngine read
+# a parametric smile off a term structure.
+# Emits references/v143/piecewise/black/variance/surface.json.
+add_executable(v143_piecewise_black_variance_surface_probe
+               v143_piecewise_black_variance_surface/probe.cpp)
+target_link_libraries(v143_piecewise_black_variance_surface_probe
+                      PRIVATE ${QUANTLIB_LIBRARY})
+
 # v1.43 addition: LBFGSB — the limited-memory bound-constrained quasi-Newton
 # optimizer (Byrd/Lu/Nocedal/Zhu 1995). The generalized Cauchy point and the
 # subspace minimization live in an anonymous namespace and cannot be probed
