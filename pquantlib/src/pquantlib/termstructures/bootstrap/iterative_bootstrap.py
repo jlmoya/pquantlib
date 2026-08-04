@@ -80,6 +80,18 @@ class BootstrapCurveProtocol(Protocol):
         self, dates: list[Date], times: list[float], data: list[float]
     ) -> None: ...
 
+    def set_max_date(self, d: Date) -> None:
+        """Extend the curve's valid range out to ``d``.
+
+        # C++ parity: ``ts_->maxDate_ = maxDate`` in
+        # ``IterativeBootstrap::initialize`` (iterativebootstrap.hpp:209).
+        # The curve reaches as far as the furthest date any helper actually
+        # needs, which is *not* the same as its last pillar — a helper whose
+        # pillar sits at its maturity date can still read the curve at a
+        # payment date days later.
+        """
+        ...
+
     def time_from_reference(self, d: Date) -> float: ...
 
 
@@ -138,6 +150,69 @@ class IterativeBootstrap[TS, Traits]:
         self._accuracy: float = accuracy
         self._valid_curve: bool = False
 
+    # -- setup ------------------------------------------------------------
+
+    def _initialize(self, curve: Any, traits: Any) -> None:
+        """Sort the helpers, build the pillar grid, and size the curve.
+
+        # C++ parity: ``IterativeBootstrap::initialize`` at
+        # iterativebootstrap.hpp:158-221.
+        """
+        n = len(self._instruments)
+        self._instruments.sort(key=lambda h: h.pillar_date())
+
+        dates: list[Date] = [traits.initial_date(curve)]
+        times: list[float] = [curve.time_from_reference(dates[0])]
+        data: list[float] = [traits.initial_value(curve)]
+
+        # C++ seeds ``maxDate`` with the first grid date and grows it to the
+        # furthest date any helper actually needs, then writes it onto the
+        # curve. The curve therefore extends past its last pillar whenever a
+        # helper's latest relevant date does — an OIS helper with a payment
+        # lag pillars at its accrual end but still reads the curve at the
+        # payment date.
+        max_date: Date = dates[0]
+
+        for i, helper in enumerate(self._instruments):
+            pillar = helper.pillar_date()
+            dates.append(pillar)
+            times.append(curve.time_from_reference(pillar))
+            data.append(traits.guess(i + 1, data, valid_data=False))
+
+            # Pillar uniqueness — C++ parity iterativebootstrap.hpp:189-190.
+            # Compared against the previous *grid* entry, so a helper whose
+            # pillar lands on the curve's own base date is caught too.
+            qassert.require(
+                dates[i] != dates[i + 1],
+                f"more than one instrument with pillar {pillar}",
+            )
+
+            # Helpers sorted by pillar must also be sorted by latest relevant
+            # date — otherwise a helper does not extend the curve at all.
+            # C++ parity: iterativebootstrap.hpp:192-200.
+            latest_relevant_date = helper.latest_relevant_date()
+            qassert.require(
+                latest_relevant_date > max_date,
+                f"{i + 1}th instrument (pillar: {pillar}) has "
+                f"latestRelevantDate ({latest_relevant_date}) before or equal "
+                f"to previous instrument's latestRelevantDate ({max_date})",
+            )
+            max_date = max(pillar, latest_relevant_date)
+
+            # C++ additionally sets ``loopRequired_`` when a pillar precedes
+            # its latest relevant date, so a *local* interpolator still gets a
+            # second pass. This port has no single-pass exit — the convergence
+            # check in ``calculate`` always compares against the previous
+            # pass — so the loop is unconditionally run. Nothing to force.
+
+        curve.bootstrap_install_grid(dates, times, data)
+        # C++ parity: iterativebootstrap.hpp:209 — ``ts_->maxDate_ = maxDate``.
+        curve.set_max_date(max_date)
+
+        # Wire helpers. C++ parity: iterativebootstrap.hpp:236-245.
+        for i in range(n):
+            self._instruments[i].set_term_structure(curve)
+
     # -- main entry -------------------------------------------------------
 
     def calculate(self) -> None:
@@ -146,11 +221,11 @@ class IterativeBootstrap[TS, Traits]:
         # C++ parity: ``IterativeBootstrap::calculate`` at
         # iterativebootstrap.hpp:184-368. Algorithm:
         # 1. Sort helpers by pillar date; check pillar uniqueness.
-        # 2. Build dates/times/data arrays (n + 1 each, with pillar 0 = base).
-        # 3. Wire each helper to the curve.
-        # 4. Outer loop: for each pillar i in 1..n, Brent-solve for
+        # 2. Build dates/times/data arrays (n + 1 each, with pillar 0 = base),
+        #    accumulate the curve's max date, and wire each helper to it.
+        # 3. Outer loop: for each pillar i in 1..n, Brent-solve for
         #    ``data[i]`` s.t. helper[i-1].quote_error() == 0.
-        # 5. Repeat until either non-global interpolator (no second pass
+        # 4. Repeat until either non-global interpolator (no second pass
         #    needed) or improvement <= accuracy.
         """
         n = len(self._instruments)
@@ -160,37 +235,9 @@ class IterativeBootstrap[TS, Traits]:
         curve: Any = self._curve
         traits: Any = self._traits
 
-        # Step 1 — sort helpers by pillar date.
-        self._instruments.sort(key=lambda h: h.pillar_date())
+        self._initialize(curve, traits)
 
-        # Pillar uniqueness check — # C++ parity iterativebootstrap.hpp:191-196.
-        for i in range(1, n):
-            qassert.require(
-                self._instruments[i - 1].pillar_date()
-                != self._instruments[i].pillar_date(),
-                "two instruments have the same pillar date",
-            )
-
-        # Step 2 — build dates/times/data grid.
-        # C++ parity: iterativebootstrap.hpp:204-220.
-        dates: list[Date] = [traits.initial_date(curve)]
-        times: list[float] = [curve.time_from_reference(dates[0])]
-        data: list[float] = [traits.initial_value(curve)]
-
-        for i in range(n):
-            dates.append(self._instruments[i].pillar_date())
-            times.append(curve.time_from_reference(dates[i + 1]))
-            data.append(traits.guess(i + 1, data, valid_data=False))
-
-        # Install grid on the curve.
-        curve.bootstrap_install_grid(dates, times, data)
-
-        # Step 3 — wire helpers.
-        # C++ parity: iterativebootstrap.hpp:225-227.
-        for i in range(n):
-            self._instruments[i].set_term_structure(curve)
-
-        # Steps 4-5 — outer iteration loop.
+        # Steps 3-4 — outer iteration loop.
         # C++ parity: iterativebootstrap.hpp:229-368.
         max_iterations = traits.max_iterations()
         brent = Brent()

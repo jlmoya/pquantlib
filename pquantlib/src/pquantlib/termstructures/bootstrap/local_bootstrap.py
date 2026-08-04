@@ -182,6 +182,10 @@ class LocalBootstrap[TS, Traits]:
         dates: list[Date] = [traits.initial_date(curve)]
         times: list[float] = [curve.time_from_reference(dates[0])]
         data: list[float] = [traits.initial_value(curve)]
+        # Note: unlike IterativeBootstrap, C++ ``LocalBootstrap::calculate``
+        # (localbootstrap.hpp:174-185) never writes ``ts_->maxDate_``, so a
+        # locally-bootstrapped curve does stop at its last pillar. Left as C++
+        # has it rather than "improved" into disagreeing with the oracle.
         for i in range(n):
             dates.append(self._instruments[i].pillar_date())
             times.append(curve.time_from_reference(dates[i + 1]))

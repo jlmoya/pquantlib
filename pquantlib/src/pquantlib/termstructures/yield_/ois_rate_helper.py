@@ -113,10 +113,57 @@ class OISRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         )
         self._earliest_date = earliest
         self._maturity_date = maturity
-        self._latest_relevant_date = maturity
-        if self._pillar_choice in (PillarChoice.MaturityDate, PillarChoice.LastRelevantDate):
+
+        # C++ parity: oisratehelper.cpp:171-176 —
+        #   latestRelevantDate_ = latestDate_
+        #     = max(maturityDate_, lastPaymentDate, fixingEndDate)
+        #
+        # ``lastPaymentDate`` is the later of the two legs' final payment
+        # dates. Both legs are paid ``payment_lag`` business days after the
+        # accrual end, on the payment calendar — which for an OIS built by
+        # ``make_ois`` is the overnight index's fixing calendar. A lag of 0
+        # collapses to ``adjust(maturity)``, i.e. maturity itself.
+        #
+        # ``fixingEndDate`` is
+        # ``index.maturity_date(index.value_date(last_fixing_date))``. For an
+        # overnight index — zero fixing days, one-business-day tenor — the
+        # last fixing's value date is the coupon's penultimate value date and
+        # its maturity is the final one, i.e. the adjusted accrual end. So
+        # that term is already covered by ``maturity`` and adds nothing here.
+        # (It would not be, for the lookback / observation-shift variants C++
+        # supports; this port's OvernightIndexedCoupon implements none of
+        # them, and the helper does not accept them either.)
+        last_payment_date = cal.advance(
+            maturity, self._payment_lag, TimeUnit.Days, self._payment_convention
+        )
+        self._latest_relevant_date = max(maturity, last_payment_date)
+        self._latest_date = self._latest_relevant_date
+
+        # C++ parity: oisratehelper.cpp:178-195.
+        if self._pillar_choice == PillarChoice.MaturityDate:
             self._pillar_date = maturity
-        self._latest_date = self._pillar_date
+        elif self._pillar_choice == PillarChoice.LastRelevantDate:
+            self._pillar_date = self._latest_relevant_date
+        elif self._pillar_choice == PillarChoice.CustomDate:
+            # pillar_date already assigned at construction time
+            qassert.require(
+                self._pillar_date is not None,
+                "CustomDate pillar requires custom_pillar_date argument",
+            )
+            assert self._pillar_date is not None
+            qassert.require(
+                self._pillar_date >= earliest,
+                f"pillar date ({self._pillar_date}) must be later than or equal "
+                f"to the instrument's earliest date ({earliest})",
+            )
+            qassert.require(
+                self._pillar_date <= self._latest_relevant_date,
+                f"pillar date ({self._pillar_date}) must be before or equal to "
+                f"the instrument's latest relevant date "
+                f"({self._latest_relevant_date})",
+            )
+        else:
+            qassert.fail(f"unknown Pillar.Choice({int(self._pillar_choice)})")
 
     # --- inspectors ---------------------------------------------------------
 

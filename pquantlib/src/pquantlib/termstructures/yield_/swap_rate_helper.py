@@ -165,12 +165,48 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         )
         self._earliest_date = earliest
         self._maturity_date = maturity
-        # In C++ the latest_relevant_date considers the last coupon's fixing_end_date;
-        # here we conservatively use maturity.
+
+        # C++ parity: ratehelpers.cpp:587-589 —
+        #   latestRelevantDate_ = max(maturityDate_, lastCoupon->fixingEndDate())
+        #
+        # C++ can ask that question because ``initializeDates`` builds a real
+        # VanillaSwap; this port approximates the schedule with calendar
+        # advances and has no last coupon to interrogate. Under the regular
+        # schedule it does model — every float period exactly one index tenor
+        # long, no stub — the last coupon's fixing period ends at the accrual
+        # end, so the max collapses to ``maturity``. It would not collapse for
+        # a short final stub or an index tenor overrunning the last period;
+        # those are not representable here. Recorded as a known gap rather
+        # than approximated, since ``LastRelevantDate`` is the default pillar
+        # and a date guessed +/- a business day would move every curve node.
         self._latest_relevant_date = maturity
-        if self._pillar_choice in (PillarChoice.MaturityDate, PillarChoice.LastRelevantDate):
+        self._latest_date = self._latest_relevant_date
+
+        # C++ parity: ratehelpers.cpp:591-611.
+        if self._pillar_choice == PillarChoice.MaturityDate:
             self._pillar_date = maturity
-        self._latest_date = self._pillar_date
+        elif self._pillar_choice == PillarChoice.LastRelevantDate:
+            self._pillar_date = self._latest_relevant_date
+        elif self._pillar_choice == PillarChoice.CustomDate:
+            # pillar_date already assigned at construction time
+            qassert.require(
+                self._pillar_date is not None,
+                "CustomDate pillar requires custom_pillar_date argument",
+            )
+            assert self._pillar_date is not None
+            qassert.require(
+                self._pillar_date >= earliest,
+                f"pillar date ({self._pillar_date}) must be later than or equal "
+                f"to the instrument's earliest date ({earliest})",
+            )
+            qassert.require(
+                self._pillar_date <= self._latest_relevant_date,
+                f"pillar date ({self._pillar_date}) must be before or equal to "
+                f"the instrument's latest relevant date "
+                f"({self._latest_relevant_date})",
+            )
+        else:
+            qassert.fail(f"unknown Pillar.Choice({int(self._pillar_choice)})")
 
     # --- inspectors ----------------------------------------------------------
 

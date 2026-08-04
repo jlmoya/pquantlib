@@ -154,8 +154,15 @@ class PiecewiseYieldCurve(YieldTermStructure):
             | None
         ) = None
         self._bootstrap_done: bool = False
+        # C++ parity: ``InterpolatedCurve::maxDate_`` (interpolatedcurve.hpp:137)
+        # — null until the bootstrap fills it in.
+        self._max_date: Date | None = None
 
     # ---- BootstrapCurveProtocol ------------------------------------------
+
+    def set_max_date(self, d: Date) -> None:
+        """C++ parity: ``ts_->maxDate_ = maxDate`` (iterativebootstrap.hpp:209)."""
+        self._max_date = d
 
     def base_date(self) -> Date:
         # The earliest date on the bootstrap grid is the reference date.
@@ -289,8 +296,16 @@ class PiecewiseYieldCurve(YieldTermStructure):
     # ---- YieldTermStructure interface ------------------------------------
 
     def max_date(self) -> Date:
-        # Use the latest helper's pillar as the max date — same as
-        # base scaffold.
+        """C++ parity: ``InterpolatedDiscountCurve::maxDate`` (discountcurve.hpp:114-119).
+
+        The bootstrap-supplied max date wins when there is one: the curve
+        reaches as far as the furthest date any helper needs, which can be
+        past its last pillar (an OIS helper with a payment lag pillars at its
+        accrual end but still reads the curve at the payment date). Falling
+        back to the last pillar is the pre-bootstrap answer only.
+        """
+        if self._max_date is not None:
+            return self._max_date
         u: Any = self._underlying
         if u is not None and u._dates:
             return u._dates[-1]

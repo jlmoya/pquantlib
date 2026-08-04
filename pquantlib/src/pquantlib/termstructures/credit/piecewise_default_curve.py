@@ -201,6 +201,17 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
 
     # ---- BootstrapCurveProtocol surface ----------------------------------
 
+    def set_max_date(self, d: Date) -> None:
+        """No-op: C++ credit curves ignore ``maxDate_``.
+
+        ``IterativeBootstrap`` writes ``ts_->maxDate_`` for every curve it
+        drives, but ``InterpolatedSurvivalProbabilityCurve::maxDate`` /
+        ``InterpolatedHazardRateCurve::maxDate`` (v1.43) return ``dates_.back()``
+        unconditionally, so the value never surfaces. Accepted and dropped
+        here rather than silently diverging by honouring it.
+        """
+        del d
+
     def base_date(self) -> Date:
         return self.reference_date()
 

@@ -141,6 +141,15 @@ class PiecewiseYoYOptionletVolatilityCurve(InterpolatedYoYOptionletVolatilityCur
             np.asarray(partial_data, dtype=np.float64),
         )
 
+    def set_max_date(self, d: Date) -> None:
+        """No-op: C++'s YoY optionlet vol curve ignores ``maxDate_``.
+
+        ``InterpolatedYoYOptionletVolatilityCurve::maxDate``
+        (yoyinflationoptionletvolatilitystructure2.hpp:73-76) derives its answer
+        from the interpolation's ``xMax``, never from ``maxDate_``.
+        """
+        del d
+
     def bootstrap_install_grid(
         self, dates: list[Date], times: list[float], data: list[float]
     ) -> None:

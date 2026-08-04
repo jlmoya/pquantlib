@@ -35,6 +35,7 @@ class _FakeCurve:
         self._times: list[float] = []
         self._data: list[float] = []
         self._interpolation: LinearInterpolation | None = None
+        self._max_date: Date | None = None
 
     # -- BootstrapCurveProtocol ---------------------------------------
 
@@ -43,6 +44,9 @@ class _FakeCurve:
 
     def base_date(self) -> Date:
         return self._dates[0] if self._dates else self._today
+
+    def set_max_date(self, d: Date) -> None:
+        self._max_date = d
 
     def times(self) -> list[float]:
         return list(self._times)
@@ -159,7 +163,7 @@ def test_iterative_bootstrap_pins_quotes_for_linear_curve() -> None:
 
 
 def test_iterative_bootstrap_rejects_duplicate_pillars() -> None:
-    """C++ parity: ``two instruments have the same pillar date``."""
+    """C++ parity: ``more than one instrument with pillar <date>``."""
     today = Date(43000)
     curve = _FakeCurve(today)
     same_pillar = Date(43365)
@@ -173,7 +177,7 @@ def test_iterative_bootstrap_rejects_duplicate_pillars() -> None:
         instruments=helpers,
         traits=traits,
     )
-    with pytest.raises(Exception, match="same pillar date"):
+    with pytest.raises(Exception, match="more than one instrument with pillar"):
         bootstrapper.calculate()
 
 

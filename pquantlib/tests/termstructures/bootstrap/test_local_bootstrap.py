@@ -35,12 +35,16 @@ class _FakeCurve:
         self._times: list[float] = []
         self._data: list[float] = []
         self._interpolation: LinearInterpolation | None = None
+        self._max_date: Date | None = None
 
     def reference_date(self) -> Date:
         return self._today
 
     def base_date(self) -> Date:
         return self._dates[0] if self._dates else self._today
+
+    def set_max_date(self, d: Date) -> None:
+        self._max_date = d
 
     def times(self) -> list[float]:
         return list(self._times)

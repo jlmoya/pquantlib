@@ -83,6 +83,9 @@ class PiecewiseYoYInflationCurve(InterpolatedYoYInflationCurve):
         )
         self._traits: YoYInflationTraits = YoYInflationTraits()
         self._accuracy: float = accuracy
+        # C++ parity: ``InterpolatedCurve::maxDate_`` (interpolatedcurve.hpp:137)
+        # — null until the bootstrap fills it in.
+        self._max_date: Date | None = None
         self._bootstrap()
 
     # -- IterativeBootstrap protocol ---------------------------------------
@@ -107,6 +110,20 @@ class PiecewiseYoYInflationCurve(InterpolatedYoYInflationCurve):
             np.asarray(partial_times, dtype=np.float64),
             np.asarray(partial_data, dtype=np.float64),
         )
+
+    def set_max_date(self, d: Date) -> None:
+        """C++ parity: ``ts_->maxDate_ = maxDate`` (iterativebootstrap.hpp:209).
+
+        Honoured by ``max_date`` below, as
+        ``InterpolatedYoYInflationCurve::maxDate`` does.
+        """
+        self._max_date = d
+
+    def max_date(self) -> Date:
+        """C++ parity: interpolatedyoyinflationcurve.hpp:139-144."""
+        if self._max_date is not None:
+            return self._max_date
+        return self._dates[-1]
 
     def bootstrap_install_grid(
         self,
