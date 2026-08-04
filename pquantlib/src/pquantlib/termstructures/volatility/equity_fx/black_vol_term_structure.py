@@ -1,7 +1,7 @@
 """Black volatility term-structure abstract bases (equity / FX).
 
 # C++ parity: ql/termstructures/volatility/equityfx/blackvoltermstructure.hpp +
-#             blackvoltermstructure.cpp (v1.42.1).
+#             blackvoltermstructure.cpp (v1.43).
 
 Three abstract classes in this module:
 
@@ -24,6 +24,13 @@ All three classes default the business-day convention to ``Following``
 Construction modes 1 (delegated) and 2 (fixed reference date) are
 ported; mode 3 (moving via settlement days) is deferred — see the
 note in VolatilityTermStructure.
+
+v1.43 added a smile view: ``atm_level(t)``, ``smile_section(date | time)``
+and the ``_smile_section_impl(t)`` hook. The default implementation wraps the
+surface in a :class:`SmileSection` adapter that reads back through
+``black_vol``, so any existing surface gains a smile without changes; a
+subclass with a native smile representation overrides the hook to return
+self-contained sections.
 """
 
 from __future__ import annotations
@@ -33,10 +40,40 @@ from abc import abstractmethod
 
 from pquantlib import qassert
 from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.termstructures.volatility.smile_section import SmileSection
 from pquantlib.termstructures.volatility_term_structure import VolatilityTermStructure
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendar import Calendar
 from pquantlib.time.date import Date
+
+
+class _BlackVolSmileSectionAdapter(SmileSection):
+    """SmileSection view of a slice through a Black-vol surface.
+
+    # C++ parity: the anonymous-namespace ``BlackVolSmileSectionAdapter`` in
+    # blackvoltermstructure.cpp (v1.43). C++ holds the surface by
+    # ``shared_ptr`` obtained from ``shared_from_this()`` — and fails loudly
+    # if the surface is not owned by a ``shared_ptr`` — purely to keep it
+    # alive for the section's lifetime. Python's reference counting makes the
+    # plain attribute below do that job, so the ``bad_weak_ptr`` branch has no
+    # analogue here.
+    """
+
+    def __init__(self, vol: BlackVolTermStructure, t: float) -> None:
+        super().__init__(exercise_time=t, day_counter=vol.day_counter())
+        self._vol: BlackVolTermStructure = vol
+
+    def min_strike(self) -> float:
+        return self._vol.min_strike()
+
+    def max_strike(self) -> float:
+        return self._vol.max_strike()
+
+    def atm_level(self) -> float:
+        return self._vol.atm_level(self.exercise_time())
+
+    def _volatility_impl(self, strike: float) -> float:
+        return self._vol.black_vol_at_time(self.exercise_time(), strike, True)
 
 
 class BlackVolTermStructure(VolatilityTermStructure):
@@ -97,6 +134,45 @@ class BlackVolTermStructure(VolatilityTermStructure):
         self.check_time_range(t, extrapolate)
         self.check_strike(strike, extrapolate)
         return self._black_vol_impl(t, strike)
+
+    # --- smile view (v1.43) ------------------------------------------------
+
+    def atm_level(self, t: float) -> float:
+        """At-the-money level at time ``t``, or NaN when not known.
+
+        # C++ parity: ``BlackVolTermStructure::atmLevel`` (v1.43), which
+        # returns ``Null<Real>()`` by default. This port's null-Real analogue
+        # for a level is NaN — the same sentinel ``SmileSection.option_price``
+        # already tests for.
+        """
+        del t
+        return float("nan")
+
+    def smile_section(self, maturity: Date, extrapolate: bool = False) -> SmileSection:
+        """Smile at an option date.
+
+        # C++ parity: ``BlackVolTermStructure::smileSection(const Date&, bool)``.
+        """
+        self.check_range(maturity, extrapolate)
+        return self._smile_section_impl(self.time_from_reference(maturity))
+
+    def smile_section_at_time(self, t: float, extrapolate: bool = False) -> SmileSection:
+        """Smile at an option time.
+
+        # C++ parity: ``BlackVolTermStructure::smileSection(Time, bool)``.
+        """
+        self.check_time_range(t, extrapolate)
+        return self._smile_section_impl(t)
+
+    def _smile_section_impl(self, t: float) -> SmileSection:
+        """Smile-section calculation.
+
+        # C++ parity: ``BlackVolTermStructure::smileSectionImpl`` (v1.43).
+        # The default wraps this surface in an adapter; subclasses with a
+        # native smile representation override to return self-contained
+        # objects.
+        """
+        return _BlackVolSmileSectionAdapter(self, t)
 
     # --- public Black-variance API: by Date --------------------------------
 

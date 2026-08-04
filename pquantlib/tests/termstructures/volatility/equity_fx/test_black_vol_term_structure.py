@@ -204,3 +204,68 @@ def test_forward_variance_rejects_date1_after_date2() -> None:
         ts.black_forward_variance(
             Date.from_ymd(15, Month.June, 2028), Date.from_ymd(15, Month.June, 2027), 100.0
         )
+
+
+# --- v1.43 smile view --------------------------------------------------------
+
+
+class _SkewedBlackVol(_StubBlackVol):
+    """Strike-dependent stub so a smile slice is distinguishable from a flat one."""
+
+    def min_strike(self) -> float:
+        return 1.0
+
+    def max_strike(self) -> float:
+        return 1000.0
+
+    def _black_vol_impl(self, t: float, strike: float) -> float:
+        _ = t
+        return 0.20 + 0.001 * (100.0 - strike)
+
+
+def test_default_atm_level_is_null() -> None:
+    """C++ ``atmLevel`` returns ``Null<Real>()`` by default (v1.43).
+
+    NaN is this port's null-Real analogue for a level — the sentinel
+    ``SmileSection.option_price`` already tests for.
+    """
+    ts = _StubBlackVol(reference_date=Date.from_ymd(15, Month.January, 2024))
+    assert math.isnan(ts.atm_level(1.0))
+
+
+def test_smile_section_reads_back_through_the_surface() -> None:
+    """C++ ``BlackVolTermStructure::smileSectionImpl`` default adapter (v1.43).
+
+    The adapter must be a live view: every volatility it returns comes from the
+    surface at the section's own exercise time, so a strike-dependent surface
+    produces a strike-dependent section.
+    """
+    ref = Date.from_ymd(15, Month.January, 2024)
+    ts = _SkewedBlackVol(reference_date=ref, day_counter=Actual365Fixed())
+    maturity = Date.from_ymd(15, Month.January, 2025)
+    t = ts.time_from_reference(maturity)
+
+    section = ts.smile_section(maturity)
+    tolerance.tight(section.exercise_time(), t)
+    tolerance.tight(section.min_strike(), ts.min_strike())
+    tolerance.tight(section.max_strike(), ts.max_strike())
+    assert math.isnan(section.atm_level())
+    for strike in (80.0, 100.0, 120.0):
+        tolerance.tight(section.volatility(strike), ts.black_vol(maturity, strike))
+
+    # The time-anchored overload must agree with the date one.
+    by_time = ts.smile_section_at_time(t)
+    for strike in (80.0, 100.0, 120.0):
+        tolerance.tight(by_time.volatility(strike), section.volatility(strike))
+
+
+def test_smile_section_checks_the_range() -> None:
+    """Both overloads run the same range check the vol accessors do."""
+    ref = Date.from_ymd(15, Month.January, 2024)
+    ts = _SkewedBlackVol(reference_date=ref, day_counter=Actual365Fixed())
+    past = Date.from_ymd(15, Month.January, 2023)
+    with pytest.raises(LibraryException, match="before reference date"):
+        ts.smile_section(past)
+    # Beyond max_date without extrapolation.
+    with pytest.raises(LibraryException):
+        ts.smile_section_at_time(1_000.0)
