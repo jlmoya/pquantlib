@@ -9,10 +9,14 @@ residuals). The Python port keeps the same shape: subclasses must
 override ``values`` and may optionally override ``value`` and
 ``gradient`` for analytic derivatives.
 
-Higher-order methods (``valueAndGradient``, ``jacobian``,
-``valuesAndJacobian``, ``ParametersTransformation``, the templated
-``SimpleCostFunction``) are deferred — they are only needed by the
-Levenberg-Marquardt and BFGS implementations, both carved out of L1-D.
+``valueAndGradient`` is ported: it is the *only* entry point L-BFGS-B
+uses to reach the objective, and subclasses override it to compute
+value and gradient in one pass when the two share work.
+
+The remaining higher-order methods (``jacobian``, ``valuesAndJacobian``,
+``ParametersTransformation``, the templated ``SimpleCostFunction``) are
+still deferred — they are only needed by Levenberg-Marquardt, carved
+out of L1-D.
 """
 
 from __future__ import annotations
@@ -64,6 +68,21 @@ class CostFunction(ABC):
             fm = self.value(xx)
             grad[i] = 0.5 * (fp - fm) / eps
             xx[i] = x[i]
+
+    def value_and_gradient(self, grad: npt.NDArray[np.float64], x: npt.NDArray[np.float64]) -> float:
+        """Store the gradient at ``x`` into ``grad`` and return ``value(x)``.
+
+        # C++ parity: costfunction.hpp:64-68 — default
+        # ``valueAndGradient`` impl, ``gradient(grad, x); return value(x);``.
+
+        Subclasses that can compute both in one pass override this. Note
+        that the default routes through ``self.gradient`` / ``self.value``
+        directly, so a subclass supplying only ``value`` gets the
+        central-difference gradient here — and those inner evaluations
+        never reach ``Problem``, so they do not move its counters.
+        """
+        self.gradient(grad, x)
+        return self.value(x)
 
     def finite_difference_epsilon(self) -> float:
         """Step size for the central-difference gradient (default 1e-8).

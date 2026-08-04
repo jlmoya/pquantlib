@@ -142,11 +142,15 @@ class Problem:
 
     def value_and_gradient(self, grad: npt.NDArray[np.float64], x: npt.NDArray[np.float64]) -> float:
         """Increment both counters, return ``value(x)`` and store ``gradient`` at ``x``."""
-        # C++ parity: problem.hpp:132-137.
+        # C++ parity: problem.hpp:132-137 — dispatches to
+        # ``costFunction_.valueAndGradient(grad, x)``, NOT to ``gradient``
+        # followed by ``value``. The distinction is observable: a cost
+        # function that overrides ``value_and_gradient`` to share work
+        # between the two (or to instrument the call) is only reached
+        # through the single dispatch.
         self._function_evaluation += 1
         self._gradient_evaluation += 1
-        self._cost_function.gradient(grad, x)
-        return self._cost_function.value(x)
+        return self._cost_function.value_and_gradient(grad, x)
 
     def reset(self) -> None:
         """Zero the counters, NaN-out the cached function and gradient values."""

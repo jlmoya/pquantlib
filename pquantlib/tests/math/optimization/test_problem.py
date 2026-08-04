@@ -86,6 +86,41 @@ def test_value_and_gradient_increments_both_counters() -> None:
     assert p.gradient_evaluation == 1
 
 
+def test_value_and_gradient_dispatches_to_the_cost_function_hook() -> None:
+    """C++ ``Problem::valueAndGradient`` calls ``CostFunction::valueAndGradient``.
+
+    Not ``gradient`` then ``value`` — the single dispatch is what lets a
+    cost function share work between the two, or observe the call.
+    """
+
+    class _OnePass(CostFunction):
+        def __init__(self) -> None:
+            self.one_pass_calls: int = 0
+            self.gradient_calls: int = 0
+
+        def values(self, x: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+            return x.copy()
+
+        def gradient(self, grad: npt.NDArray[np.float64], x: npt.NDArray[np.float64]) -> None:
+            self.gradient_calls += 1
+            grad[:] = 2.0 * x
+
+        def value_and_gradient(
+            self, grad: npt.NDArray[np.float64], x: npt.NDArray[np.float64]
+        ) -> float:
+            self.one_pass_calls += 1
+            grad[:] = 2.0 * x
+            return float(np.sum(x * x))
+
+    cf = _OnePass()
+    p = Problem(cf, NoConstraint())
+    x = np.array([1.0, 2.0], dtype=np.float64)
+    grad = np.zeros_like(x)
+    assert p.value_and_gradient(grad, x) == 5.0
+    assert cf.one_pass_calls == 1
+    assert cf.gradient_calls == 0
+
+
 def test_reset_zeros_counters_and_nans_cached_state() -> None:
     p = Problem(_Sumsq(), NoConstraint())
     p.set_function_value(1.0)

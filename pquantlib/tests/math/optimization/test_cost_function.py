@@ -61,3 +61,35 @@ def test_central_difference_gradient_for_quadratic() -> None:
 def test_finite_difference_epsilon_default() -> None:
     cf = _Quadratic()
     assert cf.finite_difference_epsilon() == 1e-8
+
+
+def test_value_and_gradient_defaults_to_gradient_then_value() -> None:
+    cf = _Quadratic()
+    x = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+    grad = np.zeros_like(x)
+    f = cf.value_and_gradient(grad, x)
+    assert math.isclose(f, cf.value(x), rel_tol=1e-15)
+    assert np.allclose(grad, np.full(3, 1.0 / 3.0), atol=1e-5)
+
+
+def test_value_and_gradient_is_overridable_as_a_single_dispatch() -> None:
+    class _OnePass(CostFunction):
+        def __init__(self) -> None:
+            self.calls: int = 0
+
+        def values(self, x: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+            return x.copy()
+
+        def value_and_gradient(
+            self, grad: npt.NDArray[np.float64], x: npt.NDArray[np.float64]
+        ) -> float:
+            self.calls += 1
+            grad[:] = 2.0 * x
+            return float(np.sum(x * x))
+
+    cf = _OnePass()
+    x = np.array([1.0, 2.0], dtype=np.float64)
+    grad = np.zeros_like(x)
+    assert cf.value_and_gradient(grad, x) == 5.0
+    assert np.array_equal(grad, np.array([2.0, 4.0]))
+    assert cf.calls == 1
