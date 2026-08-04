@@ -17,6 +17,7 @@ Public surface in alphabetical order:
 - ``BlackIborCouponPricer`` (Black-vol pricer — without cap/floor support)
 - ``InterestRate`` (frozen dataclass — rate + day_counter + compounding + frequency)
 - ``OvernightIndexedCoupon`` (concrete OIS-style daily-compounded coupon)
+- ``RateAveraging`` (IntEnum: Simple/Compound)
 - ``SimpleCashFlow`` (fixed amount on a date)
 
 Free functions:
