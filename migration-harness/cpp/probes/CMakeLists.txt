@@ -764,3 +764,13 @@ target_link_libraries(cluster_ws3fd1_probe PRIVATE ${QUANTLIB_LIBRARY})
 # v1.43 additions: the three new interest-rate indexes (NIBOR / SHIR / ZARONIA)
 add_executable(v143_indexes_probe v143_indexes/probe.cpp)
 target_link_libraries(v143_indexes_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 addition: the constant-notional cross-currency swap family —
+# ConstNotionalCrossCurrencySwap (base), ...BasisSwap (float/float),
+# ...FixedVsFloatingSwap and DiscountingConstNotionalCrossCurrencySwapEngine.
+# Curves, indexes and schedules are all built inline from literal tables so a
+# mismatch localises to the swap/engine rather than to a shared index
+# definition. Pins NPV, the seven per-leg engine outputs and every cashflow.
+# Emits references/v143/xccy/swaps.json.
+add_executable(v143_xccy_swaps_probe v143_xccy_swaps/probe.cpp)
+target_link_libraries(v143_xccy_swaps_probe PRIVATE ${QUANTLIB_LIBRARY})
