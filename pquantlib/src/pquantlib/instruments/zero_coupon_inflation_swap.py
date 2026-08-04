@@ -150,7 +150,7 @@ class ZeroCouponInflationSwap(Swap):
         fixed_rate: float,
         index: ZeroInflationIndex,
         observation_lag: Period,
-        observation_interpolation: InterpolationType = InterpolationType.AsIndex,
+        observation_interpolation: InterpolationType = InterpolationType.Flat,
         adjust_inflation_obs_dates: bool = False,
         inf_calendar: Calendar | None = None,
         inf_convention: BusinessDayConvention | None = None,

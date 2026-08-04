@@ -65,7 +65,7 @@ class CPISwap(Swap):
         fixed_payment_roll: BusinessDayConvention,
         observation_lag: Period,
         fixed_index: ZeroInflationIndex,
-        observation_interpolation: InterpolationType = InterpolationType.AsIndex,
+        observation_interpolation: InterpolationType = InterpolationType.Flat,
         inflation_nominal: float | None = None,
         # Pre-built legs (until L7-C lands CPILeg / IborLeg builders for inflation)
         cpi_leg: Sequence[CashFlow] | None = None,

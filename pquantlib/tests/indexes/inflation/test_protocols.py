@@ -8,6 +8,8 @@ conformance is a separate (silent) pyright check.
 
 from __future__ import annotations
 
+import pytest
+
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.indexes.inflation.eu_hicp import EUHICP, YoYEUHICP
 from pquantlib.indexes.inflation.fr_hicp import FRHICP, YoYFRHICP
@@ -43,13 +45,14 @@ def test_all_yoy_concretes_satisfy_inflation_index_protocol() -> None:
         assert isinstance(ctor(), InflationIndexProtocol)
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_inflation_index_protocol_accessor_round_trip() -> None:
     """All Protocol-listed accessors return values of the expected type."""
     eu: InflationIndexProtocol = EUHICP()
     assert isinstance(eu.name(), str)
     assert isinstance(eu.family_name(), str)
     assert isinstance(eu.frequency(), Frequency)
-    assert eu.interpolated() is False
+    assert eu.interpolated() is False  # pyright: ignore[reportDeprecated]
     assert eu.revised() is False
 
 

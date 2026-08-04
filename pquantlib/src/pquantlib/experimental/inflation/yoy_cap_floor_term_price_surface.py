@@ -43,7 +43,10 @@ def _index_is_interpolated(interp: InterpolationType, index: YoYInflationIndex) 
     if interp == InterpolationType.Linear:
         return True
     if interp == InterpolationType.AsIndex:
-        return index.interpolated()
+        # C++ keeps this call, wrapped in QL_DEPRECATED_DISABLE_WARNING
+        # (inflationindex.cpp, detail::CPI::effectiveInterpolationType) —
+        # resolving AsIndex is the one thing the flag is still for.
+        return index.interpolated()  # pyright: ignore[reportDeprecated]
     return False
 
 

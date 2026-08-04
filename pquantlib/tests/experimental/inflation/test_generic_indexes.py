@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pquantlib.currencies.currency import Currency
 from pquantlib.currencies.europe import EURCurrency
 from pquantlib.experimental.inflation.generic_indexes import GenericCPI, YYGenericCPI
@@ -20,6 +22,7 @@ def test_generic_region_payload() -> None:
     assert Region.Generic.region_code() == "GENERIC"
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_generic_cpi_identity() -> None:
     idx = GenericCPI(
         Frequency.Monthly, False, Period(2, TimeUnit.Months), EURCurrency()
@@ -31,7 +34,7 @@ def test_generic_cpi_identity() -> None:
     assert idx.region() == Region.Generic
     assert not idx.revised()
     # ZeroInflationIndex is always non-interpolated.
-    assert not idx.interpolated()
+    assert not idx.interpolated()  # pyright: ignore[reportDeprecated]
     assert idx.currency() == EURCurrency()
 
 
@@ -49,6 +52,7 @@ def test_yy_generic_cpi_identity() -> None:
     assert idx.currency().empty()
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yy_generic_cpi_interpolated_flag() -> None:
     idx = YYGenericCPI(
         Frequency.Monthly,
@@ -57,4 +61,4 @@ def test_yy_generic_cpi_interpolated_flag() -> None:
         Currency(),
         interpolated=True,
     )
-    assert idx.interpolated()
+    assert idx.interpolated()  # pyright: ignore[reportDeprecated]

@@ -44,9 +44,19 @@ if TYPE_CHECKING:
 class InterpolationType(IntEnum):
     """How to interpolate inflation fixings between period anchors.
 
-    # C++ parity: ``CPI::InterpolationType`` in inflationindex.hpp:42-46.
+    # C++ parity: ``CPI::InterpolationType`` in inflationindex.hpp:48-56 (v1.43).
     """
 
+    #: .. deprecated:: 1.43
+    #:    C++ v1.43 marked ``CPI::AsIndex`` ``[[deprecated("Use either Linear or
+    #:    Flat")]]`` — it existed to ease migration from index-side to
+    #:    coupon-side interpolation, and every default that used to be
+    #:    ``AsIndex`` is now ``Flat``. Still accepted, and still resolved by
+    #:    ``effective_interpolation_type``, but do not pass it in new code.
+    #:
+    #: PEP 702's ``@deprecated`` decorates classes and functions, not enum
+    #: members, so this cannot be a runtime marker the way
+    #: :meth:`InflationIndex.interpolated` can.
     AsIndex = 0  # same interpolation as index (==Flat for our zero/yoy ports)
     Flat = 1  # flat from previous fixing
     Linear = 2  # linear between bracketing fixings

@@ -84,7 +84,11 @@ class _ObjectiveFunction:
     ) -> None:
         self._slope = slope
         self._frequency = an_index.frequency()
-        self._index_is_interpolated = an_index.interpolated()
+        # C++ parity: interpolatedyoyoptionletstripper.hpp:81,108 (v1.43) —
+        # ``indexIsInterpolated_`` stopped being seeded from
+        # ``anIndex->interpolated()`` and now defaults to false. Indexes no
+        # longer interpolate; coupons do.
+        self._index_is_interpolated = False
         self._price_to_match = price_to_match
         self._surf = surf
         self._pricer = pricer
@@ -98,7 +102,9 @@ class _ObjectiveFunction:
             n,
             surf.calendar(),
             surf.observation_lag(),
-            InterpolationType.AsIndex,
+            # C++ parity: interpolatedyoyoptionletstripper.hpp:116 (v1.43) —
+            # CPI::AsIndex was replaced by CPI::Flat when AsIndex was deprecated.
+            InterpolationType.Flat,
             strike=strike,
             nominal=10000.0,
         )

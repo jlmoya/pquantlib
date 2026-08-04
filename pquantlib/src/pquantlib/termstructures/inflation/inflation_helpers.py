@@ -79,7 +79,7 @@ class ZeroCouponInflationSwapHelper(BootstrapHelper[ZeroInflationTermStructure])
         day_counter: DayCounter,
         index: ZeroInflationIndex,
         nominal_yts: YieldTermStructureProtocol | None = None,
-        observation_interpolation: InterpolationType = InterpolationType.AsIndex,
+        observation_interpolation: InterpolationType = InterpolationType.Flat,
     ) -> None:
         super().__init__(quote)
         self._observation_lag: Period = observation_lag

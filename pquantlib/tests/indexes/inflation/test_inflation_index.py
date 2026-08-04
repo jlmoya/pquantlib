@@ -11,6 +11,7 @@ import pytest
 
 from pquantlib.currencies.europe import EURCurrency
 from pquantlib.exceptions import LibraryException
+from pquantlib.indexes.inflation.eu_hicp import EUHICP
 from pquantlib.indexes.inflation.inflation_index import (
     InflationIndex,
     YoYInflationIndex,
@@ -95,6 +96,7 @@ def _zero_stub() -> ZeroInflationIndex:
     )
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_zero_inflation_index_inspectors() -> None:
     idx = _zero_stub()
     assert idx.family_name() == "HICP"
@@ -105,7 +107,7 @@ def test_zero_inflation_index_inspectors() -> None:
     assert idx.currency().code == "EUR"
     assert idx.name() == "EU HICP"
     # ZeroInflationIndex always non-interpolated (C++ parity).
-    assert idx.interpolated() is False
+    assert idx.interpolated() is False  # pyright: ignore[reportDeprecated]
     # InflationIndex uses NullCalendar.
     assert isinstance(idx.fixing_calendar(), NullCalendar)
     assert idx.is_valid_fixing_date(Date.from_ymd(15, Month.May, 2020)) is True
@@ -134,6 +136,7 @@ def test_zero_inflation_index_past_fixing_lookup_and_missing() -> None:
 # ---- YoYInflationIndex (quoted + ratio modes) ------------------------
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoy_inflation_index_quoted_mode_inspectors() -> None:
     idx = YoYInflationIndex(
         family_name="YY_HICP",
@@ -145,7 +148,7 @@ def test_yoy_inflation_index_quoted_mode_inspectors() -> None:
         currency=EURCurrency(),
     )
     assert idx.ratio() is False
-    assert idx.interpolated() is False
+    assert idx.interpolated() is False  # pyright: ignore[reportDeprecated]
     assert idx.underlying_index() is None
     assert idx.name() == "EU YY_HICP"
 
@@ -191,3 +194,19 @@ def test_inflation_index_abstract_cannot_be_instantiated() -> None:
             Period(1, TimeUnit.Months),
             EURCurrency(),
         )
+
+
+# ---- v1.43 deprecation ----------------------------------------------
+
+
+def test_interpolated_is_deprecated() -> None:
+    """C++ v1.43 marked ``YoYInflationIndex::interpolated`` deprecated.
+
+    ``[[deprecated("Indexes no longer interpolate, coupons do")]]``
+    (inflationindex.hpp:235-239). The accessor still works — C++ keeps calling
+    it internally under a warning suppression — but every call site that isn't
+    resolving ``CPI::AsIndex`` was rewritten to a literal ``false`` in v1.43.
+    """
+    idx = EUHICP()
+    with pytest.deprecated_call(match="Indexes no longer interpolate"):
+        assert idx.interpolated() is False  # pyright: ignore[reportDeprecated]

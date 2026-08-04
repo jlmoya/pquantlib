@@ -44,7 +44,7 @@ def _check_zero(idx: ZeroInflationIndex, probe: dict[str, Any]) -> None:
     assert idx.availability_lag().length == probe["availability_lag_months"]
     assert idx.currency().code == probe["currency_code"]
     # ZeroInflationIndex always non-interpolated.
-    assert idx.interpolated() is False
+    assert idx.interpolated() is False  # pyright: ignore[reportDeprecated]
 
 
 def _check_yoy(idx: YoYInflationIndex, probe: dict[str, Any]) -> None:
@@ -57,33 +57,38 @@ def _check_yoy(idx: YoYInflationIndex, probe: dict[str, Any]) -> None:
     assert int(idx.frequency()) == probe["frequency"]
     assert idx.availability_lag().length == probe["availability_lag_months"]
     assert idx.currency().code == probe["currency_code"]
-    assert idx.interpolated() is probe["interpolated"]
+    assert idx.interpolated() is probe["interpolated"]  # pyright: ignore[reportDeprecated]
     assert idx.ratio() is probe["ratio"]
 
 
 # ---- zero-inflation concretes ---------------------------------------
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_euhicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(EUHICP(), reference["zero_indexes"]["EUHICP"])
     assert EUHICP().region() == Region.Europe
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_frhicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(FRHICP(), reference["zero_indexes"]["FRHICP"])
     assert FRHICP().region() == Region.France
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_ukrpi_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(UKRPI(), reference["zero_indexes"]["UKRPI"])
     assert UKRPI().region() == Region.UnitedKingdom
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_ukhicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(UKHICP(), reference["zero_indexes"]["UKHICP"])
     assert UKHICP().region() == Region.UnitedKingdom
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_uscpi_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(USCPI(), reference["zero_indexes"]["USCPI"])
     assert USCPI().region() == Region.UnitedStates
@@ -92,18 +97,22 @@ def test_uscpi_default_matches_cpp(reference: dict[str, Any]) -> None:
 # ---- YoY siblings (no YYUKHICP — does not exist upstream) -----------
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyeu_hicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_yoy(YoYEUHICP(), reference["yoy_indexes"]["YYEUHICP"])
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyfr_hicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_yoy(YoYFRHICP(), reference["yoy_indexes"]["YYFRHICP"])
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyuk_rpi_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_yoy(YoYUKRPI(), reference["yoy_indexes"]["YYUKRPI"])
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyus_cpi_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_yoy(YoYUSCPI(), reference["yoy_indexes"]["YYUSCPI"])
 
@@ -111,10 +120,11 @@ def test_yoyus_cpi_default_matches_cpp(reference: dict[str, Any]) -> None:
 # ---- interpolated kwarg threads through -----------------------------
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoy_index_interpolated_kwarg_is_respected() -> None:
     """Passing interpolated=True on the YoY concrete reaches the abstract."""
     yoy = YoYEUHICP(interpolated=True)
-    assert yoy.interpolated() is True
+    assert yoy.interpolated() is True  # pyright: ignore[reportDeprecated]
     assert yoy.ratio() is False  # quoted mode regardless of interpolation
 
 

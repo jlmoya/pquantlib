@@ -68,7 +68,10 @@ class KInterpolatedYoYOptionletVolatilitySurface(YoYOptionletVolatilitySurface):
             day_counter=day_counter,
             observation_lag=lag,
             frequency=cap_floor_prices.yoy_index().frequency(),
-            index_is_interpolated=cap_floor_prices.yoy_index().interpolated(),
+            # C++ parity: kinterpolatedyoyoptionletvolatilitysurface.hpp:115
+            # (v1.43) — the yoy index's ``interpolated()`` flag was replaced
+            # by a literal false. Indexes no longer interpolate; coupons do.
+            index_is_interpolated=False,
             volatility_type=vol_type,
             displacement=displacement,
         )

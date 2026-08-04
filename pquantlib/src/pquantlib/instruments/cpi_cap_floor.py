@@ -55,7 +55,7 @@ class CPICapFloorArguments(PricingEngineArguments):
         self.strike: float = 0.0
         self.index: ZeroInflationIndex | None = None
         self.observation_lag: Period = Period()
-        self.observation_interpolation: InterpolationType = InterpolationType.AsIndex
+        self.observation_interpolation: InterpolationType = InterpolationType.Flat
 
     def validate(self) -> None:
         # # C++ parity: ``CPICapFloor::arguments::validate`` is a no-op.
@@ -88,7 +88,7 @@ class CPICapFloor(Instrument):
         strike: float,
         inflation_index: ZeroInflationIndex,
         observation_lag: Period,
-        observation_interpolation: InterpolationType = InterpolationType.AsIndex,
+        observation_interpolation: InterpolationType = InterpolationType.Flat,
     ) -> None:
         # # C++ parity: CPICapFloor::CPICapFloor (cpicapfloor.cpp:37-70).
         # # C++ checks for non-null shared_ptrs at runtime; Python's type

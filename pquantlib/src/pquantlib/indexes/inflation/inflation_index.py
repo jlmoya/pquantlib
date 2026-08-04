@@ -43,6 +43,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from typing import Protocol, cast, runtime_checkable
+from warnings import deprecated
 
 from pquantlib import qassert
 from pquantlib.currencies.currency import Currency
@@ -203,10 +204,17 @@ class InflationIndex(Index):
     def revised(self) -> bool:
         return self._revised
 
+    @deprecated("Indexes no longer interpolate, coupons do")
     def interpolated(self) -> bool:
         """Return whether the index uses linear interpolation between fixings.
 
-        # C++ parity: only ``YoYInflationIndex`` carries this in C++; we
+        .. deprecated:: 1.43
+           Indexes no longer interpolate, coupons do.
+
+        # C++ parity: ``YoYInflationIndex::interpolated`` was marked
+        # ``[[deprecated("Indexes no longer interpolate, coupons do")]]`` in
+        # v1.43 (inflationindex.hpp:235-239), along with the ``interpolated_``
+        # member itself. Only ``YoYInflationIndex`` carries this in C++; we
         # hoist it onto the abstract per L7-A spec. ``ZeroInflationIndex``
         # always returns ``False`` (zero fixings are non-interpolated).
         """
