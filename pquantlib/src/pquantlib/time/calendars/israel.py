@@ -1,11 +1,14 @@
-"""Israel calendar — Tel-Aviv Stock Exchange + Settlement + SHIR markets.
+"""Israel calendar — Tel-Aviv Stock Exchange + Settlement + SHIR + Telbor markets.
 
-# C++ parity: ql/time/calendars/israel.hpp + .cpp (v1.42.1).
+# C++ parity: ql/time/calendars/israel.hpp + .cpp (v1.43).
 
-The Tel-Aviv / Settlement markets use a Friday+Saturday weekend, so they
-do NOT inherit ``WesternCalendar`` — they override ``_is_weekend``
-directly. The SHIR fixing calendar follows the C++ ``WesternImpl`` and
-uses a Saturday+Sunday weekend.
+The Tel-Aviv / Settlement markets used a Friday+Saturday weekend until
+2026-01-05 and Saturday+Sunday afterwards, so they do NOT inherit
+``WesternCalendar`` — they override ``_is_weekend`` directly. The SHIR
+fixing calendar follows the C++ ``WesternImpl`` and uses a
+Saturday+Sunday weekend. Telbor (new in v1.43) also uses Saturday+Sunday
+but derives from the plain ``Calendar::Impl``, so it observes no
+Easter-derived holidays.
 
 Holiday tables (Purim, Passover, Independence Day, Shavuot, Fast Day,
 Jewish New Year) are hard-coded from the C++ source.
@@ -39,6 +42,7 @@ class IsraelMarket(IntEnum):
     Settlement = 0  # generic settlement calendar (deprecated in v1.43)
     TASE = 1  # Tel-Aviv stock exchange calendar
     SHIR = 2  # SHIR fixing calendar
+    Telbor = 3  # Telbor fixing calendar (new in v1.43)
 
 
 def _date_set(*ymds: tuple[int, Month, int]) -> frozenset[Date]:
@@ -481,6 +485,78 @@ class _IsraelTelAvivCalendar(Calendar):
         )
 
 
+class _IsraelTelborCalendar(Calendar):
+    """Telbor fixing calendar — new in C++ v1.43.
+
+    # C++ parity: ``Israel::TelborImpl`` (israel.cpp:396-401, 473-521).
+    # Saturday+Sunday weekend, like SHIR; unlike SHIR it derives from the
+    # plain ``Calendar::Impl``, not ``WesternImpl``, so no Easter-derived
+    # holidays (no Good Friday) — only the fixed Western dates below.
+    """
+
+    def name(self) -> str:
+        return "Telbor fixing calendar"
+
+    def _is_weekend(self, w: Weekday) -> bool:
+        # C++ parity: israel.cpp:473-475.
+        return w in (Weekday.Saturday, Weekday.Sunday)
+
+    def _is_business_day(self, d: Date) -> bool:
+        # Same defensive short-circuit as the Tel-Aviv calendar: the Israeli
+        # holiday helpers chain up to 21 days of subtraction, which would
+        # push below ``Date.min_date`` for dates in the first month of the
+        # valid range. The tables only cover 2000+, so "no holiday possible"
+        # below the threshold.
+        if d.serial < _MIN_SAFE_HOLIDAY_SERIAL:
+            return not self._is_weekend(d.weekday())
+
+        w = d.weekday()
+        day = d.day_of_month()
+        m = d.month()
+        y = d.year()
+
+        return not (
+            self._is_weekend(w)
+            or (day == 1 and m == Month.January)  # Western New Year's day
+            # General Elections
+            or (
+                ((day == 9 and m == Month.April) or (day == 17 and m == Month.September))
+                and y == 2019
+            )
+            or (day == 2 and m == Month.March and y == 2020)
+            # Holidays abroad
+            or (
+                ((day == 22 and m == Month.April) or (day == 27 and m == Month.May))
+                and y == 2019
+            )
+            or (
+                (
+                    ((day in (10, 13)) and m == Month.April)
+                    or ((day in (8, 25)) and m == Month.May)
+                )
+                and y == 2020
+            )
+            or _is_purim(d)
+            or _is_purim(d - 1)  # Shushan Purim
+            or _is_passover_1st(d + 1)  # Eve of Passover
+            or _is_passover_1st(d)
+            or _is_passover_1st(d - 6)  # Passover VII
+            or _is_independence_day(d)
+            or _is_shavuot(d)
+            or _is_fast_day(d)
+            or _is_new_years_day(d)
+            or _is_new_years_day(d - 1)  # 2nd day of new year
+            or _is_yom_kippur(d)
+            or _is_sukkot(d)
+            or _is_simchat_torah(d)
+            # last Monday of May (Spring Bank Holiday)
+            or (day >= 25 and w == Weekday.Monday and m == Month.May and y not in (2002, 2012))
+            or (day == 25 and m == Month.December)  # Christmas
+            # Day of Goodwill (Boxing Day)
+            or (day == 26 and m == Month.December and y >= 2000 and y != 2020)
+        )
+
+
 class _IsraelShirCalendar(WesternCalendar):
     """SHIR fixing calendar (Sat+Sun weekend — C++ inherits WesternImpl)."""
 
@@ -547,6 +623,8 @@ class Israel(Calendar):
             )
         if market in (IsraelMarket.Settlement, IsraelMarket.TASE):
             self._impl: Calendar = _IsraelTelAvivCalendar()
+        elif market == IsraelMarket.Telbor:
+            self._impl = _IsraelTelborCalendar()
         elif market == IsraelMarket.SHIR:
             self._impl = _IsraelShirCalendar()
         else:

@@ -1,4 +1,4 @@
-// Emit holiday-set reference values for all 41 sovereign/exchange calendars,
+// Emit holiday-set reference values for all sovereign/exchange calendars,
 // each default-constructed, for years 2020..2030. Output JSON shape:
 //
 //   {
@@ -153,7 +153,13 @@ int main() {
     emit("north_macedonia", NorthMacedonia(), true);
     emit("serbia",          Serbia(),         true);
     emit("slovenia",        Slovenia(),       true);
-    emit("uzbekistan",      Uzbekistan(),     false);
+    emit("uzbekistan",      Uzbekistan(),     true);
+    // Israel is the only calendar whose markets differ enough to need one
+    // section each: TASE swapped its weekend on 2026-01-05, SHIR derives from
+    // WesternImpl, and Telbor is new in v1.43.
+    emit("israel_tase",     Israel(Israel::TASE),   true);
+    emit("israel_shir",     Israel(Israel::SHIR),   true);
+    emit("israel_telbor",   Israel(Israel::Telbor), false);
 
     std::cout << "}\n";
     return 0;
