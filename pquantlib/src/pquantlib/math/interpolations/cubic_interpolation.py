@@ -4,8 +4,8 @@
 
 Provides ``CubicInterpolation`` plus the standard convenience
 subclasses ``CubicNaturalSpline`` (Spline + Natural BC + non-monotonic)
-and ``MonotonicCubicNaturalSpline`` (PCHIP / Hyman-Fritsch-Carlson
-monotonic).
+and ``MonotonicCubicNaturalSpline`` (the same natural spline with the
+Hyman 1983 monotonicity filter applied to its pillar slopes).
 
 C++ ``CubicInterpolation`` carries a derivative-approximation strategy
 (``DerivativeApprox`` — 9 values: Spline, SplineOM1, SplineOM2,
@@ -171,7 +171,7 @@ def _validate_supported(
             "(only SecondDerivative=0.0 / natural and NotAKnot are supported)"
         )
     # Both `monotonic` arms are supported for the natural BC — that's the
-    # toggle between CubicSpline and PchipInterpolator.
+    # toggle between the plain spline and the Hyman-filtered one.
     _ = monotonic
 
 

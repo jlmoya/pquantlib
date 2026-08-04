@@ -17,7 +17,7 @@ volatility — :class:`~pquantlib.pricingengines.basket.gaussian_copula_spread_e
 is the one this port needed it for — see the parametric smile itself,
 not a re-interpolation of it.
 
-Time behaviour, in the three regions (``blackVarianceImpl``):
+Time behaviour, in the four regions (``blackVarianceImpl``):
 
 * ``t == 0``                → 0.
 * ``t <= times[0]``         → ramp linearly from the origin:
