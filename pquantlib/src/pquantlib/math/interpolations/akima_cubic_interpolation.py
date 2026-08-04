@@ -38,6 +38,7 @@ from typing import Any
 
 from scipy.interpolate import Akima1DInterpolator  # type: ignore[import-untyped]
 
+from pquantlib import qassert
 from pquantlib.math.array import Array
 from pquantlib.math.interpolations.interpolation import Interpolation
 
@@ -49,11 +50,20 @@ class AkimaCubicInterpolation(Interpolation):
     """
 
     def __init__(self, x_seq: Array, y_seq: Array) -> None:
-        # C++ requires >= 5 points for the full Akima slope weighting;
-        # scipy works with as few as 2 but only produces a "reasonable"
-        # cubic for >= 5. C++ does not enforce a minimum either — it
-        # extrapolates the boundary slopes via reflection — so we match.
         super().__init__(x_seq, y_seq, required_points=2)
+        # C++ parity: cubicinterpolation.hpp:402-406 (v1.43), checked inside
+        # ``CubicInterpolationImpl::update()`` — i.e. after the structural
+        # length checks, which is why this sits below ``super().__init__``.
+        # The Akima slope estimates read S_[2] and S_[n-4]; with three points
+        # S_ has size two and both indices are out of bounds. v1.42.1 had no
+        # guard and read past the end via unsigned wrap-around; this port used
+        # to record the absence of a guard as deliberate C++ parity, which it
+        # never was.
+        n = int(self._xs.shape[0])
+        qassert.require(
+            n >= 4,
+            f"Akima approximation requires at least 4 points ({n} are given)",
+        )
         self._spline: Any = Akima1DInterpolator(self._xs, self._ys)
         # Cache first and second derivative splines (scipy provides
         # them via .derivative(1) and .derivative(2)).

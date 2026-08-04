@@ -108,13 +108,29 @@ def test_length_mismatch_raises() -> None:
         )
 
 
-def test_two_points_works() -> None:
-    # scipy Akima accepts >= 2 points (degenerate cubic = linear).
-    interp = AkimaCubicInterpolation(
-        np.array([0.0, 1.0]),
-        np.array([0.0, 1.0]),
-    )
-    tolerance.tight(interp(0.5), 0.5)
+def test_akima_with_few_points() -> None:
+    """C++ parity: ``testAkimaWithFewPoints`` (test-suite/interpolations.cpp, v1.43).
+
+    The Akima scheme reads S_[2] and S_[n-4] while computing the
+    first-derivative estimates; with three points S_ has size two and both
+    indices are out of bounds. Construction must fail cleanly rather than
+    silently produce something. scipy would happily accept 2 or 3 points and
+    return a degenerate cubic — a different answer from C++, not a safer one.
+    """
+    with pytest.raises(LibraryException, match="at least 4 points"):
+        AkimaCubicInterpolation(
+            np.array([0.0, 1.0, 2.0]),
+            np.array([1.0, 2.0, 0.5]),
+        )
+    with pytest.raises(LibraryException, match="at least 4 points"):
+        AkimaCubicInterpolation(np.array([0.0, 1.0]), np.array([0.0, 1.0]))
+
+    # Four points are enough; the interpolation must reproduce the knots.
+    x4 = np.array([0.0, 1.0, 2.0, 3.0])
+    y4 = np.array([1.0, 2.0, 0.5, 1.5])
+    f = AkimaCubicInterpolation(x4, y4)
+    for x, y in zip(x4.tolist(), y4.tolist(), strict=True):
+        tolerance.tight(f(x), y)
 
 
 def test_update_idempotent_when_inputs_unchanged() -> None:
