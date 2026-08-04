@@ -193,11 +193,10 @@ class HullWhite(Vasicek, TermStructureConsistentModel):
         self._b_param = self.arguments[1]
         self._lambda_param = self.arguments[3]
 
-        # The phi(t) fitting parameter is rebuilt every set_params via
-        # generate_arguments(); call it once here to populate.
-        self._phi: Parameter = _HullWhiteFittingParameter(
-            term_structure, self.a(), self.sigma()
-        )
+        # C++ parity: hullwhite.cpp:38 — the ctor calls generateArguments(),
+        # which populates both phi(t) and r0 from the curve.
+        self._phi: Parameter
+        self.generate_arguments()
 
         # C++ parity: hullwhite.cpp:40 — registerWith(termStructure).
         term_structure.register_with(self)
@@ -205,10 +204,22 @@ class HullWhite(Vasicek, TermStructureConsistentModel):
     # --- generated arguments hook ---------------------------------------
 
     def generate_arguments(self) -> None:
-        """Refresh phi(t) using the current ``a`` and ``sigma``.
+        """Refresh ``r0`` from the curve and phi(t) from ``a`` and ``sigma``.
 
-        # C++ parity: hullwhite.cpp:85-87.
+        # C++ parity: hullwhite.cpp:85-88.
+
+        ``r0`` is refreshed here, not only at construction: the model
+        registers with its term structure, so relinking the handle must move
+        the initial short rate with it. Every quantity derived from ``r0``
+        (notably :meth:`discount_bond_option` via the Vasicek base) would
+        otherwise silently keep using the rate the curve had when the model
+        was built.
         """
+        self._r0 = (
+            self.term_structure.zero_rate(
+                0.0, Compounding.Continuous, Frequency.NoFrequency
+            ).rate()
+        )
         self._phi = _HullWhiteFittingParameter(
             self.term_structure, self.a(), self.sigma()
         )

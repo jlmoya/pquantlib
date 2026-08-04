@@ -24,10 +24,9 @@ Discount-bond European option uses ``blackFormula`` with the bond
 volatility ``v = sigma * B(maturity, bond_maturity) * sqrt(0.5*(1 -
 exp(-2*a*maturity))/a)`` (small-a limit: ``v = sigma * B * sqrt(maturity)``).
 
-# C++ parity for A(t,T): vasicek.cpp:36-47 — the ``_a < sqrt(QL_EPSILON)``
-# branch returns A=0.0, which yields a degenerate discount_bond=0.0.
-# We preserve this for C++ parity (the limit is documented but rarely
-# useful for callers).
+# C++ parity for A(t,T): vasicek.cpp:36-49 (v1.43) — the
+# ``_a < sqrt(QL_EPSILON)`` branch returns the analytic ``a -> 0`` limit
+# ``exp(-lambda*sigma*tau^2/2 + sigma^2*tau^3/6)``.
 """
 
 from __future__ import annotations
@@ -172,14 +171,18 @@ class Vasicek(OneFactorAffineModel):
     # --- OneFactorAffineModel A(t,T) / B(t,T) ---------------------------
 
     def _a(self, t: float, t_maturity: float) -> float:
-        # C++ parity: vasicek.cpp:36-47.
+        # C++ parity: vasicek.cpp:36-49 (v1.43).
         a = self.a()
         if a < math.sqrt(QL_EPSILON):
-            # Degenerate small-a limit; C++ returns 0.0 here, which makes
-            # discount_bond=0.0. We preserve this for parity (the limit
-            # is rarely useful as a financial model; HullWhite would be
-            # used instead for a≈0).
-            return 0.0
+            # Limit of the general expression as a -> 0. This port used to
+            # return 0.0 here — pricing every zero bond at exactly zero —
+            # and documented that as C++ parity. It was parity with
+            # v1.42.1, which had the same bug; v1.43 returns the limit.
+            sigma = self.sigma()
+            tau = t_maturity - t
+            return math.exp(
+                -0.5 * self.lambda_() * sigma * tau * tau + sigma * sigma * tau * tau * tau / 6.0
+            )
         sigma = self.sigma()
         sigma2 = sigma * sigma
         bt = self._b(t, t_maturity)
