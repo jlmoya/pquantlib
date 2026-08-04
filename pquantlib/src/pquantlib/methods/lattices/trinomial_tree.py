@@ -1,6 +1,6 @@
 """TrinomialTree — recombining trinomial tree over a 1-D process.
 
-# C++ parity: ql/methods/lattices/trinomialtree.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/methods/lattices/trinomialtree.{hpp,cpp} (v1.43).
 
 The trinomial tree discretises a 1-D stochastic process on a given
 ``TimeGrid``. At each time slice ``i`` (>= 1) the lattice fans out
@@ -57,6 +57,38 @@ if TYPE_CHECKING:
 # the closest analogue).
 _INTEGER_MAX = 2**31 - 1
 _INTEGER_MIN = -(2**31)
+
+# C++ parity: trinomialtree.cpp:26-33 (v1.43) ``kFloorThreshold``. The dx
+# floor (Clewlow-Strickland 1998) is applied only on grid steps shorter
+# than this multiple of the longest step, so the floor intervenes on the
+# pathological small-mandatory-gap case and nothing else.
+_FLOOR_THRESHOLD: float = 0.01
+
+
+def _preflight(
+    process: StochasticProcess1D, time_grid: TimeGrid, n_time_steps: int
+) -> tuple[float, list[float], float]:
+    """Per-step variances, the longest step, and the dx floor, in one pass.
+
+    # C++ parity: trinomialtree.cpp:45-67 (v1.43).
+
+    ``dx_floor`` is the largest natural dx anywhere in the grid, so applying it
+    on a tiny step yields a dx no larger than one some other step already uses
+    — which is what stops the node count exploding. Iterating over the actual
+    step durations keeps the variance integration inside the declared grid
+    horizon and avoids a ``terminal - t_i`` subtraction. The variances are
+    cached so the main loop does not evaluate them twice.
+    """
+    dt_max = 0.0
+    v2_cache: list[float] = []
+    dx_floor_var = 0.0
+    for i in range(n_time_steps):
+        dt_i = time_grid.dt(i)
+        dt_max = max(dt_max, dt_i)
+        v2_i = process.variance_1d(time_grid[i], 0.0, dt_i)
+        v2_cache.append(v2_i)
+        dx_floor_var = max(dx_floor_var, v2_i)
+    return dt_max, v2_cache, math.sqrt(3.0 * dx_floor_var)
 
 
 class _Branching:
@@ -175,6 +207,8 @@ class TrinomialTree(Tree[float]):
         n_time_steps = time_grid.size() - 1
         qassert.require(n_time_steps > 0, "null time steps for trinomial tree")
 
+        dt_max, v2_cache, dx_floor = _preflight(process, time_grid, n_time_steps)
+
         j_min: int = 0
         j_max: int = 0
 
@@ -184,12 +218,29 @@ class TrinomialTree(Tree[float]):
 
             # The diffusion must be independent of x (C++ "warning"
             # tag — variance(t, 0.0, dt) is the slice variance).
-            v2 = process.variance_1d(t, 0.0, dt)
+            v2 = v2_cache[i]
             v = math.sqrt(v2)
             # Trinomial spacing: dx = v * sqrt(3) — minimum
             # node spacing that admits a centred trinomial with
             # positive probabilities for typical drift/sigma ratios.
-            self._dx.append(v * math.sqrt(3.0))
+            # On grid steps far shorter than the longest one, that natural
+            # spacing collapses and the node count explodes, so v1.43 floors
+            # it. Two orders of magnitude leaves uniform and typical
+            # non-uniform grids (weekend rolls, one-day mismatches) untouched.
+            dx_natural = v * math.sqrt(3.0)
+            dx_next = (
+                max(dx_natural, dx_floor)
+                if dt < _FLOOR_THRESHOLD * dt_max
+                else dx_natural
+            )
+            self._dx.append(dx_next)
+
+            # Whether the floor was *effective* here, not merely whether the
+            # gate fired: a time-dependent diffusion can have a short step
+            # whose natural dx already reaches dx_floor, in which case the
+            # classical probabilities below still apply.
+            dx_is_floored = dx_next > dx_natural
+            dx2 = dx_next * dx_next
 
             branching = _Branching()
             for j in range(j_min, j_max + 1):
@@ -201,23 +252,57 @@ class TrinomialTree(Tree[float]):
                 # Optional positivity floor — keep the lowest branch
                 # node strictly positive (BlackKarasinski uses log
                 # rates and needs r > 0).
+                temp_bumped = False
                 if is_positive:
                     while self._x0 + (temp - 1) * self._dx[i + 1] <= 0.0:
                         temp += 1
+                        temp_bumped = True
 
                 # ``e`` is the centring residual: the diff between
                 # the true expectation and the discrete centre.
                 e = m - (self._x0 + temp * self._dx[i + 1])
                 e2 = e * e
-                e3 = e * math.sqrt(3.0)
 
-                # Branching probabilities — match the first two moments
-                # of the conditional distribution (and recombine the
-                # third by virtue of the centre choice). Same formulas
-                # as C++ trinomialtree.cpp:64-66.
-                p1 = (1.0 + e2 / v2 - e3 / v) / 6.0
-                p2 = (2.0 - e2 / v2) / 3.0
-                p3 = (1.0 + e2 / v2 + e3 / v) / 6.0
+                if dx_is_floored:
+                    # General moment-matching probabilities, valid for any
+                    # spacing dx, used only where the floor widened dx beyond
+                    # v*sqrt(3). They shift weight toward the middle node to
+                    # reflect the short step's smaller variance.
+                    #
+                    # Non-negativity needs v^2 >= |e|*(dx - |e|), which can
+                    # fail in the floored regime when v << v_max. Slightly
+                    # negative weights are the accepted cost of the fix; the
+                    # first two moments are still matched exactly, so signed
+                    # weights stay arithmetically consistent.
+                    p1 = (v2 + e2 - e * dx_next) / (2.0 * dx2)
+                    p2 = 1.0 - (v2 + e2) / dx2
+                    p3 = (v2 + e2 + e * dx_next) / (2.0 * dx2)
+                else:
+                    # Classical Hull-White / Clewlow probabilities for
+                    # dx = v*sqrt(3). Kept in exactly this form rather than
+                    # the algebraically-equivalent dx-based one, so cached
+                    # tree pricings stay bit-identical by construction rather
+                    # than by floating-point coincidence.
+                    e3 = e * math.sqrt(3.0)
+                    p1 = (1.0 + e2 / v2 - e3 / v) / 6.0
+                    p2 = (2.0 - e2 / v2) / 3.0
+                    p3 = (1.0 + e2 / v2 + e3 / v) / 6.0
+
+                # In the unfloored regime with a naturally-rounded centre the
+                # weights are non-negative by construction (|e| <= dx/2 gives
+                # v^2 >= |e|*(dx - |e|)); this guards against future drift on
+                # that safe path. When is_positive bumps the centre upward,
+                # |e| can exceed dx/2 and the resulting signed weights were
+                # accepted before this change (the CIR family relies on it),
+                # so the check is skipped there — and in the floored regime
+                # the limitation is documented and accepted uniformly.
+                if not dx_is_floored and not temp_bumped:
+                    qassert.require(
+                        p1 >= 0.0 and p2 >= 0.0 and p3 >= 0.0,
+                        f"negative probability in trinomial tree (unfloored regime) "
+                        f"at step {i}, node {j}: p1={p1}, p2={p2}, p3={p3} "
+                        f"(v={v}, dx={dx_next}, e={e})",
+                    )
 
                 branching.add(temp, p1, p2, p3)
 

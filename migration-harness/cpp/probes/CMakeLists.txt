@@ -790,3 +790,19 @@ target_link_libraries(v143_flatextrapolation_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/xccy/swaps.json.
 add_executable(v143_xccy_swaps_probe v143_xccy_swaps/probe.cpp)
 target_link_libraries(v143_xccy_swaps_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 behavioural changes: the TrinomialTree gated dx floor and the
+# G2Process / G2ForwardProcess term-structure awareness (state shifted to
+# (x + phi(t), y) so state[0] + state[1] == r(t); empty handle degenerates to
+# the pre-v1.43 pair of zero-mean OU processes).
+# Emits references/v143/trinomial/g2process.json.
+# The probe body is shared verbatim with JQuantLib's harness, which builds
+# its JSON with nlohmann; only the output layer is adapted, in the local
+# common.hpp shim. nlohmann/json is header-only.
+find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
+if(NOT NLOHMANN_JSON_INCLUDE_DIR)
+    message(FATAL_ERROR "nlohmann/json.hpp not found (brew install nlohmann-json)")
+endif()
+add_executable(v143_trinomial_g2process_probe v143_trinomial_g2process/probe.cpp)
+target_include_directories(v143_trinomial_g2process_probe PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
+target_link_libraries(v143_trinomial_g2process_probe PRIVATE ${QUANTLIB_LIBRARY})
