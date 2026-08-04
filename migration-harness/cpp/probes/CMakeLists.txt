@@ -782,6 +782,14 @@ target_link_libraries(v143_piecewise_black_variance_surface_probe
 add_executable(v143_smilesection_rnd_probe v143_smilesection_rnd/probe.cpp)
 target_link_libraries(v143_smilesection_rnd_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# v1.43 additions: the two new spread-option pricing engines
+#   PearsonSpreadEngine          (Pearson 1995, adaptive Gauss-Lobatto)
+#   GaussianCopulaSpreadEngine   (nested Gauss-Hermite over a Gaussian copula
+#                                 with SmileSectionRNDCalculator marginals)
+# Emits references/v143/spread/engines.json.
+add_executable(v143_spread_engines_probe v143_spread_engines/probe.cpp)
+target_link_libraries(v143_spread_engines_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # v1.43 addition: LBFGSB — the limited-memory bound-constrained quasi-Newton
 # optimizer (Byrd/Lu/Nocedal/Zhu 1995). The generalized Cauchy point and the
 # subspace minimization live in an anonymous namespace and cannot be probed
