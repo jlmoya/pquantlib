@@ -15,12 +15,21 @@ NotAKnot, FirstDerivative, SecondDerivative (= Natural when value=0),
 Periodic, Lagrange), plus an orthogonal monotonicity-preserving filter.
 The full 9 x 5 x 2 = 90-cell matrix lives in 820 LOC of templated C++.
 
-**Python port — scope.** This port lands the two cells that the rest
+**Python port — scope.** This port lands the three cells that the rest
 of the library actually exercises:
 
 * ``Spline + SecondDerivative=0 BC + monotonic=false`` → natural cubic
   spline (``CubicNaturalSpline``). Delegated to
   ``scipy.interpolate.CubicSpline(bc_type='natural')``.
+* ``Spline + NotAKnot BC at both ends + monotonic=false`` → the
+  not-a-knot cubic spline. Delegated to
+  ``scipy.interpolate.CubicSpline(bc_type='not-a-knot')``. C++ ignores
+  the end-condition *value* for this boundary condition and so does
+  this port. Cross-validated against the ``v143/flatextrapolation``
+  probe, which needs it: unlike a natural spline, a not-a-knot spline
+  has a nonzero second derivative at its endpoints, and that is what
+  discriminates ``FlatExtrapolator``'s strict boundary test from an
+  inclusive one.
 * ``Spline + SecondDerivative=0 BC + monotonic=true`` → monotonic
   cubic (``MonotonicCubicNaturalSpline``). Delegated to
   ``scipy.interpolate.PchipInterpolator``.
@@ -52,8 +61,12 @@ raise ``LibraryException("not implemented in this port")`` from the
 * ``Akima`` — covered separately by
   ``pquantlib.math.interpolations.akima_cubic_interpolation.AkimaCubicInterpolation``
   (Phase 5 L5-A, a different scipy delegation).
-* Boundary conditions ``NotAKnot``, ``FirstDerivative``,
-  non-zero ``SecondDerivative``, ``Periodic``, ``Lagrange``.
+* Boundary conditions ``FirstDerivative``, non-zero
+  ``SecondDerivative``, ``Periodic``, ``Lagrange``; mixing two
+  different boundary conditions across the two ends; and ``NotAKnot``
+  combined with ``monotonic=true`` (``PchipInterpolator`` has no
+  boundary-condition knob at all, so honouring the request is
+  impossible rather than merely unported).
 
 The validation hook is the C++ probe at
 ``migration-harness/cpp/probes/cluster_l9a/probe.cpp``. Spline values
@@ -131,18 +144,34 @@ def _validate_supported(
             f"DerivativeApprox.{derivative_approx.name} not implemented in this port "
             "(only Spline is supported)"
         )
+    if left_condition != right_condition:
+        raise LibraryException(
+            f"mixed boundary conditions (left={left_condition.name}, "
+            f"right={right_condition.name}) not implemented in this port"
+        )
+    if left_condition == BoundaryCondition.NotAKnot:
+        # C++ parity: cubicinterpolation.hpp — the NotAKnot arm ignores the
+        # end-condition value, so we do not inspect left_value / right_value.
+        if monotonic:
+            raise LibraryException(
+                "BoundaryCondition.NotAKnot with monotonic=True is not supported: "
+                "PchipInterpolator has no boundary-condition parameter"
+            )
+        return
     if left_condition != BoundaryCondition.SecondDerivative or left_value != 0.0:
         raise LibraryException(
             f"left BoundaryCondition.{left_condition.name} (value={left_value}) "
-            "not implemented in this port (only SecondDerivative=0.0 / natural is supported)"
+            "not implemented in this port "
+            "(only SecondDerivative=0.0 / natural and NotAKnot are supported)"
         )
-    if right_condition != BoundaryCondition.SecondDerivative or right_value != 0.0:
+    if right_value != 0.0:
         raise LibraryException(
             f"right BoundaryCondition.{right_condition.name} (value={right_value}) "
-            "not implemented in this port (only SecondDerivative=0.0 / natural is supported)"
+            "not implemented in this port "
+            "(only SecondDerivative=0.0 / natural and NotAKnot are supported)"
         )
-    # Both `monotonic` arms are supported — that's the toggle between
-    # CubicSpline and PchipInterpolator.
+    # Both `monotonic` arms are supported for the natural BC — that's the
+    # toggle between CubicSpline and PchipInterpolator.
     _ = monotonic
 
 
@@ -151,10 +180,13 @@ class CubicInterpolation(Interpolation):
 
     # C++ parity: ``CubicInterpolation`` (cubicinterpolation.hpp:109-201).
 
-    Only ``Spline + Natural`` (``DerivativeApprox.Spline`` +
-    ``BoundaryCondition.SecondDerivative`` with value 0.0) is implemented.
-    The ``monotonic`` flag selects ``scipy.PchipInterpolator`` (monotonic
-    Hyman/Fritsch-Carlson cubic) over ``scipy.CubicSpline`` (Natural BC).
+    Two boundary conditions are implemented, both with
+    ``DerivativeApprox.Spline`` and both applied to *both* ends:
+    ``BoundaryCondition.SecondDerivative`` with value 0.0 (the natural
+    spline) and ``BoundaryCondition.NotAKnot`` (whose end-condition value
+    C++ ignores, as does this port). The ``monotonic`` flag selects
+    ``scipy.PchipInterpolator`` (monotonic Hyman/Fritsch-Carlson cubic)
+    over ``scipy.CubicSpline``, and is only available with the natural BC.
     """
 
     def __init__(
@@ -202,10 +234,16 @@ class CubicInterpolation(Interpolation):
             # one-sided three-point at the endpoints).
             self._spline = PchipInterpolator(self._xs, self._ys, extrapolate=True)
         else:
-            # Natural cubic — second derivative = 0 at both ends.
-            self._spline = CubicSpline(
-                self._xs, self._ys, bc_type="natural", extrapolate=True
+            # "natural"      — second derivative = 0 at both ends.
+            # "not-a-knot"   — third derivative continuous across the first
+            #                  and last interior knots, so the endpoint second
+            #                  derivative is generally NONZERO.
+            bc_type = (
+                "not-a-knot"
+                if self._left_condition == BoundaryCondition.NotAKnot
+                else "natural"
             )
+            self._spline = CubicSpline(self._xs, self._ys, bc_type=bc_type, extrapolate=True)
         self._d1 = self._spline.derivative(1)
         self._d2 = self._spline.derivative(2)
         # scipy's ``antiderivative()`` returns a PPoly whose value at x is

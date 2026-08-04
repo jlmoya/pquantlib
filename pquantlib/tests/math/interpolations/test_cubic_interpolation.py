@@ -223,7 +223,6 @@ def test_cubic_interpolation_unimplemented_derivative_raises(da: DerivativeAppro
 @pytest.mark.parametrize(
     "bc",
     [
-        BoundaryCondition.NotAKnot,
         BoundaryCondition.FirstDerivative,
         BoundaryCondition.Periodic,
         BoundaryCondition.Lagrange,
@@ -233,9 +232,64 @@ def test_cubic_interpolation_unimplemented_boundary_raises(bc: BoundaryCondition
     xs = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
     ys = np.array([0.0, 1.0, 4.0, 9.0], dtype=np.float64)
     with pytest.raises(LibraryException, match="not implemented in this port"):
+        CubicInterpolation(
+            xs, ys, left_condition=bc, right_condition=bc, left_value=0.0, right_value=0.0
+        )
+
+
+@pytest.mark.parametrize(
+    "bc",
+    [
+        BoundaryCondition.NotAKnot,
+        BoundaryCondition.FirstDerivative,
+        BoundaryCondition.Periodic,
+        BoundaryCondition.Lagrange,
+    ],
+)
+def test_cubic_interpolation_mixed_boundary_conditions_raise(bc: BoundaryCondition) -> None:
+    """Two different conditions across the two ends stay carved out."""
+    xs = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
+    ys = np.array([0.0, 1.0, 4.0, 9.0], dtype=np.float64)
+    with pytest.raises(LibraryException, match="mixed boundary conditions"):
         CubicInterpolation(xs, ys, left_condition=bc)
-    with pytest.raises(LibraryException, match="not implemented in this port"):
+    with pytest.raises(LibraryException, match="mixed boundary conditions"):
         CubicInterpolation(xs, ys, right_condition=bc)
+
+
+def test_not_a_knot_is_supported_and_ignores_the_end_condition_value() -> None:
+    """C++ ignores the end-condition value for NotAKnot; so does this port.
+
+    The spline must still pass through every knot, and — unlike a natural
+    spline — its endpoint second derivative is nonzero. That difference is
+    what makes it the discriminating underlying for ``FlatExtrapolator``.
+    """
+    xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0], dtype=np.float64)
+    ys = np.array([5.0, 3.0, 4.0, 2.0, 1.0], dtype=np.float64)
+    interp = CubicInterpolation(
+        xs,
+        ys,
+        left_condition=BoundaryCondition.NotAKnot,
+        left_value=123.0,  # ignored
+        right_condition=BoundaryCondition.NotAKnot,
+        right_value=-7.0,  # ignored
+    )
+    for i in range(xs.size):
+        tolerance.tight(interp(float(xs[i])), float(ys[i]))
+    assert abs(interp.second_derivative(0.0)) > 1.0
+    assert abs(interp.second_derivative(4.0)) > 1.0
+
+
+def test_not_a_knot_with_monotonic_raises() -> None:
+    xs = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
+    ys = np.array([0.0, 1.0, 4.0, 9.0], dtype=np.float64)
+    with pytest.raises(LibraryException, match="PchipInterpolator has no boundary-condition"):
+        CubicInterpolation(
+            xs,
+            ys,
+            monotonic=True,
+            left_condition=BoundaryCondition.NotAKnot,
+            right_condition=BoundaryCondition.NotAKnot,
+        )
 
 
 def test_cubic_interpolation_nonzero_second_derivative_raises() -> None:
