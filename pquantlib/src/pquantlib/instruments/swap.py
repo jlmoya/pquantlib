@@ -125,8 +125,11 @@ class SwapResults(InstrumentResults):
         super().__init__()
         self.leg_npv: list[float] = []
         self.leg_bps: list[float] = []
-        self.start_discounts: list[float] = []
-        self.end_discounts: list[float] = []
+        # ``None`` mirrors C++ ``Null<DiscountFactor>()`` — the engine reports
+        # it for a leg whose start / maturity date precedes the curve's
+        # reference date, where no discount factor exists.
+        self.start_discounts: list[float | None] = []
+        self.end_discounts: list[float | None] = []
         self.npv_date_discount: float | None = None
 
     def reset(self) -> None:

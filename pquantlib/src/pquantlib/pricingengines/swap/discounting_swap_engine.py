@@ -90,8 +90,12 @@ class DiscountingSwapEngine(SwapEngine):
         n = len(args.legs)
         results.leg_npv = [0.0] * n
         results.leg_bps = [0.0] * n
-        results.start_discounts = [0.0] * n
-        results.end_discounts = [0.0] * n
+        # C++ resizes these vectors, value-initialising to 0.0, and only writes
+        # a leg's entry when the leg is non-empty.
+        start_discounts: list[float | None] = [0.0] * n
+        end_discounts: list[float | None] = [0.0] * n
+        results.start_discounts = start_discounts
+        results.end_discounts = end_discounts
 
         total_npv = 0.0
         for i in range(n):
@@ -122,13 +126,16 @@ class DiscountingSwapEngine(SwapEngine):
             results.leg_bps[i] = leg_bps_val * args.payer[i]
 
             if len(leg) > 0:
+                # C++ parity: a date before the curve reference date has no
+                # discount factor, and C++ reports Null<DiscountFactor>() —
+                # ``None`` here — rather than a number.
                 d1 = leg_start_date(leg)
                 d2 = leg_maturity_date(leg)
                 results.start_discounts[i] = (
-                    self._discount_curve.discount(d1) if d1 >= ref_date else 0.0
+                    self._discount_curve.discount(d1) if d1 >= ref_date else None
                 )
                 results.end_discounts[i] = (
-                    self._discount_curve.discount(d2) if d2 >= ref_date else 0.0
+                    self._discount_curve.discount(d2) if d2 >= ref_date else None
                 )
 
             total_npv += results.leg_npv[i]

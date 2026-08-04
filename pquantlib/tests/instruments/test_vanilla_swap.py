@@ -14,6 +14,7 @@ import pytest
 
 from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.daycounters.thirty_360 import Convention, Thirty360
+from pquantlib.exceptions import LibraryException
 from pquantlib.indexes.ibor.euribor import Euribor
 from pquantlib.instruments.swap import SwapType
 from pquantlib.instruments.vanilla_swap import VanillaSwap
@@ -168,3 +169,29 @@ def test_vanilla_swap_inspectors() -> None:
     # Schedule end ≈ settle + 5y; payment-cal advances make it exact.
     assert swap.maturity_date() > settle
     _ = curve  # silence unused-var
+
+
+# --- pre-reference-date discount factors ----------------------------------
+
+
+def test_start_discount_is_null_before_the_curve_reference_date() -> None:
+    """C++ parity: DiscountingSwapEngine reports Null<DiscountFactor>() — ``None``
+    here — for a leg whose start date precedes the curve reference date, since
+    no discount factor exists there. The maturity is still ahead of it, so that
+    one remains a number.
+    """
+    swap, _, _ = _five_year_vanilla_swap(0.05)
+    seasoned_ref = Date.from_ymd(17, Month.January, 2025)
+    later_curve = cast(
+        YieldTermStructureProtocol,
+        FlatForward.from_rate(
+            seasoned_ref, 0.05, Actual360(), Compounding.Continuous, Frequency.Annual
+        ),
+    )
+    swap.set_pricing_engine(DiscountingSwapEngine(later_curve))
+
+    assert swap.start_date() < seasoned_ref
+    assert swap.maturity_date() > seasoned_ref
+    with pytest.raises(LibraryException, match="result not available"):
+        swap.start_discounts(0)
+    assert 0.0 < swap.end_discounts(0) < 1.0
