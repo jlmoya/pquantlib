@@ -12,7 +12,6 @@ C++ surface are:
 
 - ``with_first_period_day_counter`` / ``with_last_period_day_counter``
   — deferred (rarely used in tests).
-- ``with_payment_lag`` — deferred (always 0 in default L2-D coverage).
 - ``with_ex_coupon_period`` + variants — deferred.
 - ``with_indexed_coupons`` / ``with_at_par_coupons`` — deferred (no IborCoupon
   par/indexed flag yet).
@@ -36,6 +35,7 @@ from pquantlib.time.compounding import Compounding
 from pquantlib.time.date import Date
 from pquantlib.time.frequency import Frequency
 from pquantlib.time.schedule import Schedule
+from pquantlib.time.time_unit import TimeUnit
 
 
 def _pick_nominal(seq: Sequence[float], i: int) -> float:
@@ -116,6 +116,7 @@ def fixed_rate_leg(
     frequency: Frequency = Frequency.Annual,
     payment_adjustment: BusinessDayConvention = BusinessDayConvention.Following,
     payment_calendar: Calendar | None = None,
+    payment_lag: int = 0,
 ) -> list[CashFlow]:
     """Build a leg of FixedRateCoupons from a schedule.
 
@@ -130,6 +131,11 @@ def fixed_rate_leg(
     Sequence semantics mirror C++: if the rates / nominals list is
     shorter than the number of coupon periods, the last value is
     repeated. Empty rates or empty nominals raises.
+
+    ``payment_lag`` mirrors C++ ``withPaymentLag``: the payment date is
+    ``payment_calendar.advance(end, payment_lag, Days, payment_adjustment)``.
+    A lag of 0 collapses to ``adjust(end, payment_adjustment)``, which is
+    exactly what this builder did before the parameter existed.
     """
     qassert.require(len(rates) > 0, "no coupon rates given")
     qassert.require(len(nominals) > 0, "no notional given")
@@ -146,7 +152,7 @@ def fixed_rate_leg(
     for i in range(n_periods):
         start = schedule.date(i)
         end = schedule.date(i + 1)
-        payment_date = cal.adjust(end, payment_adjustment)
+        payment_date = cal.advance(end, payment_lag, TimeUnit.Days, payment_adjustment)
         rate = _pick_rate(coupon_rates, i)
         nominal_val = _pick_nominal(nominals, i)
         ref_start, ref_end = _compute_ref_period(schedule, n_periods, i, start, end)

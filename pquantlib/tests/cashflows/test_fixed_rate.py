@@ -13,6 +13,7 @@ from pquantlib.interest_rate import InterestRate
 from pquantlib.testing import reference_reader, tolerance
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendars.null_calendar import NullCalendar
+from pquantlib.time.calendars.weekends_only import WeekendsOnly
 from pquantlib.time.compounding import Compounding
 from pquantlib.time.date import Date
 from pquantlib.time.date_generation import DateGeneration
@@ -189,3 +190,74 @@ def test_fixed_rate_leg_with_interest_rate_objects() -> None:
     )
     assert len(leg) == 1
     tolerance.tight(leg[0].amount(), 100_000.0 * 0.05 * (181.0 / 360.0))
+
+
+def test_fixed_rate_leg_payment_lag_shifts_by_business_days() -> None:
+    """C++ parity: paymentDate = paymentCalendar.advance(end, lag, Days, adj).
+
+    A quarterly 2026 leg on a weekends-only calendar. Accrual ends fall on
+    Wed 1 Apr, Wed 1 Jul, Thu 1 Oct and Fri 1 Jan 2027; a two-business-day
+    lag therefore rolls the last two over a weekend, which is what separates
+    the C++ semantics from plain calendar-day arithmetic.
+    """
+    schedule = Schedule.from_rule(
+        effective_date=Date.from_ymd(1, Month.January, 2026),
+        termination_date=Date.from_ymd(1, Month.January, 2027),
+        tenor=Period(3, TimeUnit.Months),
+        calendar=WeekendsOnly(),
+        convention=BusinessDayConvention.Unadjusted,
+        termination_date_convention=BusinessDayConvention.Unadjusted,
+        rule=DateGeneration.Forward,
+        end_of_month=False,
+    )
+    leg = fixed_rate_leg(
+        schedule,
+        nominals=[100_000.0],
+        rates=[0.05],
+        day_counter=Actual360(),
+        payment_adjustment=BusinessDayConvention.Following,
+        payment_calendar=WeekendsOnly(),
+        payment_lag=2,
+    )
+    assert [cf.date() for cf in leg] == [
+        Date.from_ymd(3, Month.April, 2026),
+        Date.from_ymd(3, Month.July, 2026),
+        Date.from_ymd(5, Month.October, 2026),
+        Date.from_ymd(5, Month.January, 2027),
+    ]
+
+
+def test_fixed_rate_leg_zero_payment_lag_is_a_plain_adjust() -> None:
+    """lag=0 must reproduce the pre-existing ``adjust(end, adjustment)``."""
+    schedule = Schedule.from_rule(
+        effective_date=Date.from_ymd(1, Month.January, 2026),
+        termination_date=Date.from_ymd(1, Month.January, 2027),
+        tenor=Period(3, TimeUnit.Months),
+        calendar=WeekendsOnly(),
+        convention=BusinessDayConvention.Unadjusted,
+        termination_date_convention=BusinessDayConvention.Unadjusted,
+        rule=DateGeneration.Forward,
+        end_of_month=False,
+    )
+    lagged = fixed_rate_leg(
+        schedule,
+        nominals=[100_000.0],
+        rates=[0.05],
+        day_counter=Actual360(),
+        payment_adjustment=BusinessDayConvention.Following,
+        payment_calendar=WeekendsOnly(),
+        payment_lag=0,
+    )
+    plain = fixed_rate_leg(
+        schedule,
+        nominals=[100_000.0],
+        rates=[0.05],
+        day_counter=Actual360(),
+        payment_adjustment=BusinessDayConvention.Following,
+        payment_calendar=WeekendsOnly(),
+    )
+    assert [cf.date() for cf in lagged] == [cf.date() for cf in plain]
+    assert [cf.date() for cf in plain] == [
+        WeekendsOnly().adjust(schedule.date(i + 1), BusinessDayConvention.Following)
+        for i in range(len(schedule) - 1)
+    ]

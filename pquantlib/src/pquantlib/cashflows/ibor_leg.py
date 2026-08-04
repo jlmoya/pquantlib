@@ -8,7 +8,7 @@ function. Carve-outs (deferred):
 
 - ``with_caps`` / ``with_floors`` (cap/floor coupons require
   OptionletVolatilityStructure — deferred).
-- ``with_zero_payments`` / ``with_payment_lag`` / ``with_ex_coupon_period``.
+- ``with_zero_payments`` / ``with_ex_coupon_period``.
 - ``with_indexed_coupons`` / ``with_at_par_coupons`` (Settings toggle).
 - Per-period fixing_days / gearings / spreads vectors collapse to
   scalar-or-uniform-list for L2-D coverage.
@@ -26,6 +26,7 @@ from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendar import Calendar
 from pquantlib.time.schedule import Schedule
+from pquantlib.time.time_unit import TimeUnit
 
 if TYPE_CHECKING:
     from pquantlib.termstructures.protocols import IborIndexProtocol
@@ -45,6 +46,7 @@ def ibor_leg(
     payment_day_counter: DayCounter | None = None,
     payment_adjustment: BusinessDayConvention = BusinessDayConvention.Following,
     payment_calendar: Calendar | None = None,
+    payment_lag: int = 0,
     fixing_days: int | None = None,
     gearings: float | Sequence[float] = 1.0,
     spreads: float | Sequence[float] = 0.0,
@@ -57,6 +59,11 @@ def ibor_leg(
 
     ``fixing_days`` defaults to ``index.fixing_days()``. ``payment_day_counter``
     defaults to ``index.day_counter()``.
+
+    ``payment_lag`` mirrors C++ ``withPaymentLag``: the payment date is
+    ``payment_calendar.advance(end, payment_lag, Days, payment_adjustment)``.
+    A lag of 0 collapses to ``adjust(end, payment_adjustment)``, which is
+    exactly what this builder did before the parameter existed.
     """
     qassert.require(len(nominals) > 0, "no notional given")
     qassert.require(len(schedule) >= 2, "schedule has fewer than 2 dates")
@@ -71,7 +78,7 @@ def ibor_leg(
     for i in range(n_periods):
         start = schedule.date(i)
         end = schedule.date(i + 1)
-        payment_date = cal.adjust(end, payment_adjustment)
+        payment_date = cal.advance(end, payment_lag, TimeUnit.Days, payment_adjustment)
         nominal_val = float(nominals[i] if i < len(nominals) else nominals[-1])
         g = _scalar_or_seq(gearings, i, 1.0)
         s = _scalar_or_seq(spreads, i, 0.0)

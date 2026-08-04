@@ -5,8 +5,9 @@
 Same Python-idiomatic divergence as ``fixed_rate_leg``: the C++
 chained-builder ``with*`` setters become keyword arguments on a free
 function. Carve-outs (deferred): lookback_days, lockout_days,
-observation_shift, compound_spread_daily, caps / floors, naked_option,
-last_recent_period, custom payment_dates, telescopic_value_dates.
+observation_shift, compound_spread_daily, averaging_method (Compound
+only), caps / floors, naked_option, last_recent_period, custom
+payment_dates, telescopic_value_dates.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendar import Calendar
 from pquantlib.time.schedule import Schedule
+from pquantlib.time.time_unit import TimeUnit
 
 if TYPE_CHECKING:
     from pquantlib.termstructures.protocols import OvernightIndexProtocol
@@ -40,6 +42,7 @@ def overnight_leg(
     payment_day_counter: DayCounter | None = None,
     payment_adjustment: BusinessDayConvention = BusinessDayConvention.Following,
     payment_calendar: Calendar | None = None,
+    payment_lag: int = 0,
     gearings: float | Sequence[float] = 1.0,
     spreads: float | Sequence[float] = 0.0,
 ) -> list[CashFlow]:
@@ -47,6 +50,13 @@ def overnight_leg(
 
     C++ parity: ql/cashflows/overnightindexedcoupon.cpp
     ``OvernightLeg::operator Leg()``.
+
+    ``payment_lag`` mirrors C++ ``withPaymentLag``: the payment date is
+    ``payment_calendar.advance(end, payment_lag, Days, payment_adjustment)``.
+    A lag of 0 collapses to ``adjust(end, payment_adjustment)``, which is
+    exactly what this builder did before the parameter existed. Overnight
+    legs are the main user of the lag — a compounded overnight coupon only
+    fixes on its accrual end date, so it is normally paid a day or two later.
     """
     qassert.require(len(nominals) > 0, "no notional given")
     qassert.require(len(schedule) >= 2, "schedule has fewer than 2 dates")
@@ -59,7 +69,7 @@ def overnight_leg(
     for i in range(n_periods):
         start = schedule.date(i)
         end = schedule.date(i + 1)
-        payment_date = cal.adjust(end, payment_adjustment)
+        payment_date = cal.advance(end, payment_lag, TimeUnit.Days, payment_adjustment)
         nominal_val = float(nominals[i] if i < len(nominals) else nominals[-1])
         g = _scalar_or_seq(gearings, i, 1.0)
         s = _scalar_or_seq(spreads, i, 0.0)

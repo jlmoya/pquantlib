@@ -283,6 +283,76 @@ def test_overnight_leg() -> None:
         assert cf.amount() > 0.0
 
 
+def test_ibor_leg_payment_lag_shifts_by_business_days() -> None:
+    """C++ parity: paymentDate = paymentCalendar.advance(end, lag, Days, adj)."""
+    schedule = Schedule.from_rule(
+        effective_date=Date.from_ymd(1, Month.January, 2026),
+        termination_date=Date.from_ymd(1, Month.January, 2027),
+        tenor=Period(3, TimeUnit.Months),
+        calendar=WeekendsOnly(),
+        convention=BusinessDayConvention.Unadjusted,
+        termination_date_convention=BusinessDayConvention.Unadjusted,
+        rule=DateGeneration.Forward,
+        end_of_month=False,
+    )
+    idx = _FlatIborIndex(0.035, fixing_days=0)
+    leg = ibor_leg(
+        schedule,
+        idx,
+        nominals=[100_000.0],
+        payment_adjustment=BusinessDayConvention.Following,
+        payment_calendar=WeekendsOnly(),
+        payment_lag=2,
+    )
+    # Accrual ends Wed 1 Apr, Wed 1 Jul, Thu 1 Oct, Fri 1 Jan 2027 — the last
+    # two roll over a weekend under a two-business-day lag.
+    assert [cf.date() for cf in leg] == [
+        Date.from_ymd(3, Month.April, 2026),
+        Date.from_ymd(3, Month.July, 2026),
+        Date.from_ymd(5, Month.October, 2026),
+        Date.from_ymd(5, Month.January, 2027),
+    ]
+    # The accrual window is untouched by the lag.
+    first = leg[0]
+    assert isinstance(first, FloatingRateCoupon)
+    assert first.accrual_start_date() == Date.from_ymd(1, Month.January, 2026)
+    assert first.accrual_end_date() == Date.from_ymd(1, Month.April, 2026)
+
+
+def test_overnight_leg_payment_lag_shifts_by_business_days() -> None:
+    """C++ parity: paymentDate = paymentCalendar.advance(end, lag, Days, adj).
+
+    Overnight legs are the main user of the lag: a compounded overnight
+    coupon only fixes on its accrual end date, so it is paid a day or two
+    after the period closes.
+    """
+    schedule = Schedule.from_rule(
+        effective_date=Date.from_ymd(15, Month.January, 2026),
+        termination_date=Date.from_ymd(15, Month.April, 2026),
+        tenor=Period(1, TimeUnit.Months),
+        calendar=WeekendsOnly(),
+        convention=BusinessDayConvention.Following,
+        termination_date_convention=BusinessDayConvention.Following,
+        rule=DateGeneration.Forward,
+        end_of_month=False,
+    )
+    idx = _FlatOvernightIndex(0.04)
+    lagged = overnight_leg(schedule, idx, nominals=[100_000.0], payment_lag=2)
+    plain = overnight_leg(schedule, idx, nominals=[100_000.0])
+    cal = WeekendsOnly()
+    for i, (lag_cf, plain_cf) in enumerate(zip(lagged, plain, strict=True)):
+        end = schedule.date(i + 1)
+        assert plain_cf.date() == cal.adjust(end, BusinessDayConvention.Following)
+        assert lag_cf.date() == cal.advance(
+            end, 2, TimeUnit.Days, BusinessDayConvention.Following
+        )
+        # Two business days later, and strictly later than the unlagged date.
+        assert lag_cf.date() > plain_cf.date()
+    # The amounts are unchanged — the lag moves the payment, not the accrual.
+    for lag_cf, plain_cf in zip(lagged, plain, strict=True):
+        tolerance.exact(lag_cf.amount(), plain_cf.amount())
+
+
 # --- Pricers ---------------------------------------------------------------
 
 
