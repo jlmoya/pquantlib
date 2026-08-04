@@ -153,9 +153,22 @@ def make_vanilla_swap(
             "make_vanilla_swap: evaluation_date is required when effective_date is None",
         )
         assert evaluation_date is not None
-        ref = float_cal.adjust(evaluation_date)
-        sd = settlement_days if settlement_days is not None else ibor_index.fixing_days()
-        spot = float_cal.advance(ref, sd, TimeUnit.Days)
+        # C++ parity: makevanillaswap.cpp:65-83 (v1.43).
+        #
+        # Which calendar the reference date is pre-adjusted on depends on how
+        # the spot date is then derived. v1.42.1 always pre-adjusted on the
+        # float/payment calendar, which is inconsistent with value_date's own
+        # fixing-calendar advance; v1.43 splits the two branches. This port
+        # additionally never used value_date at all — it advanced the index's
+        # fixing_days on the float calendar in both branches, which is only
+        # the same answer while the two calendars coincide (they do by
+        # default, and diverge as soon as floating_leg_calendar is passed).
+        if settlement_days is None:
+            ref = ibor_index.fixing_calendar().adjust(evaluation_date)
+            spot = ibor_index.value_date(ref)
+        else:
+            ref = float_cal.adjust(evaluation_date)
+            spot = float_cal.advance(ref, settlement_days, TimeUnit.Days)
         start_date = spot + forward_start
         if forward_start.length < 0:
             start_date = float_cal.adjust(start_date, BusinessDayConvention.Preceding)

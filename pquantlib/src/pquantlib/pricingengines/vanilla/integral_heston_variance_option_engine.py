@@ -39,6 +39,7 @@ from pquantlib.experimental.varianceoption.variance_option import (
     VarianceOptionArguments,
     VarianceOptionResults,
 )
+from pquantlib.math.closeness import close_enough
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.pricingengines.generic_engine import GenericEngine
 from pquantlib.processes.heston_process import HestonProcess
@@ -63,13 +64,29 @@ class IntegralHestonVarianceOptionEngine(
     def calculate(self) -> None:
         """# C++ parity: ``calculate()`` (.cpp:366-399).
 
-        Note: the C++ engine asserts ``dividendYield().empty()``. The
-        Python port relaxes this: HestonProcess requires a non-null
-        dividend YTS, so we expect the caller to pass a flat-zero
-        ``FlatForward`` if they don't want dividend impact.
+        C++ opens with ``QL_REQUIRE(process_->dividendYield().empty(), "this
+        engine does not manage dividend yields")`` — the requirement is on the
+        *handle* being empty, not on the yield being zero: a flat-zero curve is
+        rejected there too. This port has no ``Handle``, and
+        ``HestonProcess.dividend_yield`` is a required, non-optional curve, so
+        "empty" is not expressible without making the dividend curve optional
+        across the whole Heston family.
+
+        What *is* expressible is the assumption the guard protects: the engine
+        never reads the dividend curve, so any non-zero dividend yield would be
+        silently ignored and the price silently wrong. We therefore reject a
+        dividend curve that accrues anything to maturity. That accepts exactly
+        one input C++ rejects — the flat-zero curve, which gives the same answer
+        as C++'s empty handle — and rejects everything else, as C++ does.
         """
         args = self._arguments
         results = self._results
+
+        assert args.maturity_date is not None
+        qassert.require(
+            close_enough(self._process.dividend_yield().discount(args.maturity_date), 1.0),
+            "this engine does not manage dividend yields",
+        )
 
         rfts = self._process.risk_free_rate()
         epsilon = self._process.sigma
@@ -78,7 +95,6 @@ class IntegralHestonVarianceOptionEngine(
         rho = self._process.rho
         v0 = self._process.v0
 
-        assert args.maturity_date is not None
         assert args.notional is not None
         tau = rfts.day_counter().year_fraction(
             rfts.reference_date(), args.maturity_date

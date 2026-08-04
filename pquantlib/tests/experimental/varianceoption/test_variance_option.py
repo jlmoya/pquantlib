@@ -23,6 +23,7 @@ from typing import Any
 import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
+from pquantlib.exceptions import LibraryException
 from pquantlib.experimental.varianceoption.variance_option import (
     VarianceOption,
 )
@@ -53,9 +54,11 @@ def today() -> Date:
 def heston_process(today: Date) -> HestonProcess:
     """Heston process fixture mirroring the W4-C probe Heston setup.
 
-    Note: the C++ engine asserts ``dividendYield().empty()``; the
-    Python port doesn't enforce that, so we pass a flat-zero
-    ``FlatForward`` as a dividend curve to get the same effect.
+    C++ asserts ``dividendYield().empty()``. This port has no ``Handle`` and
+    ``HestonProcess`` requires a dividend curve, so the flat-zero curve below
+    is the closest expressible equivalent — it accrues nothing, which is what
+    the empty handle means to this engine. Anything else is now rejected; see
+    ``test_engine_rejects_a_dividend_paying_process``.
     """
     dc = Actual365Fixed()
     return HestonProcess(
@@ -110,3 +113,36 @@ def test_variance_option_heston_call_strike005(
         vopt.npv(),
         reference_data["variance_option_heston_call_npv_strike005"],
     )
+
+
+def test_engine_rejects_a_dividend_paying_process(today: Date) -> None:
+    """The engine never reads the dividend curve, so it must refuse a live one.
+
+    C++ guards this with ``QL_REQUIRE(process_->dividendYield().empty())`` — the
+    handle must be empty, and a flat-*zero* curve is rejected there too. This
+    port cannot express an empty handle (see the engine docstring), so it
+    rejects any curve that accrues something to maturity instead. Before this
+    guard existed, a 3% dividend yield was silently ignored and the price came
+    back identical to the zero-dividend one, which is the failure mode worth
+    pinning.
+    """
+    dc = Actual365Fixed()
+    process = HestonProcess(
+        risk_free_rate=FlatForward.from_rate(today, 0.04, dc),
+        dividend_yield=FlatForward.from_rate(today, 0.03, dc),
+        s0=SimpleQuote(100.0),
+        v0=0.04,
+        kappa=4.0,
+        theta=0.04,
+        sigma=0.25,
+        rho=-0.5,
+    )
+    vopt = VarianceOption(
+        payoff=PlainVanillaPayoff(OptionType.Call, 0.04),
+        notional=10000.0,
+        start_date=today,
+        maturity_date=today + 182,
+    )
+    vopt.set_pricing_engine(IntegralHestonVarianceOptionEngine(process))
+    with pytest.raises(LibraryException, match="does not manage dividend yields"):
+        vopt.npv()
