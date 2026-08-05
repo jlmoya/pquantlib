@@ -35,7 +35,8 @@ from pquantlib.cashflows.coupon import Coupon
 from pquantlib.cashflows.duration import Duration
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.interest_rate import InterestRate
-from pquantlib.math.solvers1d.brent import Brent
+from pquantlib.math.solvers1d.newton_safe import NewtonSafe
+from pquantlib.math.solvers1d.solver_1d import Solver1D
 from pquantlib.time.compounding import Compounding
 from pquantlib.time.date import Date
 from pquantlib.time.frequency import Frequency
@@ -50,11 +51,19 @@ if TYPE_CHECKING:
 
 
 _BASIS_POINT: float = 1.0e-4
+
+
+def _sign(x: float) -> int:
+    """C++ parity: ``ql/math/comparison.hpp`` ``sign`` used by ``IrrFinder::checkSign``."""
+    if x == 0.0:
+        return 0
+    return 1 if x > 0.0 else -1
+
+
 # Default IRR solver settings (match C++ ql/cashflows/cashflows.cpp:911).
 _DEFAULT_IRR_GUESS: float = 0.05
 _DEFAULT_IRR_ACCURACY: float = 1.0e-10
 _DEFAULT_IRR_MAX_ITER: int = 100
-_DEFAULT_IRR_STEP: float = 1.0e-4
 
 
 def _stepwise_discount_time(
@@ -74,18 +83,12 @@ def _stepwise_discount_time(
         ref_start = cf.reference_period_start()
         ref_end = cf.reference_period_end()
         if last_date != cf.accrual_start_date():
-            coupon_period = dc.year_fraction(
-                cf.accrual_start_date(), cf_date, ref_start, ref_end
-            )
-            accrued_period = dc.year_fraction(
-                cf.accrual_start_date(), last_date, ref_start, ref_end
-            )
+            coupon_period = dc.year_fraction(cf.accrual_start_date(), cf_date, ref_start, ref_end)
+            accrued_period = dc.year_fraction(cf.accrual_start_date(), last_date, ref_start, ref_end)
             return coupon_period - accrued_period
         return dc.year_fraction(last_date, cf_date, ref_start, ref_end)
     # Non-Coupon CashFlow.
-    ref_start = (
-        cf_date - Period(1, TimeUnit.Years) if last_date == npv_date else last_date
-    )
+    ref_start = cf_date - Period(1, TimeUnit.Years) if last_date == npv_date else last_date
     ref_end = cf_date
     return dc.year_fraction(last_date, cf_date, ref_start, ref_end)
 
@@ -175,9 +178,7 @@ def _macaulay_duration_impl(
     npv_date: Date,
 ) -> float:
     """C++ parity: cashflows.cpp:709-722."""
-    qassert.require(
-        y.compounding() == Compounding.Compounded, "compounded rate required"
-    )
+    qassert.require(y.compounding() == Compounding.Compounded, "compounded rate required")
     return (1.0 + y.rate() / float(y.frequency())) * _modified_duration_impl(
         leg, y, include_settlement_date_flows, settlement_date, npv_date
     )
@@ -192,6 +193,103 @@ class CashFlows:
     def __init__(self) -> NoReturn:
         msg = "CashFlows is a namespace; use classmethods only"
         raise TypeError(msg)
+
+    # ===================================================================
+    # IrrFinder — the solver objective behind ``irr``
+    # ===================================================================
+
+    class IrrFinder:
+        """Objective for the yield solve: ``f(y) = NPV(leg, y) - target``.
+
+        C++ parity: ``CashFlows::IrrFinder``
+        (ql/cashflows/cashflows.hpp:43-66, .cpp:733-800).
+
+        Nested exactly as in C++. It carries the derivative that
+        ``NewtonSafe`` needs (``-modifiedDuration * P``) and runs the
+        constructor-time ``checkSign`` guard, which rejects a
+        (leg, target NPV) pair whose signs make an IRR meaningless.
+        """
+
+        def __init__(
+            self,
+            leg: Sequence[CashFlow],
+            npv: float,
+            day_counter: DayCounter,
+            compounding: Compounding,
+            frequency: Frequency,
+            include_settlement_date_flows: bool,
+            settlement_date: Date,
+            npv_date: Date | None = None,
+        ) -> None:
+            self._leg = leg
+            self._npv = npv
+            self._day_counter = day_counter
+            self._compounding = compounding
+            self._frequency = frequency
+            self._include_settlement_date_flows = include_settlement_date_flows
+            self._settlement_date = settlement_date
+            self._npv_date = npv_date if npv_date is not None else settlement_date
+            self._check_sign()
+
+        def _rate(self, y: float) -> InterestRate:
+            return InterestRate(y, self._day_counter, self._compounding, self._frequency)
+
+        def __call__(self, y: float) -> float:
+            # C++ parity: cashflows.cpp:754-760 — ``NPV - npv_``, in that order.
+            npv = CashFlows.npv_yield(
+                self._leg,
+                self._rate(y),
+                self._include_settlement_date_flows,
+                self._settlement_date,
+                self._npv_date,
+            )
+            return npv - self._npv
+
+        def derivative(self, y: float) -> float:
+            # C++ parity: cashflows.cpp:762-769.
+            rate = self._rate(y)
+            p = CashFlows.npv_yield(
+                self._leg,
+                rate,
+                self._include_settlement_date_flows,
+                self._settlement_date,
+                self._npv_date,
+            )
+            return (
+                -CashFlows.duration(
+                    self._leg,
+                    rate,
+                    Duration.Modified,
+                    self._include_settlement_date_flows,
+                    self._settlement_date,
+                    self._npv_date,
+                )
+                * p
+            )
+
+        def _check_sign(self) -> None:
+            """Reject a (leg, price) pair for which an IRR is nonsensical.
+
+            C++ parity: cashflows.cpp:771-790 ``IrrFinder::checkSign``.
+            Cash flows of the sign opposite to the market price must be
+            present, otherwise no yield reproduces it.
+            """
+            last_sign = _sign(-self._npv)
+            sign_changes = 0
+            for cf in self._leg:
+                if cf.has_occurred(
+                    self._settlement_date, self._include_settlement_date_flows
+                ) or cf.trading_ex_coupon(self._settlement_date):
+                    continue
+                this_sign = _sign(cf.amount())
+                if last_sign * this_sign < 0:
+                    sign_changes += 1
+                if this_sign != 0:
+                    last_sign = this_sign
+            qassert.require(
+                sign_changes > 0,
+                "the given cash flows cannot result in the given market price due to their sign",
+            )
 
     # ===================================================================
     # NPV
@@ -287,9 +385,7 @@ class CashFlows:
             amount = cf.amount()
             if cf.trading_ex_coupon(settlement_date):
                 amount = 0.0
-            b = yield_rate.discount_factor(
-                _stepwise_discount_time(cf, dc, npv_d, last_date)
-            )
+            b = yield_rate.discount_factor(_stepwise_discount_time(cf, dc, npv_d, last_date))
             discount *= b
             last_date = cf.date()
             npv += amount * discount
@@ -357,17 +453,11 @@ class CashFlows:
         assert settlement_date is not None
         npv_d = npv_date if npv_date is not None else settlement_date
         if duration_type == Duration.Simple:
-            return _simple_duration_impl(
-                leg, rate, include_settlement_date_flows, settlement_date, npv_d
-            )
+            return _simple_duration_impl(leg, rate, include_settlement_date_flows, settlement_date, npv_d)
         if duration_type == Duration.Modified:
-            return _modified_duration_impl(
-                leg, rate, include_settlement_date_flows, settlement_date, npv_d
-            )
+            return _modified_duration_impl(leg, rate, include_settlement_date_flows, settlement_date, npv_d)
         if duration_type == Duration.Macaulay:
-            return _macaulay_duration_impl(
-                leg, rate, include_settlement_date_flows, settlement_date, npv_d
-            )
+            return _macaulay_duration_impl(leg, rate, include_settlement_date_flows, settlement_date, npv_d)
         qassert.fail(f"unknown duration type ({int(duration_type)})")
 
     # ===================================================================
@@ -428,9 +518,7 @@ class CashFlows:
                 else:
                     d2pdy2 += c * b * t * (n * t + 1.0) / (n * (1.0 + r / n) * (1.0 + r / n))
             else:
-                qassert.fail(
-                    f"unknown compounding convention ({int(rate.compounding())})"
-                )
+                qassert.fail(f"unknown compounding convention ({int(rate.compounding())})")
             last_date = cf.date()
         if p_val == 0.0:
             return 0.0
@@ -482,10 +570,7 @@ class CashFlows:
             return True
         # Walk from the end since the latest cashflow is most likely
         # still pending — mirrors C++ reverse-iteration optimisation.
-        return all(
-            cf.has_occurred(settlement_date, include_settlement_date_flows)
-            for cf in reversed(leg)
-        )
+        return all(cf.has_occurred(settlement_date, include_settlement_date_flows) for cf in reversed(leg))
 
     @classmethod
     def previous_cash_flow_date(
@@ -639,12 +724,19 @@ class CashFlows:
         accuracy: float = _DEFAULT_IRR_ACCURACY,
         max_iterations: int = _DEFAULT_IRR_MAX_ITER,
         guess: float = _DEFAULT_IRR_GUESS,
+        solver: Solver1D | None = None,
     ) -> float:
         """Solve for the yield that reproduces ``target_npv``.
 
-        C++ parity: ql/cashflows/cashflows.cpp:903-921 (``yield`` function).
-        The C++ default uses NewtonSafe; we use Brent (already ported)
-        to avoid requiring derivative-aware setup.
+        C++ parity: ql/cashflows/cashflows.cpp:905-923 (``CashFlows::yield``)
+        plus the ``template <typename Solver> yield(solver, ...)`` overload
+        at cashflows.hpp:276-292. Defaults to ``NewtonSafe`` exactly as C++
+        does; ``solver`` is the Python spelling of the template parameter.
+
+        The objective is :class:`CashFlows.IrrFinder`, whose constructor
+        runs C++'s ``checkSign`` guard — a (leg, target NPV) pair with no
+        sign change raises ``LibraryException`` rather than silently
+        returning a meaningless root.
         """
         qassert.require(
             settlement_date is not None,
@@ -652,13 +744,18 @@ class CashFlows:
         )
         assert settlement_date is not None
 
-        def objective(y: float) -> float:
-            ir = InterestRate(y, day_counter, compounding, frequency)
-            npv = cls.npv_yield(
-                leg, ir, include_settlement_date_flows, settlement_date, npv_date
-            )
-            return target_npv - npv
-
-        solver = Brent()
+        obj_function = cls.IrrFinder(
+            leg,
+            target_npv,
+            day_counter,
+            compounding,
+            frequency,
+            include_settlement_date_flows,
+            settlement_date,
+            npv_date,
+        )
+        if solver is None:
+            solver = NewtonSafe()
         solver.set_max_evaluations(max_iterations)
-        return solver.solve(objective, accuracy, guess, _DEFAULT_IRR_STEP)
+        # C++ parity: cashflows.hpp:291 — the step is guess/10, not a constant.
+        return solver.solve(obj_function, accuracy, guess, guess / 10.0)
