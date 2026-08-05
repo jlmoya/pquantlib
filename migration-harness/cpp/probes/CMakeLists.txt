@@ -850,3 +850,14 @@ target_link_libraries(currencies_all_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/currencies/exchangerate.json.
 add_executable(currencies_exchangerate_probe currencies_exchangerate/probe.cpp)
 target_link_libraries(currencies_exchangerate_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/yield: SwapRateHelper dates + implied quote ===
+# SwapRateHelper::initializeDates builds a real VanillaSwap and takes
+# latestRelevantDate_ = max(maturityDate_, lastCoupon->fixingEndDate()).
+# Pins all four dates plus the underlying swap's schedule for cases where a
+# calendar-advance approximation of the schedule comes apart from the real one
+# (stub tenors, EOM, schedule calendar != index fixing calendar, indexed
+# coupons, explicit settlementDays, forward start, every Pillar::Choice).
+# Emits references/v143/ts/swaphelper.json.
+add_executable(v143_ts_swaphelper_probe v143_ts_swaphelper/probe.cpp)
+target_link_libraries(v143_ts_swaphelper_probe PRIVATE ${QUANTLIB_LIBRARY})

@@ -1,24 +1,35 @@
 """SwapRateHelper — bootstrap from par-swap rate quote.
 
-# C++ parity: ql/termstructures/yield/ratehelpers.{hpp,cpp} class SwapRateHelper.
+# C++ parity: ql/termstructures/yield/ratehelpers.{hpp,cpp} class SwapRateHelper (v1.43).
 
 C++ ``SwapRateHelper::impliedQuote`` constructs a ``VanillaSwap`` via
 ``MakeVanillaSwap`` and inspects its fixed/floating leg NPVs:
 
     impliedQuote = -(floatLegNPV + spreadNPV) / (fixedLegBPS / 1e-4)
 
-L3-C closes the carry-over: ``implied_quote`` now builds the underlying
-swap via ``make_vanilla_swap`` and reads ``fair_rate()``.
+``initialize_dates`` builds the same swap and reads its schedule:
 
-Carve-out: the ``initialize_dates`` method still approximates earliest /
-maturity dates via ``calendar.advance(...)`` rather than building a full
-``VanillaSwap`` schedule. That's accurate enough for pillar-date computation;
-a full schedule-driven implementation is deferred.
+    earliest = swap.start_date()
+    maturity = swap.maturity_date()
+    latest_relevant = max(maturity, last_float_coupon.fixing_end_date())
+
+An earlier revision approximated the schedule with ``calendar.advance``
+and dropped the ``fixing_end_date`` term, noting that under a regular
+schedule the max collapses to ``maturity``. It does — but only when the
+last accrual end date is a business day on the *index's fixing calendar*,
+which is not the calendar the schedule was rolled on. Whenever the two
+differ (helper ``calendar`` != index fixing calendar) the par-coupon
+round trip overshoots and ``latest_relevant`` lands a business day past
+maturity; since ``LastRelevantDate`` is the default pillar, that moved
+the curve node. See ``migration-harness/cpp/probes/v143_ts_swaphelper``.
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pquantlib import qassert
+from pquantlib.cashflows.ibor_coupon import IborCoupon
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.indexes.ibor_index import IborIndex
 from pquantlib.indexes.swap_index import SwapIndex
@@ -31,6 +42,9 @@ from pquantlib.time.date import Date
 from pquantlib.time.frequency import Frequency
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
+
+if TYPE_CHECKING:
+    from pquantlib.instruments.vanilla_swap import VanillaSwap
 
 _ZERO_PERIOD = Period(0, TimeUnit.Days)
 
@@ -55,6 +69,8 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         pillar: PillarChoice = PillarChoice.LastRelevantDate,
         custom_pillar_date: Date | None = None,
         end_of_month: bool = False,
+        use_indexed_coupons: bool | None = None,
+        float_convention: BusinessDayConvention | None = None,
         evaluation_date: Date | None = None,
     ) -> None:
         super().__init__(rate)
@@ -80,7 +96,12 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         assert fixed_day_count is not None
         assert ibor_index is not None
 
-        self._settlement_days: int = settlement_days if settlement_days is not None else ibor_index.fixing_days()
+        # ``None`` is C++'s ``Null<Natural>()``: MakeVanillaSwap then derives
+        # the spot date as ``index->valueDate(fixingCalendar.adjust(today))``
+        # instead of advancing ``settlementDays`` on the FLOATING-leg calendar.
+        # Those two agree only while the helper's calendar and the index's
+        # fixing calendar coincide, so the distinction has to survive.
+        self._settlement_days: int | None = settlement_days
         self._tenor: Period = tenor
         self._calendar: Calendar = calendar
         self._fixed_frequency: Frequency = fixed_frequency
@@ -91,11 +112,58 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         self._fwd_start: Period = fwd_start
         self._discount_curve: YieldTermStructureProtocol | None = discount_curve
         self._end_of_month: bool = end_of_month
+        self._use_indexed_coupons: bool | None = use_indexed_coupons
+        self._float_convention: BusinessDayConvention | None = float_convention
         self._pillar_choice: PillarChoice = pillar
         if custom_pillar_date is not None:
             self._pillar_date = custom_pillar_date
         if evaluation_date is not None:
             self.initialize_dates(evaluation_date)
+
+    # --- swap construction ----------------------------------------------------
+
+    def _make_swap(
+        self,
+        evaluation_date: Date,
+        ibor_index: IborIndex,
+        fixed_rate: float | None,
+        discount_curve: YieldTermStructureProtocol | None,
+    ) -> VanillaSwap:
+        """Build the underlying swap the way C++ ``initializeDates`` does.
+
+        # C++ parity: ratehelpers.cpp:559-580 — the single MakeVanillaSwap
+        # chain that both ``initializeDates`` and ``impliedQuote`` observe.
+        """
+        # Local import: termstructures/ should not depend on instruments/.
+        from pquantlib.instruments.make_vanilla_swap import make_vanilla_swap  # noqa: PLC0415
+
+        # C++: withFixedLegTenor(fixedFrequency_ == Once ? tenor_ : Period(fixedFrequency_)).
+        fixed_tenor = (
+            self._tenor
+            if self._fixed_frequency == Frequency.Once
+            else Period.from_frequency(self._fixed_frequency)
+        )
+        return make_vanilla_swap(
+            swap_tenor=self._tenor,
+            ibor_index=ibor_index,
+            fixed_rate=fixed_rate,
+            forward_start=self._fwd_start,
+            fixed_leg_tenor=fixed_tenor,
+            fixed_leg_calendar=self._calendar,
+            fixed_leg_day_count=self._fixed_day_count,
+            fixed_leg_convention=self._fixed_convention,
+            fixed_leg_termination_convention=self._fixed_convention,
+            fixed_leg_end_of_month=self._end_of_month,
+            floating_leg_calendar=self._calendar,
+            floating_leg_convention=self._float_convention,
+            floating_leg_termination_convention=self._float_convention,
+            floating_leg_end_of_month=self._end_of_month,
+            floating_leg_spread=self.spread(),
+            discount_curve=discount_curve,
+            use_indexed_coupons=self._use_indexed_coupons,
+            evaluation_date=evaluation_date,
+            settlement_days=self._settlement_days,
+        )
 
     # --- BootstrapHelper interface --------------------------------------------
 
@@ -108,9 +176,6 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         # what ``FixedVsFloatingSwap::fairRate`` computes via its result-fetch
         # fallback when the engine doesn't supply fair_rate directly.
         """
-        # Local import: termstructures/ should not depend on instruments/.
-        from pquantlib.instruments.make_vanilla_swap import make_vanilla_swap  # noqa: PLC0415
-
         # The bootstrap loop calls ``set_term_structure`` before each
         # ``implied_quote`` evaluation; use that curve as the discount.
         qassert.require(
@@ -119,68 +184,40 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
         )
         ts = self._term_structure
         assert ts is not None
-        # Build a swap whose fixed-rate is solved-for (None -> fair-rate path
-        # in make_vanilla_swap). Use the helper's tenor + the index + curve;
-        # MakeVanillaSwap's currency-driven defaults will reconstruct the
-        # same schedule the constructor described.
         idx = self._ibor_index.clone(ts) if hasattr(self._ibor_index, "clone") else self._ibor_index
-        swap = make_vanilla_swap(
-            swap_tenor=self._tenor,
-            ibor_index=idx,
-            fixed_rate=None,
-            forward_start=self._fwd_start,
-            fixed_leg_tenor=Period.from_frequency(self._fixed_frequency),
-            fixed_leg_day_count=self._fixed_day_count,
-            fixed_leg_convention=self._fixed_convention,
-            fixed_leg_termination_convention=self._fixed_convention,
-            fixed_leg_end_of_month=self._end_of_month,
-            floating_leg_spread=self.spread(),
-            discount_curve=self._discount_curve if self._discount_curve is not None else ts,
-            evaluation_date=ts.reference_date(),
-            settlement_days=self._settlement_days,
+        swap = self._make_swap(
+            ts.reference_date(),
+            idx,
+            None,
+            self._discount_curve if self._discount_curve is not None else ts,
         )
         return swap.fair_rate()
 
     # --- dates ----------------------------------------------------------------
 
     def initialize_dates(self, evaluation_date: Date) -> None:
-        """Approximate earliest / maturity dates via calendar.advance.
+        """Read earliest / maturity / latest-relevant off the real swap schedule.
 
-        Full VanillaSwap-driven schedule is L3.
+        # C++ parity: ``SwapRateHelper::initializeDates`` (ratehelpers.cpp:557-616).
         """
-        cal = self._ibor_index.fixing_calendar()
-        ref = cal.adjust(evaluation_date, BusinessDayConvention.Following)
-        # Forward-start swap: advance by settlement_days then by fwd_start.
-        spot = cal.advance(ref, self._settlement_days, TimeUnit.Days)
-        if self._fwd_start.length != 0:
-            earliest = cal.advance(
-                spot, self._fwd_start.length, self._fwd_start.units,
-                self._fixed_convention, self._end_of_month,
-            )
-        else:
-            earliest = spot
-        maturity = cal.advance(
-            earliest, self._tenor.length, self._tenor.units,
-            self._fixed_convention, self._end_of_month,
-        )
+        # A fixed rate of 0.0 (C++'s choice too) keeps this curve-free: the
+        # fair-rate fallback would need a forecast curve, and none of the
+        # dates depend on one.
+        swap = self._make_swap(evaluation_date, self._ibor_index, 0.0, None)
+        earliest = swap.start_date()
+        maturity = swap.maturity_date()
         self._earliest_date = earliest
         self._maturity_date = maturity
 
-        # C++ parity: ratehelpers.cpp:587-589 —
+        # C++ parity: ratehelpers.cpp:589-591 —
         #   latestRelevantDate_ = max(maturityDate_, lastCoupon->fixingEndDate())
-        #
-        # C++ can ask that question because ``initializeDates`` builds a real
-        # VanillaSwap; this port approximates the schedule with calendar
-        # advances and has no last coupon to interrogate. Under the regular
-        # schedule it does model — every float period exactly one index tenor
-        # long, no stub — the last coupon's fixing period ends at the accrual
-        # end, so the max collapses to ``maturity``. It would not collapse for
-        # a short final stub or an index tenor overrunning the last period;
-        # those are not representable here. Recorded as a known gap rather
-        # than approximated, since ``LastRelevantDate`` is the default pillar
-        # and a date guessed +/- a business day would move every curve node.
-        self._latest_relevant_date = maturity
-        self._latest_date = self._latest_relevant_date
+        last_coupon = swap.floating_leg()[-1]
+        qassert.require(
+            isinstance(last_coupon, IborCoupon),
+            "SwapRateHelper: last floating cashflow is not an IborCoupon",
+        )
+        assert isinstance(last_coupon, IborCoupon)
+        self._latest_relevant_date = max(maturity, last_coupon.fixing_end_date())
 
         # C++ parity: ratehelpers.cpp:591-611.
         if self._pillar_choice == PillarChoice.MaturityDate:
@@ -207,6 +244,11 @@ class SwapRateHelper(BootstrapHelper[YieldTermStructureProtocol]):
             )
         else:
             qassert.fail(f"unknown Pillar.Choice({int(self._pillar_choice)})")
+
+        # C++ parity: ratehelpers.cpp:613 — latestDate_ = pillarDate_, kept for
+        # backward compatibility. It follows the PILLAR, not the latest
+        # relevant date, so under Pillar::CustomDate the two differ.
+        self._latest_date = self._pillar_date
 
     # --- inspectors ----------------------------------------------------------
 
