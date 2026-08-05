@@ -1,4 +1,4 @@
 """Statistics aggregators.
 
-# C++ parity: ql/math/statistics/* (v1.42.1).
+# C++ parity: ql/math/statistics/* (v1.43).
 """
