@@ -18,7 +18,7 @@ from pquantlib.indexes.inflation.inflation_index import (
     ZeroInflationIndex,
     inflation_period,
 )
-from pquantlib.indexes.inflation.region import Region
+from pquantlib.indexes.inflation.region import EURegion
 from pquantlib.testing.reference_reader import load as load_reference
 from pquantlib.testing.tolerance import tight
 from pquantlib.time.calendars.null_calendar import NullCalendar
@@ -88,7 +88,7 @@ def test_inflation_period_unsupported_frequency_raises() -> None:
 def _zero_stub() -> ZeroInflationIndex:
     return ZeroInflationIndex(
         family_name="HICP",
-        region=Region.Europe,
+        region=EURegion(),
         revised=False,
         frequency=Frequency.Monthly,
         availability_lag=Period(1, TimeUnit.Months),
@@ -100,7 +100,7 @@ def _zero_stub() -> ZeroInflationIndex:
 def test_zero_inflation_index_inspectors() -> None:
     idx = _zero_stub()
     assert idx.family_name() == "HICP"
-    assert idx.region() == Region.Europe
+    assert idx.region() == EURegion()
     assert idx.revised() is False
     assert idx.frequency() == Frequency.Monthly
     assert idx.availability_lag() == Period(1, TimeUnit.Months)
@@ -140,7 +140,7 @@ def test_zero_inflation_index_past_fixing_lookup_and_missing() -> None:
 def test_yoy_inflation_index_quoted_mode_inspectors() -> None:
     idx = YoYInflationIndex(
         family_name="YY_HICP",
-        region=Region.Europe,
+        region=EURegion(),
         revised=False,
         interpolated=False,
         frequency=Frequency.Monthly,
@@ -160,7 +160,7 @@ def test_yoy_inflation_index_ratio_mode_inspectors() -> None:
     assert yoy.underlying_index() is underlying
     # C++ parity: ratio-mode family_name = "YYR_" + underlying.family_name().
     assert yoy.family_name() == "YYR_HICP"
-    assert yoy.region() == Region.Europe
+    assert yoy.region() == EURegion()
     assert yoy.frequency() == Frequency.Monthly
     assert yoy.name() == "EU YYR_HICP"
 
@@ -187,7 +187,7 @@ def test_inflation_index_abstract_cannot_be_instantiated() -> None:
         # cast bypass: pyright would otherwise reject this construction.
         cast(Any, InflationIndex)(
             "HICP",
-            Region.Europe,
+            EURegion(),
             False,
             False,
             Frequency.Monthly,

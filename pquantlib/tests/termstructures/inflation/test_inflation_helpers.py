@@ -16,7 +16,7 @@ from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.daycounters.thirty_360 import Convention as Thirty360Convention
 from pquantlib.daycounters.thirty_360 import Thirty360
 from pquantlib.exceptions import LibraryException
-from pquantlib.indexes.inflation.eu_hicp import EUHICP, YoYEUHICP
+from pquantlib.indexes.inflation.eu_hicp import EUHICP, YYEUHICP
 from pquantlib.indexes.inflation.inflation_index import inflation_period
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.inflation.inflation_helpers import (
@@ -169,7 +169,7 @@ def test_yoy_helper_pillar_date_matches_cpp() -> None:
         calendar=TARGET(),
         payment_convention=BusinessDayConvention.ModifiedFollowing,
         day_counter=Thirty360(Thirty360Convention.BondBasis),
-        index=YoYEUHICP(),
+        index=YYEUHICP(),
     )
     expected, _ = inflation_period(maturity - lag, Frequency.Monthly)
     assert h.pillar_date() == expected
@@ -183,7 +183,7 @@ def test_yoy_helper_implied_quote_requires_set_term_structure() -> None:
         calendar=TARGET(),
         payment_convention=BusinessDayConvention.ModifiedFollowing,
         day_counter=Thirty360(Thirty360Convention.BondBasis),
-        index=YoYEUHICP(),
+        index=YYEUHICP(),
     )
     with pytest.raises(LibraryException, match="term structure not set"):
         h.implied_quote()
@@ -196,7 +196,7 @@ def test_yoy_helper_implied_quote_after_binding_matches_forecast() -> None:
     YYIIS fair rate reduces to the YoY forecast at the pillar.
     """
     today = Date.from_ymd(15, Month.January, 2020)
-    yyii = YoYEUHICP()
+    yyii = YYEUHICP()
     maturity = Date.from_ymd(15, Month.January, 2025)
     lag = Period(3, TimeUnit.Months)
     h = YearOnYearInflationSwapHelper(
@@ -221,7 +221,7 @@ def test_yoy_helper_implied_quote_after_binding_matches_forecast() -> None:
 
 
 def test_yoy_helper_inflation_index_inspector() -> None:
-    yyii = YoYEUHICP()
+    yyii = YYEUHICP()
     h = YearOnYearInflationSwapHelper(
         quote=0.022,
         observation_lag=Period(3, TimeUnit.Months),

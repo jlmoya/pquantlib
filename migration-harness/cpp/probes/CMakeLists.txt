@@ -850,3 +850,34 @@ target_link_libraries(currencies_all_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/currencies/exchangerate.json.
 add_executable(currencies_exchangerate_probe currencies_exchangerate/probe.cpp)
 target_link_libraries(currencies_exchangerate_probe PRIVATE ${QUANTLIB_LIBRARY})
+# v1.43 index coverage: the ql/indexes/ibor/* families PQuantLib was missing.
+# Pins wiring (name / fixing days / currency / calendar / day counter /
+# convention / EOM) plus the fixing→value→maturity roll for every tenor C++
+# exposes as its own subclass, and the two behavioural outliers in the batch
+# (Cdi's compounded forecastFixing, CustomIborIndex's three-calendar roll).
+# Emits references/v143/indexes/ibor.json.
+add_executable(v143_indexes_ibor_probe v143_indexes_ibor/probe.cpp)
+target_link_libraries(v143_indexes_ibor_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 index coverage: the ql/indexes/swap/* ISDA/IFR-fix families plus
+# OvernightIndexedSwapIndex. Pins the fixed-leg tenor/convention, the
+# tenor-dependent choice of underlying ibor index, and the underlying-swap
+# driven maturityDate (which is not a plain tenor advance).
+# Emits references/v143/indexes/swap.json.
+add_executable(v143_indexes_swap_probe v143_indexes_swap/probe.cpp)
+target_link_libraries(v143_indexes_swap_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 index coverage: the ql/indexes/region.hpp hierarchy (including the
+# name-only equality that lets a CustomRegion shadow a built-in) and the
+# ql/indexes/inflation/* concretes. Region names feed InflationIndex::name(),
+# which is the IndexManager key, so both halves are pinned.
+# Emits references/v143/indexes/inflation.json.
+add_executable(v143_indexes_inflation_probe v143_indexes_inflation/probe.cpp)
+target_link_libraries(v143_indexes_inflation_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 index coverage: EquityIndex (the one index in the batch with a real
+# forecast rather than pure wiring) plus the Index::addFixings ordering
+# guarantee — valid entries are committed before the invalid ones raise.
+# Emits references/v143/indexes/equity.json.
+add_executable(v143_indexes_equity_probe v143_indexes_equity/probe.cpp)
+target_link_libraries(v143_indexes_equity_probe PRIVATE ${QUANTLIB_LIBRARY})

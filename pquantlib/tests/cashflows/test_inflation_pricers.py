@@ -33,7 +33,7 @@ from pquantlib.cashflows.yoy_inflation_coupon_pricer import (
 from pquantlib.daycounters.thirty_360 import Convention, Thirty360
 from pquantlib.exceptions import LibraryException
 from pquantlib.indexes.inflation.cpi import InterpolationType
-from pquantlib.indexes.inflation.eu_hicp import YoYEUHICP
+from pquantlib.indexes.inflation.eu_hicp import YYEUHICP
 from pquantlib.payoffs import OptionType
 from pquantlib.testing import reference_reader, tolerance
 from pquantlib.time.date import Date
@@ -172,7 +172,7 @@ def test_yoy_pricer_caplet_without_vol_raises() -> None:
     # C++ parity: optionletRate's QL_REQUIRE(!capletVolatility().empty()).
     """
     # We need to wire a YoY coupon + pricer pair.
-    yoy = YoYEUHICP()
+    yoy = YYEUHICP()
     yoy.clear_fixings()
     yoy.add_fixing(Date.from_ymd(1, Month.March, 2022), 0.025, True)
     cpn = YoYInflationCoupon(
@@ -237,7 +237,7 @@ def test_set_coupon_pricer_attaches_to_inflation_coupons() -> None:
 
     # C++ parity: inflationcouponpricer.cpp:27-34.
     """
-    yoy = YoYEUHICP()
+    yoy = YYEUHICP()
     yoy.clear_fixings()
     yoy.add_fixing(Date.from_ymd(1, Month.March, 2022), 0.025, True)
     cpn = YoYInflationCoupon(

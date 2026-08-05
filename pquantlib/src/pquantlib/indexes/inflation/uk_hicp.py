@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pquantlib.currencies.europe import GBPCurrency
 from pquantlib.indexes.inflation.inflation_index import ZeroInflationIndex
-from pquantlib.indexes.inflation.region import Region
+from pquantlib.indexes.inflation.region import UKRegion
 from pquantlib.time.frequency import Frequency
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
@@ -24,7 +24,7 @@ class UKHICP(ZeroInflationIndex):
     def __init__(self, ts: object | None = None) -> None:
         super().__init__(
             family_name="HICP",
-            region=Region.UnitedKingdom,
+            region=UKRegion(),
             revised=False,
             frequency=Frequency.Monthly,
             availability_lag=Period(1, TimeUnit.Months),

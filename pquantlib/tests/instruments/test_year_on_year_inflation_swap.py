@@ -21,7 +21,7 @@ from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.daycounters.thirty_360 import Convention as Thirty360Convention
 from pquantlib.daycounters.thirty_360 import Thirty360
 from pquantlib.indexes.inflation.cpi import InterpolationType
-from pquantlib.indexes.inflation.eu_hicp import YoYEUHICP
+from pquantlib.indexes.inflation.eu_hicp import YYEUHICP
 from pquantlib.instruments.swap import SwapType
 from pquantlib.instruments.year_on_year_inflation_swap import YearOnYearInflationSwap
 from pquantlib.instruments.yoy_inflation_capfloor import YoYInflationCouponLike
@@ -119,7 +119,7 @@ def _build_swap(type_: SwapType = SwapType.Payer) -> YearOnYearInflationSwap:
         fixed_rate=0.025,
         fixed_day_count=Thirty360(Thirty360Convention.BondBasis),
         yoy_leg=yoy_leg,
-        yoy_index=YoYEUHICP(),
+        yoy_index=YYEUHICP(),
         observation_lag=Period(3, TimeUnit.Months),
         interpolation=InterpolationType.AsIndex,
         spread=0.0,

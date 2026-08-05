@@ -1,0 +1,191 @@
+{
+  "regions": {
+    "australia": {"name": "Australia", "code": "AU"},
+    "eu": {"name": "EU", "code": "EU"},
+    "france": {"name": "France", "code": "FR"},
+    "uk": {"name": "UK", "code": "UK"},
+    "us": {"name": "USA", "code": "US"},
+    "za": {"name": "South Africa", "code": "ZA"},
+    "generic": {"name": "Generic", "code": "GENERIC"},
+    "custom": {"name": "Atlantis", "code": "AT"}
+  },
+  "region_equality": {
+    "eu_vs_eu": true,
+    "eu_vs_us": false,
+    "custom_same_name_different_code_vs_eu": true
+  },
+  "zero_indexes": {
+    "AUCPI_quarterly": {
+      "name": "Australia CPI",
+      "family_name": "CPI",
+      "region_name": "Australia",
+      "region_code": "AU",
+      "revised": false,
+      "frequency": 4,
+      "availability_lag_months": 2,
+      "currency_code": "AUD"
+    },
+    "AUCPI_monthly_revised": {
+      "name": "Australia CPI",
+      "family_name": "CPI",
+      "region_name": "Australia",
+      "region_code": "AU",
+      "revised": true,
+      "frequency": 12,
+      "availability_lag_months": 2,
+      "currency_code": "AUD"
+    },
+    "EUHICP": {
+      "name": "EU HICP",
+      "family_name": "HICP",
+      "region_name": "EU",
+      "region_code": "EU",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "EUHICPXT": {
+      "name": "EU HICPXT",
+      "family_name": "HICPXT",
+      "region_name": "EU",
+      "region_code": "EU",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "FRHICP": {
+      "name": "France HICP",
+      "family_name": "HICP",
+      "region_name": "France",
+      "region_code": "FR",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "UKHICP": {
+      "name": "UK HICP",
+      "family_name": "HICP",
+      "region_name": "UK",
+      "region_code": "UK",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "GBP"
+    },
+    "UKRPI": {
+      "name": "UK RPI",
+      "family_name": "RPI",
+      "region_name": "UK",
+      "region_code": "UK",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "GBP"
+    },
+    "USCPI": {
+      "name": "USA CPI",
+      "family_name": "CPI",
+      "region_name": "USA",
+      "region_code": "US",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "USD"
+    },
+    "ZACPI": {
+      "name": "South Africa CPI",
+      "family_name": "CPI",
+      "region_name": "South Africa",
+      "region_code": "ZA",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "ZAR"
+    }
+  },
+  "yoy_indexes": {
+    "YYAUCPI_quarterly": {
+      "name": "Australia YY_CPI",
+      "family_name": "YY_CPI",
+      "region_name": "Australia",
+      "region_code": "AU",
+      "revised": false,
+      "frequency": 4,
+      "availability_lag_months": 2,
+      "currency_code": "AUD"
+    },
+    "YYAUCPI_monthly_revised": {
+      "name": "Australia YY_CPI",
+      "family_name": "YY_CPI",
+      "region_name": "Australia",
+      "region_code": "AU",
+      "revised": true,
+      "frequency": 12,
+      "availability_lag_months": 2,
+      "currency_code": "AUD"
+    },
+    "YYEUHICP": {
+      "name": "EU YY_HICP",
+      "family_name": "YY_HICP",
+      "region_name": "EU",
+      "region_code": "EU",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "YYEUHICPXT": {
+      "name": "EU YY_HICPXT",
+      "family_name": "YY_HICPXT",
+      "region_name": "EU",
+      "region_code": "EU",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "YYFRHICP": {
+      "name": "France YY_HICP",
+      "family_name": "YY_HICP",
+      "region_name": "France",
+      "region_code": "FR",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "EUR"
+    },
+    "YYUKRPI": {
+      "name": "UK YY_RPI",
+      "family_name": "YY_RPI",
+      "region_name": "UK",
+      "region_code": "UK",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "GBP"
+    },
+    "YYUSCPI": {
+      "name": "USA YY_CPI",
+      "family_name": "YY_CPI",
+      "region_name": "USA",
+      "region_code": "US",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "USD"
+    },
+    "YYZACPI": {
+      "name": "South Africa YY_CPI",
+      "family_name": "YY_CPI",
+      "region_name": "South Africa",
+      "region_code": "ZA",
+      "revised": false,
+      "frequency": 12,
+      "availability_lag_months": 1,
+      "currency_code": "ZAR"
+    }
+  }
+}

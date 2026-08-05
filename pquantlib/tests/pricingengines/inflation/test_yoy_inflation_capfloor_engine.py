@@ -32,7 +32,7 @@ from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.daycounters.actual_actual import ActualActual
 from pquantlib.daycounters.actual_actual import Convention as ActualActualConvention
 from pquantlib.daycounters.day_counter import DayCounter
-from pquantlib.indexes.inflation.eu_hicp import YoYEUHICP
+from pquantlib.indexes.inflation.eu_hicp import YYEUHICP
 from pquantlib.instruments.yoy_inflation_capfloor import (
     YoYInflationCap,
     YoYInflationCapFloorArguments,
@@ -269,13 +269,13 @@ def _vol_surface(vol: float, vol_type: VolatilityType, displacement: float = 0.0
     )
 
 
-def _yoy_index() -> YoYEUHICP:
-    # Build a flat YoY curve at 2.5% and attach to YoYEUHICP.
+def _yoy_index() -> YYEUHICP:
+    # Build a flat YoY curve at 2.5% and attach to YYEUHICP.
     yoy_curve = _FlatYoYTermStructure(
         base_date=_EVAL_DATE - Period(3, TimeUnit.Months),
         rate=0.025,
     )
-    return YoYEUHICP(ts=yoy_curve)
+    return YYEUHICP(ts=yoy_curve)
 
 
 def test_yoy_inflation_black_cap_npv(

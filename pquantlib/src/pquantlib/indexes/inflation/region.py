@@ -1,72 +1,130 @@
 """Region — geographical area, used for inflation indexes.
 
-# C++ parity: ql/indexes/region.{hpp,cpp} (v1.42.1) — class Region holds
-   ``(name, code)`` strings, with one C++ subclass per region (EURegion,
-   FranceRegion, UKRegion, USRegion, ...).
+# C++ parity: ql/indexes/region.{hpp,cpp} (v1.43) — class ``Region`` holds a
+  ``(name, code)`` pair behind ``name()`` / ``code()`` accessors, with one
+  subclass per region and equality defined on ``name()`` alone.
 
-Python divergence: rather than one class per region, we expose an
-``IntEnum`` whose members carry a ``(name, code)`` payload via a frozen
-helper class and accessor methods. This:
-
-- preserves the C++ ``name() / code()`` accessors verbatim, so
-  ``InflationIndex.name()`` reproduces ``"<region.name()> <familyName>"``
-  exactly (e.g. ``"EU HICP"`` from EUHICP + ``Region.Europe``);
-- is hashable and orderable for free (IntEnum), so ``Region`` can land in
-  registries / dataclasses without extra glue;
-- allows L7-A region-concrete subclasses to write
-  ``Region.Europe`` instead of ``EURegion()``.
-
-The ``CustomRegion`` C++ constructor (user-supplied name + code) is
-deferred to Phase 8+ — it has zero callers in the must-port surface for
-Phase 7.
+``CustomRegion`` takes a user-supplied ``(name, code)``, so the region set is
+open — which is why this is a class hierarchy rather than an enumeration.
+``GenericRegion`` comes from ``ql/experimental/inflation/genericindexes.hpp``
+and backs the generic test indexes that drive YoY optionlet stripping.
 """
 
 from __future__ import annotations
 
-from enum import IntEnum
-from typing import Final
 
+class Region:
+    """Geographical/economic region of an inflation index.
 
-class Region(IntEnum):
-    """Enum tagging the geographical/economic region of an inflation index.
-
-    # C++ parity: each member corresponds to one of the QuantLib subclasses
-    # in ``ql/indexes/region.hpp``. The ``name`` and ``code`` payloads come
-    # from ``ql/indexes/region.cpp`` and are exposed via ``region_name()`` /
-    # ``region_code()`` methods that map name → name() / code → code().
+    # C++ parity: ``Region`` in ql/indexes/region.hpp. The C++ base has a
+    # protected default constructor and subclasses fill in ``data_``; Python
+    # takes the pair directly and each subclass supplies it.
     """
 
-    Europe = 1
-    France = 2
-    UnitedKingdom = 3
-    UnitedStates = 4
-    # C++ parity: GenericRegion in ql/experimental/inflation/genericindexes.hpp
-    # — a placeholder region (name "Generic", code "GENERIC") used by the
-    # generic test indexes that drive YoY optionlet stripping.
-    Generic = 5
+    __slots__ = ("_code", "_name")
 
-    def region_name(self) -> str:
-        """Return the C++-equivalent ``Region::name()`` string."""
-        return _NAMES[self]
+    def __init__(self, name: str, code: str) -> None:
+        self._name = name
+        self._code = code
 
-    def region_code(self) -> str:
-        """Return the C++-equivalent ``Region::code()`` string."""
-        return _CODES[self]
+    def name(self) -> str:
+        """Mirror C++ ``Region::name()``."""
+        return self._name
+
+    def code(self) -> str:
+        """Mirror C++ ``Region::code()``."""
+        return self._code
+
+    def __eq__(self, other: object) -> bool:
+        # C++ parity: operator== compares name() only, not code().
+        if not isinstance(other, Region):
+            return NotImplemented
+        return self._name == other._name
+
+    def __ne__(self, other: object) -> bool:
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+
+    def __hash__(self) -> int:
+        return hash(self._name)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(name={self._name!r}, code={self._code!r})"
 
 
-# C++ parity: matches the static Data initializers in ql/indexes/region.cpp.
-_NAMES: Final[dict[Region, str]] = {
-    Region.Europe: "EU",
-    Region.France: "France",
-    Region.UnitedKingdom: "UK",
-    Region.UnitedStates: "USA",
-    Region.Generic: "Generic",
-}
+class CustomRegion(Region):
+    """User-defined region. # C++ parity: ``CustomRegion`` in region.hpp."""
 
-_CODES: Final[dict[Region, str]] = {
-    Region.Europe: "EU",
-    Region.France: "FR",
-    Region.UnitedKingdom: "UK",
-    Region.UnitedStates: "US",
-    Region.Generic: "GENERIC",
-}
+    __slots__ = ()
+
+    def __init__(self, name: str, code: str) -> None:
+        super().__init__(name, code)
+
+
+class AustraliaRegion(Region):
+    """Australia. # C++ parity: ``AustraliaRegion`` in region.cpp."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__("Australia", "AU")
+
+
+class EURegion(Region):
+    """European Union. # C++ parity: ``EURegion`` in region.cpp."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__("EU", "EU")
+
+
+class FranceRegion(Region):
+    """France. # C++ parity: ``FranceRegion`` in region.cpp."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__("France", "FR")
+
+
+class UKRegion(Region):
+    """United Kingdom. # C++ parity: ``UKRegion`` in region.cpp."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__("UK", "UK")
+
+
+class USRegion(Region):
+    """United States. # C++ parity: ``USRegion`` in region.cpp."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__("USA", "US")
+
+
+class ZARegion(Region):
+    """South Africa. # C++ parity: ``ZARegion`` in region.cpp."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__("South Africa", "ZA")
+
+
+class GenericRegion(Region):
+    """Placeholder region for the generic test indexes.
+
+    # C++ parity: ``GenericRegion`` in
+    # ql/experimental/inflation/genericindexes.hpp.
+    """
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__("Generic", "GENERIC")

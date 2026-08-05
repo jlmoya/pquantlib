@@ -11,9 +11,12 @@ The C++ ``CPI`` struct holds:
 * ``laggedYoYRate(index, date, observationLag, interpolationType)`` — same
   but for ``YoYInflationIndex``.
 
-We port the struct as a Python module-level enum + two free functions
-(``lagged_fixing`` / ``lagged_yoy_rate``). This avoids the awkwardness of
-wrapping a static-method-only struct in a Python class.
+The implementations are module-level (``InterpolationType``,
+``lagged_fixing``, ``lagged_yoy_rate``) — that is the idiomatic Python shape
+and the one every internal call site uses. A ``CPI`` class re-exports them at
+the bottom of this module so C++-shaped call sites (``CPI.Flat``,
+``CPI.lagged_fixing(...)``) read the same in both languages; it is a namespace
+carrier with no state, exactly as ``struct CPI`` is in C++.
 
 # C++ parity divergence: the C++ Linear-mode branch has a fast-path when
 # the requested date sits exactly on an inflation-period start (no
@@ -162,3 +165,26 @@ def lagged_yoy_rate(
         denom = float((interp_end + _ONE_DAY) - interp_start)
         return y0 + (y1 - y0) * num / denom
     qassert.fail(f"unknown CPI interpolation type: {interpolation_type}")
+
+
+class CPI:
+    """Namespace carrier for the inflation-fixing utilities.
+
+    # C++ parity: ``struct CPI`` in ql/indexes/inflationindex.hpp — a
+    # static-only struct used purely for qualification (``CPI::Flat``,
+    # ``CPI::laggedFixing``). Not instantiable; the members delegate to the
+    # module-level definitions above.
+    """
+
+    InterpolationType = InterpolationType
+
+    #: .. deprecated:: 1.43 — use :attr:`Flat` or :attr:`Linear`.
+    AsIndex = InterpolationType.AsIndex
+    Flat = InterpolationType.Flat
+    Linear = InterpolationType.Linear
+
+    def __init__(self) -> None:
+        qassert.fail("CPI is a namespace, not a type; it cannot be instantiated")
+
+    lagged_fixing = staticmethod(lagged_fixing)
+    lagged_yoy_rate = staticmethod(lagged_yoy_rate)

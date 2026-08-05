@@ -22,6 +22,8 @@ What's ported in L2-C:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pquantlib.currencies.currency import Currency
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.indexes.ibor_index import IborIndex
@@ -31,6 +33,9 @@ from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendar import Calendar
 from pquantlib.time.date import Date
 from pquantlib.time.period import Period
+
+if TYPE_CHECKING:
+    from pquantlib.instruments.fixed_vs_floating_swap import FixedVsFloatingSwap
 
 
 class SwapIndex(InterestRateIndex):
@@ -93,11 +98,19 @@ class SwapIndex(InterestRateIndex):
         """
         return self.underlying_swap(fixing_date).fair_rate()
 
-    def underlying_swap(self, fixing_date: Date):  # type: ignore[no-untyped-def]
+    def underlying_swap(self, fixing_date: Date) -> FixedVsFloatingSwap:
         """Build the underlying VanillaSwap for a given fixing date.
 
         # C++ parity: ql/indexes/swapindex.cpp ``SwapIndex::underlyingSwap`` —
         # delegates to ``MakeVanillaSwap`` with effective date = value_date(fixing_date).
+
+        The declared return type is the common ``FixedVsFloatingSwap`` base
+        rather than ``VanillaSwap``: in C++ ``underlyingSwap`` is non-virtual,
+        so ``OvernightIndexedSwapIndex`` *hides* it with an overload returning
+        an ``OvernightIndexedSwap``. Python has no name hiding, so the base
+        annotation has to admit both concrete swaps for the subclass to remain
+        a well-typed override. This implementation still returns a
+        ``VanillaSwap``.
         """
         # Local import to keep the layering clean — indexes/ depend only on
         # cashflows + termstructures; instruments/make_vanilla_swap pulls in
