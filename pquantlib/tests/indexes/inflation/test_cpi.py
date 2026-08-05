@@ -6,10 +6,16 @@ that the L7-D inflation swap path relies on.
 
 from __future__ import annotations
 
+import pytest
+
+from pquantlib.exceptions import LibraryException
 from pquantlib.indexes.inflation.cpi import (
+    CPI,
     InterpolationType,
     effective_interpolation_type,
     is_interpolated,
+    lagged_fixing,
+    lagged_yoy_rate,
 )
 
 
@@ -30,3 +36,18 @@ def test_effective_interpolation_type_collapses_asindex_to_flat() -> None:
     assert effective_interpolation_type(InterpolationType.AsIndex) == InterpolationType.Flat
     assert effective_interpolation_type(InterpolationType.Flat) == InterpolationType.Flat
     assert effective_interpolation_type(InterpolationType.Linear) == InterpolationType.Linear
+
+
+def test_cpi_namespace_mirrors_the_cpp_qualified_names() -> None:
+    """``struct CPI`` is a namespace carrier in C++; the port exposes the same names."""
+    assert CPI.InterpolationType is InterpolationType
+    assert CPI.Flat is InterpolationType.Flat
+    assert CPI.Linear is InterpolationType.Linear
+    assert CPI.AsIndex is InterpolationType.AsIndex
+    assert CPI.lagged_fixing is lagged_fixing
+    assert CPI.lagged_yoy_rate is lagged_yoy_rate
+
+
+def test_cpi_namespace_is_not_instantiable() -> None:
+    with pytest.raises(LibraryException, match="namespace"):
+        CPI()
