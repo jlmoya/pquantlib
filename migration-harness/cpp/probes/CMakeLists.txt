@@ -881,3 +881,13 @@ target_link_libraries(v143_ts_discountcurve_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/ts/yieldadapters.json.
 add_executable(v143_ts_yieldadapters_probe v143_ts_yieldadapters/probe.cpp)
 target_link_libraries(v143_ts_yieldadapters_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/yield: BondHelper / FixedRateBondHelper ===
+# The two dates are the last CASHFLOW date and the next cashflow after
+# settlement (not the bond's maturity and issue dates), and the implied quote
+# is the bond's clean or dirty price off the curve being bootstrapped. The
+# schedule is chosen so the redemption payment rolls past maturity, which is
+# where latestDate() and maturityDate() come apart.
+# Emits references/v143/ts/bondhelper.json.
+add_executable(v143_ts_bondhelper_probe v143_ts_bondhelper/probe.cpp)
+target_link_libraries(v143_ts_bondhelper_probe PRIVATE ${QUANTLIB_LIBRARY})

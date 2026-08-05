@@ -1,0 +1,52 @@
+{
+  "fixed_rate_clean": {
+    "earliest_date": 45460,
+    "latest_date": 47651,
+    "pillar_date": 47651,
+    "bond_maturity_date": 47649,
+    "bond_settlement_date": 45313,
+    "n_cashflows": 11,
+    "implied_quote": 102.4243419311973,
+    "quote_error": -0.92434193119730423
+  },
+  "fixed_rate_dirty": {
+    "earliest_date": 45460,
+    "latest_date": 47651,
+    "pillar_date": 47651,
+    "bond_maturity_date": 47649,
+    "bond_settlement_date": 45313,
+    "n_cashflows": 11,
+    "implied_quote": 104.83545304230843,
+    "quote_error": -3.3354530423084299
+  },
+  "fixed_rate_settle0": {
+    "earliest_date": 45460,
+    "latest_date": 47651,
+    "pillar_date": 47651,
+    "bond_maturity_date": 47649,
+    "bond_settlement_date": 45308,
+    "n_cashflows": 11,
+    "implied_quote": 102.42964596093772,
+    "quote_error": -0.92964596093771945
+  },
+  "fixed_rate_semi_act365": {
+    "earliest_date": 45352,
+    "latest_date": 47178,
+    "pillar_date": 47178,
+    "bond_maturity_date": 47178,
+    "bond_settlement_date": 45310,
+    "n_cashflows": 17,
+    "implied_quote": 95.210171878679063,
+    "quote_error": 3.0398281213209373
+  },
+  "zero_coupon_clean": {
+    "earliest_date": 47651,
+    "latest_date": 47651,
+    "pillar_date": 47651,
+    "bond_maturity_date": 47649,
+    "bond_settlement_date": 45310,
+    "n_cashflows": 1,
+    "implied_quote": 79.893199294207506,
+    "quote_error": 2.1068007057924945
+  }
+}
