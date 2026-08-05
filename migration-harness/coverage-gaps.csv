@@ -403,7 +403,6 @@ math,EmptyRes
 math,FlatExtrapolator2DImpl
 math,KernelInterpolation2DImpl
 math,Matrix
-math,SABRInterpolation
 math,XABRError
 methods,AdditiveEQPBinomialTree
 methods,BSMRNDCalculator

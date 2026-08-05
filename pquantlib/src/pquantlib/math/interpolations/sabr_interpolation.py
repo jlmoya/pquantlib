@@ -1,4 +1,4 @@
-"""SabrInterpolation — fits SABR (alpha, beta, nu, rho) to a strike-vol slice.
+"""SABRInterpolation — fits SABR (alpha, beta, nu, rho) to a strike-vol slice.
 
 # C++ parity: ql/math/interpolations/sabrinterpolation.hpp (v1.42.1).
 
@@ -337,7 +337,7 @@ class SABRSpecs:
         return SABRWrapper(t, forward, params, add_params)
 
 
-class SabrInterpolation:
+class SABRInterpolation:
     """Fit SABR (alpha, beta, nu, rho) to a strike-vol slice.
 
     # C++ parity: ``SABRInterpolation`` (sabrinterpolation.hpp:150-194).
@@ -732,10 +732,10 @@ class SabrInterpolation:
         return self.value(strike)
 
 
-# C++ spells the class ``SABRInterpolation``; PQuantLib landed it as
-# ``SabrInterpolation`` and a good deal of the library imports that name.
-# Both are exported, with the C++ spelling as the canonical alias.
-SABRInterpolation = SabrInterpolation
+# The class carries the C++ spelling, ``SABRInterpolation``. PQuantLib
+# originally landed it as ``SabrInterpolation`` and a good deal of the library
+# imports that name, so it stays as the alias.
+SabrInterpolation = SABRInterpolation
 
 
 class SABR:
