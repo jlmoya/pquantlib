@@ -1,34 +1,35 @@
-"""Optimization scaffolding (constraint, cost function, end criteria, method, problem).
+"""Optimization: constraints, cost functions, end criteria, methods, problems.
 
-# C++ parity: ql/math/optimization/* (v1.42.1).
+# C++ parity: ql/math/optimization/* (v1.43).
 
-L1-D scaffolding (closed in Phase 1):
-
+Scaffolding
+-----------
 - ``Constraint`` base + ``NoConstraint``, ``PositiveConstraint``,
-  ``BoundaryConstraint``
-- ``CostFunction`` abstract
-- ``EndCriteria`` + ``EndCriteria.Type`` IntEnum
+  ``BoundaryConstraint``, ``NonhomogeneousBoundaryConstraint``,
+  ``CompositeConstraint``, plus ``Constraint.update``
+- ``CostFunction`` abstract + ``SimpleCostFunction``,
+  ``ParametersTransformation``
+- ``EndCriteria`` + ``EndCriteria.Type`` IntEnum, with every checker
+  including the ones that carry the ``statStateIterations`` in-out counter
 - ``OptimizationMethod`` abstract
 - ``Problem`` (cost + constraint + state bundle)
+- ``Projection``, ``ProjectedConstraint``, ``ProjectedCostFunction``
+- ``LeastSquareProblem``, ``LeastSquareFunction``, ``NonLinearLeastSquare``
 
-L4-A concretizations (this batch, closing Phase 1 carry-overs):
-
-- ``LevenbergMarquardt`` (scipy-backed ``least_squares(method='lm')``)
-- ``Simplex`` (scipy-backed ``minimize(method='Nelder-Mead')``)
-
-v1.43 additions:
-
-- ``LBFGSB`` — the limited-memory bound-constrained quasi-Newton method,
-  ported line for line from ``ql/math/optimization/lbfgsb.{hpp,cpp}``, plus
-  the prerequisites it reaches for: ``NonhomogeneousBoundaryConstraint``,
-  ``CostFunction.value_and_gradient`` and the ``EndCriteria`` max-iterations
-  / zero-gradient-norm checks.
-
-Carve-outs (still deferred to follow-up clusters): Bfgs,
-ConjugateGradient, SimulatedAnnealing, DifferentialEvolution,
-LineSearch + subclasses, CompositeConstraint,
-ParametersTransformation, SimpleCostFunction, and the ``EndCriteria``
-checkers that carry the ``statStateIterations`` in-out counter
-(``checkStationaryPoint``, ``checkStationaryFunctionValue``,
-``checkStationaryFunctionAccuracy``, ``operator()``).
+Methods
+-------
+- ``LBFGSB`` — limited-memory bound-constrained quasi-Newton
+- ``Simplex`` — Nelder-Mead, transcribed from simplex.cpp
+- ``LineSearch`` + ``ArmijoLineSearch``, ``GoldsteinLineSearch``
+- ``LineSearchBasedMethod`` + ``SteepestDescent``, ``ConjugateGradient``,
+  ``BFGS``
+- ``SimulatedAnnealing`` — annealed simplex, seeded from QuantLib's own
+  Mersenne twister
+- ``DifferentialEvolution`` (+ ``Candidate``, ``Configuration``) — 7
+  strategies x 3 crossover types, likewise seeded
+- ``SphereCylinderOptimizer``
+- ``LevenbergMarquardt`` — **still a scipy delegation, not a port.** See
+  ``tests/math/optimization/test_levenberg_marquardt_cpp_parity.py`` for
+  the measured divergences against C++ v1.43; porting MINPACK's ``lmdif``
+  (ql/math/optimization/lmdif.cpp) is the outstanding work.
 """

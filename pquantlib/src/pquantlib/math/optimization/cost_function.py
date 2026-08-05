@@ -13,15 +13,17 @@ override ``values`` and may optionally override ``value`` and
 uses to reach the objective, and subclasses override it to compute
 value and gradient in one pass when the two share work.
 
-The remaining higher-order methods (``jacobian``, ``valuesAndJacobian``,
-``ParametersTransformation``, the templated ``SimpleCostFunction``) are
-still deferred — they are only needed by Levenberg-Marquardt, carved
-out of L1-D.
+``jacobian`` and ``valuesAndJacobian`` are ported (central differences
+with ``finiteDifferenceEpsilon()``, matching costfunction.hpp:72-93),
+along with ``SimpleCostFunction`` — which C++ needs as a template only
+because it stores the functor without type erasure — and the
+``ParametersTransformation`` interface.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 import numpy as np
 import numpy.typing as npt
@@ -84,9 +86,92 @@ class CostFunction(ABC):
         self.gradient(grad, x)
         return self.value(x)
 
+    def jacobian(self, jac: npt.NDArray[np.float64], x: npt.NDArray[np.float64]) -> None:
+        """Central-difference Jacobian of ``values`` at ``x``, into ``jac``.
+
+        # C++ parity: costfunction.hpp:72-85 — default ``jacobian`` impl.
+
+        ``jac`` is mutated in place and must be shaped
+        ``(len(values(x)), len(x))``; ``jac[j][i]`` is d values_j / d x_i.
+        Note the C++ default is a CENTRAL difference (order 2), unlike the
+        forward difference MINPACK's ``fdjac2`` computes inside
+        ``LevenbergMarquardt`` — that asymmetry is deliberate upstream and
+        is documented in levenbergmarquardt.hpp:40-45.
+        """
+        eps = self.finite_difference_epsilon()
+        xx = x.astype(np.float64, copy=True)
+        for i in range(x.size):
+            xx[i] += eps
+            fp = self.values(xx)
+            xx[i] -= 2.0 * eps
+            fm = self.values(xx)
+            for j in range(fp.size):
+                jac[j][i] = 0.5 * (fp[j] - fm[j]) / eps
+            xx[i] = x[i]
+
+    def values_and_jacobian(
+        self, jac: npt.NDArray[np.float64], x: npt.NDArray[np.float64]
+    ) -> npt.NDArray[np.float64]:
+        """Store the Jacobian at ``x`` into ``jac`` and return ``values(x)``.
+
+        # C++ parity: costfunction.hpp:89-93 — default
+        # ``valuesAndJacobian`` impl, ``jacobian(jac, x); return values(x);``.
+        """
+        self.jacobian(jac, x)
+        return self.values(x)
+
     def finite_difference_epsilon(self) -> float:
         """Step size for the central-difference gradient (default 1e-8).
 
         # C++ parity: costfunction.hpp:96 — ``finiteDifferenceEpsilon``.
         """
         return 1e-8
+
+
+class SimpleCostFunction(CostFunction):
+    """Cost function built from a plain ``values`` callable.
+
+    # C++ parity: ``template <class ValuesFn> class SimpleCostFunction``
+    # in ql/math/optimization/costfunction.hpp:99-107 (v1.43).
+
+    C++ needs the template because it stores the functor by value with
+    no type erasure; Python stores the callable directly. Everything
+    else — ``value``, ``gradient``, ``jacobian`` — comes from the
+    ``CostFunction`` defaults, exactly as in C++.
+    """
+
+    __slots__ = ("_values_fn",)
+
+    def __init__(
+        self,
+        values_fn: Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]],
+    ) -> None:
+        self._values_fn: Callable[
+            [npt.NDArray[np.float64]], npt.NDArray[np.float64]
+        ] = values_fn
+
+    def values(self, x: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        # C++ parity: costfunction.hpp:104.
+        return self._values_fn(x)
+
+
+class ParametersTransformation(ABC):
+    """Bijection between an optimizer's search space and a model's parameters.
+
+    # C++ parity: ``class ParametersTransformation`` in
+    # ql/math/optimization/costfunction.hpp:109-114 (v1.43).
+
+    ``direct`` maps unconstrained search coordinates onto the model
+    parameters; ``inverse`` maps back. Both are pure-virtual in C++ with
+    no default implementation.
+    """
+
+    @abstractmethod
+    def direct(self, x: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        """Map search coordinates ``x`` onto model parameters."""
+        ...
+
+    @abstractmethod
+    def inverse(self, x: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        """Map model parameters ``x`` back onto search coordinates."""
+        ...

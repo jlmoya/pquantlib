@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 
+from pquantlib.math.optimization.end_criteria import NULL_REAL
+
 if TYPE_CHECKING:
     from pquantlib.math.optimization.constraint import Constraint
     from pquantlib.math.optimization.cost_function import CostFunction
@@ -69,13 +71,18 @@ class Problem:
             else np.empty(0, dtype=np.float64)
         )
         # Mutable per-call state.
-        # NaN is the closest Python analogue to C++ ``Null<Real>()``,
-        # which QuantLib defines as ``std::numeric_limits<Real>::max()``.
-        # Either sentinel works because the only check ever applied is
-        # ``isNull(x)``; pquantlib will fully port ``Null<>`` in a later
-        # cluster (carry-out documented).
-        self._function_value: float = float("nan")
-        self._squared_norm: float = float("nan")
+        # C++ parity: problem.hpp:139-142 — ``reset()`` sets both to
+        # ``Null<Real>()``, which is ``numeric_limits<float>::max()``
+        # (ql/utilities/null.hpp), i.e. 3.4028234663852886e38 — NOT NaN and
+        # NOT ``numeric_limits<double>::max()``. The value is observable:
+        # ``Simplex``, ``LevenbergMarquardt``, ``SimulatedAnnealing`` and
+        # ``DifferentialEvolution`` never write ``gradientNormValue``, so a
+        # caller reading it back gets this sentinel. The C++ constructor
+        # leaves both members INDETERMINATE; every ``minimize`` calls
+        # ``reset()`` first, so the sentinel is what is ever observed, and
+        # pquantlib seeds it here too.
+        self._function_value: float = NULL_REAL
+        self._squared_norm: float = NULL_REAL
         self._function_evaluation: int = 0
         self._gradient_evaluation: int = 0
 
@@ -153,9 +160,10 @@ class Problem:
         return self._cost_function.value_and_gradient(grad, x)
 
     def reset(self) -> None:
-        """Zero the counters, NaN-out the cached function and gradient values."""
-        # C++ parity: problem.hpp:139-142.
+        """Zero the counters, reset the cached function and gradient values."""
+        # C++ parity: problem.hpp:139-142 —
+        # ``functionValue_ = squaredNorm_ = Null<Real>()``.
         self._function_evaluation = 0
         self._gradient_evaluation = 0
-        self._function_value = float("nan")
-        self._squared_norm = float("nan")
+        self._function_value = NULL_REAL
+        self._squared_norm = NULL_REAL

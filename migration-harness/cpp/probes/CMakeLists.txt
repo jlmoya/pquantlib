@@ -842,6 +842,7 @@ foreach(area
         interp_cubic
         interp_kernel
         matrixutilities
+        optimization
         randomnumbers
         statistics
         tail)

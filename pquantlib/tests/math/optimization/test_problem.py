@@ -9,6 +9,7 @@ import numpy.typing as npt
 
 from pquantlib.math.optimization.constraint import NoConstraint
 from pquantlib.math.optimization.cost_function import CostFunction
+from pquantlib.math.optimization.end_criteria import NULL_REAL
 from pquantlib.math.optimization.problem import Problem
 
 
@@ -34,10 +35,19 @@ def test_explicit_initial_value_round_trips() -> None:
     assert p.current_value[0] == 1.0
 
 
-def test_function_value_and_gradient_norm_defaults_to_nan() -> None:
+def test_function_value_and_gradient_norm_default_to_the_null_sentinel() -> None:
+    """# C++ parity: problem.hpp:139-142 — ``Null<Real>()``, not NaN.
+
+    ``Null<Real>()`` is ``numeric_limits<FLOAT>::max()`` (ql/utilities/null.hpp),
+    i.e. 3.4028234663852886e38 — neither NaN nor ``DBL_MAX``. The value is
+    observable: ``Simplex``, ``LevenbergMarquardt``, ``SimulatedAnnealing`` and
+    ``DifferentialEvolution`` never write ``gradientNormValue``, so a caller
+    reading it back after one of those gets exactly this.
+    """
     p = Problem(_Sumsq(), NoConstraint())
-    assert math.isnan(p.function_value)
-    assert math.isnan(p.gradient_norm_value)
+    assert p.function_value == NULL_REAL
+    assert p.gradient_norm_value == NULL_REAL
+    assert not math.isnan(p.function_value)
 
 
 def test_setters_round_trip() -> None:
@@ -121,7 +131,7 @@ def test_value_and_gradient_dispatches_to_the_cost_function_hook() -> None:
     assert cf.gradient_calls == 0
 
 
-def test_reset_zeros_counters_and_nans_cached_state() -> None:
+def test_reset_zeros_counters_and_restores_the_null_sentinel() -> None:
     p = Problem(_Sumsq(), NoConstraint())
     p.set_function_value(1.0)
     p.set_gradient_norm_value(2.0)
@@ -130,8 +140,8 @@ def test_reset_zeros_counters_and_nans_cached_state() -> None:
     p.reset()
     assert p.function_evaluation == 0
     assert p.gradient_evaluation == 0
-    assert math.isnan(p.function_value)
-    assert math.isnan(p.gradient_norm_value)
+    assert p.function_value == NULL_REAL
+    assert p.gradient_norm_value == NULL_REAL
 
 
 def test_constraint_and_cost_function_are_identity_preserved() -> None:
