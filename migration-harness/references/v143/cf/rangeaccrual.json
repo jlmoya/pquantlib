@@ -1,0 +1,256 @@
+{
+  "setup": {
+    "evaluation_date": 45337,
+    "curve_dates": [45337, 45519, 45703, 46068, 46433, 47164, 48990],
+    "curve_zeros": [0.029999999999999999, 0.032000000000000001, 0.034500000000000003, 0.037499999999999999, 0.0395, 0.042000000000000003, 0.044999999999999998],
+    "index_name": "Euribor6M Actual/360",
+    "correlation": 0.69999999999999996,
+    "affine_expiry": {"base": 0.25, "slope": -2, "anchor": 0.040000000000000001, "atm": 0.040000000000000001, "exercise_time": 1.5},
+    "affine_payment": {"base": 0.22, "slope": -1.5, "anchor": 0.040000000000000001, "atm": 0.040000000000000001, "exercise_time": 2.0},
+    "flat_expiry_vol": 0.25,
+    "flat_payment_vol": 0.22
+  },
+  "leg_main": {
+    "schedule_dates": [45733, 45917, 46098, 46282, 46463],
+    "raw_leg_size": 8,
+    "null_prefix": 4,
+    "coupon_count": 4,
+    "coupons": [
+      {
+        "payment_date": 45917,
+        "nominal": 1000000,
+        "accrual_start_date": 45733,
+        "accrual_end_date": 45917,
+        "accrual_period": 0.51111111111111107,
+        "day_counter": "Actual/360",
+        "fixing_days": 3,
+        "fixing_date": 45728,
+        "index_fixing": 0.039323940881847951,
+        "gearing": 0.75,
+        "spread": 0.0025000000000000001,
+        "start_time": 1.1000000000000001,
+        "end_time": 1.6111111111111112,
+        "lower_trigger": 0.029999999999999999,
+        "upper_trigger": 0.055,
+        "observations_no": 5,
+        "observation_schedule_dates": [45733, 45764, 45796, 45825, 45855, 45887, 45917],
+        "observation_dates": [45764, 45796, 45825, 45855, 45887],
+        "observation_times": [1.1861111111111111, 1.2749999999999999, 1.3555555555555556, 1.4388888888888889, 1.5277777777777777],
+        "price_without_optionality": 15436.434324921704
+      },
+      {
+        "payment_date": 46098,
+        "nominal": 900000,
+        "accrual_start_date": 45917,
+        "accrual_end_date": 46098,
+        "accrual_period": 0.50277777777777777,
+        "day_counter": "Actual/360",
+        "fixing_days": 1,
+        "fixing_date": 45916,
+        "index_fixing": 0.042032857652977686,
+        "gearing": 0.75,
+        "spread": 0.0025000000000000001,
+        "start_time": 1.6111111111111112,
+        "end_time": 2.1138888888888889,
+        "lower_trigger": 0.029999999999999999,
+        "upper_trigger": 0.055,
+        "observations_no": 5,
+        "observation_schedule_dates": [45917, 45947, 45978, 46008, 46041, 46070, 46098],
+        "observation_dates": [45947, 45978, 46008, 46041, 46070],
+        "observation_times": [1.6944444444444444, 1.7805555555555554, 1.8638888888888889, 1.9555555555555555, 2.036111111111111],
+        "price_without_optionality": 14233.37967516251
+      },
+      {
+        "payment_date": 46282,
+        "nominal": 800000,
+        "accrual_start_date": 46098,
+        "accrual_end_date": 46282,
+        "accrual_period": 0.51111111111111107,
+        "day_counter": "Actual/360",
+        "fixing_days": 1,
+        "fixing_date": 46097,
+        "index_fixing": 0.042726233440006783,
+        "gearing": 0.75,
+        "spread": 0.0025000000000000001,
+        "start_time": 2.1138888888888889,
+        "end_time": 2.625,
+        "lower_trigger": 0.029999999999999999,
+        "upper_trigger": 0.055,
+        "observations_no": 5,
+        "observation_schedule_dates": [46098, 46129, 46160, 46190, 46220, 46251, 46282],
+        "observation_dates": [46129, 46160, 46190, 46220, 46251],
+        "observation_times": [2.2000000000000002, 2.286111111111111, 2.3694444444444445, 2.4527777777777779, 2.5388888888888888],
+        "price_without_optionality": 12779.171682338882
+      },
+      {
+        "payment_date": 46463,
+        "nominal": 800000,
+        "accrual_start_date": 46282,
+        "accrual_end_date": 46463,
+        "accrual_period": 0.50277777777777777,
+        "day_counter": "Actual/360",
+        "fixing_days": 1,
+        "fixing_date": 46281,
+        "index_fixing": 0.044333794094897329,
+        "gearing": 0.75,
+        "spread": 0.0025000000000000001,
+        "start_time": 2.625,
+        "end_time": 3.1277777777777778,
+        "lower_trigger": 0.029999999999999999,
+        "upper_trigger": 0.055,
+        "observations_no": 5,
+        "observation_schedule_dates": [46282, 46314, 46343, 46373, 46405, 46435, 46463],
+        "observation_dates": [46314, 46343, 46373, 46405, 46435],
+        "observation_times": [2.713888888888889, 2.7944444444444443, 2.8777777777777778, 2.9666666666666668, 3.0499999999999998],
+        "price_without_optionality": 12725.8846157851
+      }
+    ]
+  },
+  "leg_vectors": {
+    "schedule_dates": [45824, 46007, 46189, 46372],
+    "raw_leg_size": 6,
+    "null_prefix": 3,
+    "coupon_count": 3,
+    "coupons": [
+      {
+        "payment_date": 46007,
+        "nominal": 2000000,
+        "accrual_start_date": 45824,
+        "accrual_end_date": 46007,
+        "accrual_period": 0.50136986301369868,
+        "day_counter": "Actual/365 (Fixed)",
+        "fixing_days": 0,
+        "fixing_date": 45824,
+        "index_fixing": 0.040891326780063617,
+        "gearing": 1.25,
+        "spread": -0.001,
+        "start_time": 1.3342465753424657,
+        "end_time": 1.8356164383561644,
+        "lower_trigger": 0.025000000000000001,
+        "upper_trigger": 0.059999999999999998,
+        "observations_no": 2,
+        "observation_schedule_dates": [45824, 45885, 45946, 46007],
+        "observation_dates": [45885, 45946],
+        "observation_times": [1.5013698630136987, 1.6684931506849314],
+        "price_without_optionality": 46951.927475437071
+      },
+      {
+        "payment_date": 46189,
+        "nominal": 2000000,
+        "accrual_start_date": 46007,
+        "accrual_end_date": 46189,
+        "accrual_period": 0.49863013698630138,
+        "day_counter": "Actual/365 (Fixed)",
+        "fixing_days": 0,
+        "fixing_date": 46007,
+        "index_fixing": 0.042317773625747852,
+        "gearing": 0.5,
+        "spread": 0.002,
+        "start_time": 1.8356164383561644,
+        "end_time": 2.3342465753424659,
+        "lower_trigger": 0.028000000000000001,
+        "upper_trigger": 0.058000000000000003,
+        "observations_no": 2,
+        "observation_schedule_dates": [46007, 46069, 46128, 46189],
+        "observation_dates": [46069, 46128],
+        "observation_times": [2.0054794520547947, 2.1671232876712327],
+        "price_without_optionality": 21127.029011203918
+      },
+      {
+        "payment_date": 46372,
+        "nominal": 2000000,
+        "accrual_start_date": 46189,
+        "accrual_end_date": 46372,
+        "accrual_period": 0.50136986301369868,
+        "day_counter": "Actual/365 (Fixed)",
+        "fixing_days": 0,
+        "fixing_date": 46189,
+        "index_fixing": 0.043734453020886022,
+        "gearing": 0.5,
+        "spread": 0.002,
+        "start_time": 2.3342465753424659,
+        "end_time": 2.8356164383561642,
+        "lower_trigger": 0.031,
+        "upper_trigger": 0.056000000000000001,
+        "observations_no": 2,
+        "observation_schedule_dates": [46189, 46250, 46311, 46372],
+        "observation_dates": [46250, 46311],
+        "observation_times": [2.5013698630136987, 2.6684931506849314],
+        "price_without_optionality": 21416.960776165135
+      }
+    ]
+  },
+  "leg_main_pricers": {
+    "affine_nosmile_nocs": {
+      "rates": [0.024212993338543234, 0.023119389114033231, 0.02128383815300226, 0.02033686623862804],
+      "amounts": [12375.529928588763, 10461.523574100038, 8702.7249336720342, 8179.9395315370557],
+      "prices": [11682.643061681962, 9671.4325790072198, 7873.5672339196963, 7239.2199030411894],
+      "npv": 36466.862777650065
+    },
+    "affine_nosmile_cs": {
+      "rates": [0.024212993338543234, 0.023119389114033231, 0.02128383815300226, 0.02033686623862804],
+      "amounts": [12375.529928588763, 10461.523574100038, 8702.7249336720342, 8179.9395315370557],
+      "prices": [11682.643061681962, 9671.4325790072198, 7873.5672339196963, 7239.2199030411894],
+      "npv": 36466.862777650065
+    },
+    "affine_smile_nocs": {
+      "rates": [0.024073197809093502, 0.022669364145950732, 0.020550623971862962, 0.019451601201574579],
+      "amounts": [12304.078880203344, 10257.887276042706, 8402.92180182841, 7823.8662610777747],
+      "prices": [11615.192447487132, 9483.1756092312353, 7602.3280377482433, 6924.0962158168859],
+      "npv": 35624.792310283497
+    },
+    "affine_smile_cs": {
+      "rates": [0.024076147099897281, 0.022675843961021673, 0.020559164964318238, 0.019459865477347623],
+      "amounts": [12305.586295503053, 10260.819392362308, 8406.4141187434561, 7827.190336444266],
+      "prices": [11616.615464925078, 9485.8862818304951, 7605.4876219293292, 6927.0380117139748],
+      "npv": 35635.027380398875
+    },
+    "flat_nosmile_nocs": {
+      "rates": [0.024229146737832448, 0.023242134867773673, 0.021592150934705564, 0.020806549451285194],
+      "amounts": [12383.786110447696, 10517.066027667588, 8828.7906044129413, 8368.8565570724895],
+      "prices": [11690.436992630117, 9722.7802714486061, 7987.621917025589, 7406.4108567159374],
+      "npv": 36807.250037820253
+    },
+    "flat_smile_nocs": {
+      "rates": [0.024229146737832448, 0.023242134867773673, 0.021592150934705564, 0.020806549451285194],
+      "amounts": [12383.786110447696, 10517.066027667588, 8828.7906044129413, 8368.8565570724895],
+      "prices": [11690.436992630117, 9722.7802714486061, 7987.621917025589, 7406.4108567159374],
+      "npv": 36807.250037820253
+    },
+    "flat_smile_cs": {
+      "rates": [0.024229146731612271, 0.023242134867361472, 0.021592150942660971, 0.020806549452054453],
+      "amounts": [12383.786107268494, 10517.066027481067, 8828.7906076658182, 8368.8565573819033],
+      "prices": [11690.436989628914, 9722.7802712761713, 7987.6219199685465, 7406.4108569897671],
+      "npv": 36807.250037863399
+    }
+  },
+  "leg_vectors_pricers": {
+    "affine_smile_cs": {
+      "rates": [0.042448745653968216, 0.016768409499838544, 0.013718099486462914],
+      "amounts": [42565.043587266759, 16722.468651893778, 13755.683320672402],
+      "prices": [39770.206424986318, 15297.223775794826, 12309.767056367285],
+      "npv": 67377.197257148422
+    }
+  },
+  "leg_zero_gearing": {
+    "raw_leg_size": 4,
+    "null_prefix": 2,
+    "coupon_count": 2,
+    "coupons": [
+      {"payment_date": 46097, "nominal": 500000, "accrual_start_date": 45915, "accrual_end_date": 46097, "accrual_period": 0.50555555555555554, "rate": 0.035000000000000003, "amount": 8847.2222222222281},
+      {"payment_date": 46280, "nominal": 500000, "accrual_start_date": 46097, "accrual_end_date": 46280, "accrual_period": 0.5083333333333333, "rate": 0.035000000000000003, "amount": 8895.8333333333248}
+    ],
+    "npv": 16230.196978816126
+  },
+  "variant_payment_adjustment": {
+    "schedule_dates": [45794, 45978, 46159],
+    "preceding": [45978, 46157],
+    "following": [45978, 46160],
+    "modified_following": [45978, 46160]
+  },
+  "variant_observation": {
+    "tenor_2m_unadjusted": {"observation_dates": [[45885, 45946], [46069, 46128], [46250, 46311]], "observations_no": [2, 2, 2]},
+    "tenor_2m_modified_following": {"observation_dates": [[45887, 45946], [46069, 46128], [46251, 46311]], "observations_no": [2, 2, 2]},
+    "tenor_3m_unadjusted": {"observation_dates": [[45916], [46097], [46281]], "observations_no": [1, 1, 1]}
+  }
+}
