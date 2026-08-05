@@ -11,9 +11,10 @@ C++ exposes an ``impliedVolatility`` helper that constructs an engine
 (``AnalyticEuropeanEngine`` for European; ``FdBlackScholesVanillaEngine``
 for American/Bermudan) and runs a Brent solver on
 ``engine_value(vol) - target = 0``. The Python port mirrors this
-behaviour, cloning the process with a fresh BlackConstantVol backed
-by a mutable ``SimpleQuote`` so each Brent iteration just updates
-the quote and reprices.
+behaviour, delegating the process clone and the Brent solve to
+``ImpliedVolatilityHelper`` — which is what C++'s own
+``VanillaOption::impliedVolatility`` does with
+``detail::ImpliedVolatilityHelper``.
 """
 
 from __future__ import annotations
@@ -21,8 +22,8 @@ from __future__ import annotations
 from pquantlib import qassert
 from pquantlib.exceptions import LibraryException
 from pquantlib.exercise import Exercise
+from pquantlib.instruments.implied_volatility import ImpliedVolatilityHelper
 from pquantlib.instruments.one_asset_option import OneAssetOption
-from pquantlib.math.solvers1d.brent import Brent
 from pquantlib.payoffs import StrikedTypePayoff
 from pquantlib.pricingengines.pricing_engine import PricingEngine
 from pquantlib.pricingengines.vanilla.analytic_european_engine import (
@@ -35,9 +36,6 @@ from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
 )
 from pquantlib.quotes.simple_quote import SimpleQuote
-from pquantlib.termstructures.volatility.equity_fx.black_constant_vol import (
-    BlackConstantVol,
-)
 
 
 class VanillaOption(OneAssetOption):
@@ -91,22 +89,10 @@ class VanillaOption(OneAssetOption):
         qassert.require(not self.is_expired(), "option expired")
 
         vol_quote = SimpleQuote(0.0)
-
-        # Clone the process replacing the BlackVol curve with a constant-vol
-        # curve backed by the mutable quote.
-        original_vol_ts = process.black_volatility()
-        new_vol_ts = BlackConstantVol(
-            reference_date=original_vol_ts.reference_date(),
-            calendar=original_vol_ts.calendar(),
-            day_counter=original_vol_ts.day_counter(),
-            volatility=vol_quote,
-        )
-        new_process: GeneralizedBlackScholesProcess = GeneralizedBlackScholesProcess(
-            x0=process.state_variable(),
-            dividend_ts=process.dividend_yield(),
-            risk_free_ts=process.risk_free_rate(),
-            black_vol_ts=new_vol_ts,
-        )
+        # Steps 1 and 3 are `ImpliedVolatilityHelper.clone` / `.calculate`
+        # (C++ `detail::ImpliedVolatilityHelper`, which C++'s own
+        # `VanillaOption::impliedVolatility` calls for exactly this).
+        new_process = ImpliedVolatilityHelper.clone(process, vol_quote)
 
         # Select the engine matching the exercise type.
         engine: PricingEngine
@@ -122,24 +108,16 @@ class VanillaOption(OneAssetOption):
                 f"VanillaOption.implied_volatility: unknown exercise type {self._exercise.type()}"
             )
 
-        # Wire the engine arguments.
-        engine.reset()
-        args = engine.get_arguments()
-        self.setup_arguments(args)
-        args.validate()
-
-        # Brent on f(x) = engine_value(x) - target_value.
-        def price_error(x: float) -> float:
-            vol_quote.set_value(x)
-            engine.calculate()
-            results = engine.get_results()
-            assert results.value is not None
-            return float(results.value) - target_value
-
-        solver = Brent()
-        solver.set_max_evaluations(max_evaluations)
-        guess = 0.5 * (min_vol + max_vol)
-        return solver.solve(price_error, accuracy, guess, min_vol, max_vol)
+        return ImpliedVolatilityHelper.calculate(
+            self,
+            engine,
+            vol_quote,
+            target_value,
+            accuracy,
+            max_evaluations,
+            min_vol,
+            max_vol,
+        )
 
 
 __all__ = ["VanillaOption"]
