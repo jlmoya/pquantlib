@@ -1,4 +1,4 @@
-"""MultidimGaussianQuadrature — tensor-product Gauss-Hermite quadrature.
+"""GaussianQuadMultidimIntegrator — tensor-product Gauss-Hermite quadrature.
 
 # C++ parity: ql/experimental/math/multidimquadrature.{hpp,cpp} @ v1.42.1 (099987f0).
 # class GaussianQuadMultidimIntegrator.
@@ -32,15 +32,11 @@ from pquantlib import qassert
 _MAX_DIMENSIONS = 15
 
 
-def _gauss_hermite_nodes_weights(
-    order: int, mu: float
-) -> tuple[list[float], list[float]]:
+def _gauss_hermite_nodes_weights(order: int, mu: float) -> tuple[list[float], list[float]]:
     """Nodes/weights of QuantLib's GaussHermiteIntegration(order, mu)."""
     # Hermite recurrence: alpha_i = 0; beta_i = i/2 (+ mu if i odd).
     alpha = np.zeros(order)
-    beta = np.array(
-        [(i / 2.0 + mu) if (i % 2) != 0 else (i / 2.0) for i in range(order)]
-    )
+    beta = np.array([(i / 2.0 + mu) if (i % 2) != 0 else (i / 2.0) for i in range(order)])
     off = np.sqrt(beta[1:])
     jac = np.diag(alpha) + np.diag(off, 1) + np.diag(off, -1)
     evals, evecs = np.linalg.eigh(jac)
@@ -55,7 +51,7 @@ def _gauss_hermite_nodes_weights(
     return nodes, weights
 
 
-class MultidimGaussianQuadrature:
+class GaussianQuadMultidimIntegrator:
     """Tensor-product Gauss-Hermite quadrature over ``R^dimension``."""
 
     __slots__ = ("_dimension", "_nodes", "_order", "_weights")
@@ -90,3 +86,11 @@ class MultidimGaussianQuadrature:
             return total
 
         return integrate(n - 1)
+
+
+# The class carries the C++ spelling; this is the descriptive name it used to be
+# declared under, kept so existing call sites keep working.
+MultidimGaussianQuadrature = GaussianQuadMultidimIntegrator
+
+
+__all__ = ["GaussianQuadMultidimIntegrator", "MultidimGaussianQuadrature"]
