@@ -1,0 +1,70 @@
+{
+  "ctor": {
+    "size": 4,
+    "dates": [46037, 46096, 46188, 46280],
+    "amounts": [1000, 2000, 3000, 4000]
+  },
+  "ctor_duplicate_date": {
+    "size": 2,
+    "dates": [46037, 46096],
+    "amounts": [99, 20]
+  },
+  "ctor_size_mismatch_raises": {"raises": true},
+  "has_date_present": true,
+  "has_date_absent": false,
+  "lookup_present": 3000,
+  "lookup_missing_value": 0,
+  "lookup_missing_size_before": 4,
+  "lookup_missing_size_after": 5,
+  "lookup_missing_basket": {
+    "size": 5,
+    "dates": [46037, 46096, 46188, 46280, 46357],
+    "amounts": [1000, 2000, 3000, 4000, 0]
+  },
+  "other": {
+    "size": 4,
+    "dates": [46023, 46096, 46280, 46387],
+    "amounts": [125, 500, -250, 77.5]
+  },
+  "plus_equals": {
+    "size": 6,
+    "dates": [46023, 46037, 46096, 46188, 46280, 46387],
+    "amounts": [125, 1000, 2500, 3000, 3750, 77.5]
+  },
+  "minus_equals": {
+    "size": 6,
+    "dates": [46023, 46037, 46096, 46188, 46280, 46387],
+    "amounts": [-125, 1000, 1500, 3000, 4250, -77.5]
+  },
+  "plus_then_minus": {
+    "size": 6,
+    "dates": [46023, 46037, 46096, 46188, 46280, 46387],
+    "amounts": [0, 1000, 2000, 3000, 4000, 0]
+  },
+  "rebin_coarser": {
+    "size": 2,
+    "dates": [46054, 46204],
+    "amounts": [2760, 7240]
+  },
+  "rebin_finer": {
+    "size": 9,
+    "dates": [46037, 46068, 46096, 46127, 46157, 46188, 46218, 46249, 46280],
+    "amounts": [1000, 0, 2000, 0, 0, 3000, 0, 0, 4000]
+  },
+  "rebin_partial_overlap": {
+    "size": 3,
+    "dates": [46082, 46143, 46204],
+    "amounts": [2540.9836065573768, 1245.9016393442623, 6213.1147540983602]
+  },
+  "rebin_single_bucket": {
+    "size": 1,
+    "dates": [46143],
+    "amounts": [10000]
+  },
+  "rebin_source_unchanged": {
+    "size": 4,
+    "dates": [46037, 46096, 46188, 46280],
+    "amounts": [1000, 2000, 3000, 4000]
+  },
+  "rebin_empty_buckets_raises": {"raises": true}
+}
