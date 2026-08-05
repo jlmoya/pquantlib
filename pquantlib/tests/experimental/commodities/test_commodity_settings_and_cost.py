@@ -1,8 +1,10 @@
 """Money + CommodityUnitCost + CommoditySettings foundation tests.
 
-Money same-currency arithmetic is exact; cross-currency paths are deferred
-(ExchangeRateManager not yet ported) and raise. CommoditySettings defaults
-match C++ (USD + Barrel).
+Money same-currency arithmetic is exact; the cross-currency paths go through
+``ExchangeRateManager`` and are cross-validated in
+``tests/currencies/test_exchange_rate_manager.py``. What is checked here is
+the refusal side: no conversion configured, or no rate available.
+CommoditySettings defaults match C++ (USD + Barrel).
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from collections.abc import Iterator
 import pytest
 
 from pquantlib.currencies.america import USDCurrency
-from pquantlib.currencies.currency import Currency
+from pquantlib.currencies.europe import EURCurrency
 from pquantlib.currencies.money import Money, MoneySettings, close, close_enough
 from pquantlib.exceptions import LibraryException
 from pquantlib.experimental.commodities.commodity_settings import CommoditySettings
@@ -81,19 +83,19 @@ def test_money_comparisons_and_close() -> None:
 
 def test_money_cross_currency_no_conversion_raises() -> None:
     usd = USDCurrency()
-    eur = Currency(name="European Euro", code="EUR", numeric_code=978)
+    eur = EURCurrency()
     assert MoneySettings.instance().conversion_type == Money.ConversionType.NO_CONVERSION
     with pytest.raises(LibraryException):
         _ = Money(usd, 1.0) + Money(eur, 1.0)
 
 
-def test_money_cross_currency_automated_deferred() -> None:
-    # AutomatedConversion would need ExchangeRateManager (not ported) -> raises.
+def test_money_cross_currency_automated_without_a_rate_raises() -> None:
+    # AutomatedConversion consults ExchangeRateManager, which knows no USD/EUR
+    # rate — only the euro-legacy conversions and the redenominations. The
+    # succeeding path is cross-validated in tests/currencies.
     usd = USDCurrency()
-    eur = Currency(name="European Euro", code="EUR", numeric_code=978)
-    MoneySettings.instance().conversion_type = (
-        Money.ConversionType.AUTOMATED_CONVERSION
-    )
+    eur = EURCurrency()
+    MoneySettings.instance().conversion_type = Money.ConversionType.AUTOMATED_CONVERSION
     with pytest.raises(LibraryException):
         _ = Money(usd, 1.0) + Money(eur, 1.0)
 

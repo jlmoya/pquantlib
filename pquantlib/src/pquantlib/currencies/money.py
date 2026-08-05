@@ -1,20 +1,12 @@
 """Money — a cash amount in a given currency (L1-B foundation).
 
-# C++ parity: ql/money.hpp + ql/money.cpp (v1.42.1).
+# C++ parity: ql/money.hpp + ql/money.cpp (v1.43).
 
 Same-currency arithmetic (+, -, *, /) and comparisons are exact. Combining
 amounts in *different* currencies is governed by ``Money.Settings`` (a
 singleton with ``conversion_type`` / ``base_currency``), mirroring the C++
-``Money::Settings`` singleton.
-
-# Deferral: the cross-currency branches in C++ delegate to
-# ``ExchangeRateManager``, which is not yet ported. Until it lands, any
-# cross-currency combination under ``BASE_CURRENCY_CONVERSION`` /
-# ``AUTOMATED_CONVERSION`` raises ``LibraryException`` (documented in
-# docs/carve-outs.md). The default ``NO_CONVERSION`` setting already raises
-# on a currency mismatch, exactly as C++ does, so the common same-currency
-# path — used by ``CommodityUnitCost`` / ``CommodityPricingHelper`` — is
-# fully faithful.
+``Money::Settings`` singleton, and goes through ``ExchangeRateManager``
+exactly as C++ does.
 """
 
 from __future__ import annotations
@@ -71,11 +63,16 @@ class MoneySettings(Singleton):
 
 def _convert_to(m: Money, target: Currency) -> Money:
     if m.currency != target:
-        # C++ delegates to ExchangeRateManager here (not yet ported).
-        qassert.fail(
-            "Money cross-currency conversion requires ExchangeRateManager, "
-            "which is not yet ported (see docs/carve-outs.md)"
+        # Imported here, not at module scope: ExchangeRateManager pulls in the
+        # currency modules, which pull in ExchangeRate, which pulls in Money.
+        # C++ has the same cycle and breaks it the same way — money.cpp
+        # includes exchangeratemanager.hpp, money.hpp does not.
+        from pquantlib.currencies.exchange_rate_manager import (  # noqa: PLC0415
+            ExchangeRateManager,
         )
+
+        rate = ExchangeRateManager.instance().lookup(m.currency, target)
+        return rate.exchange(m).rounded()
     return m
 
 

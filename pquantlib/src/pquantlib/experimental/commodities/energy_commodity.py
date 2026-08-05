@@ -13,8 +13,7 @@ vanilla swap / basis swap).
 # - The static ``calculateUomConversionFactor`` / ``calculateFxConversionFactor``
 #   delegate to the same arithmetic as ``CommodityPricingHelper`` (the C++
 #   bodies are duplicated between the two classes). We forward to the helper
-#   so the cross-currency deferral (ExchangeRateManager not yet ported) is
-#   shared in one place.
+#   so there is one implementation rather than two.
 # - ``setupArguments`` / ``fetchResults`` are part of the C++ engine plumbing
 #   but the concrete energy instruments self-price in ``performCalculations``
 #   (no separate engine is attached). They are omitted here.

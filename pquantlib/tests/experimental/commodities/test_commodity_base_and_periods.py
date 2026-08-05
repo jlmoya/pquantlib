@@ -7,12 +7,15 @@ Reference:    migration-harness/references/cluster/w7b.json
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
 from pquantlib.currencies.america import USDCurrency
-from pquantlib.currencies.currency import Currency
+from pquantlib.currencies.asia import JPYCurrency
+from pquantlib.currencies.europe import ATSCurrency, EURCurrency
+from pquantlib.currencies.exchange_rate_manager import ExchangeRateManager
 from pquantlib.currencies.money import Money
 from pquantlib.exceptions import LibraryException
 from pquantlib.experimental.commodities.commodity import (
@@ -38,6 +41,10 @@ from pquantlib.testing import reference_reader, tolerance
 from pquantlib.time.calendars.null_calendar import NullCalendar
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
+
+#: Inside the validity range of every seeded euro-legacy rate, and the date
+#: the ``currencies/exchangerate`` probe uses.
+_FX_DATE = Date.from_ymd(15, Month.June, 2010)
 
 
 @pytest.fixture(scope="module")
@@ -234,20 +241,53 @@ def test_helper_uom_conversion_factor(cpp_ref: dict[str, Any]) -> None:
     tolerance.tight(same, cpp_ref["helper_uom_factor_same"])
 
 
-def test_helper_fx_same_currency_is_one() -> None:
-    usd = USDCurrency()
+@pytest.fixture
+def known_rates() -> Iterator[None]:
+    """Reset ExchangeRateManager to its seeded known rates around a test."""
+    ExchangeRateManager.instance().clear()
+    yield
+    ExchangeRateManager.instance().clear()
+
+
+@pytest.fixture(scope="module")
+def cpp_fx() -> dict[str, Any]:
+    return reference_reader.load("currencies/exchangerate")["fx_conversion_factor"]
+
+
+@pytest.mark.exact
+def test_helper_fx_same_currency_is_one(cpp_fx: dict[str, Any]) -> None:
+    eur = EURCurrency()
+    f = CommodityPricingHelper.calculate_fx_conversion_factor(eur, eur, _FX_DATE)
+    tolerance.exact(f, cpp_fx["same_currency"])
+
+
+@pytest.mark.exact
+@pytest.mark.usefixtures("known_rates")
+def test_helper_fx_uses_the_stored_orientation(cpp_fx: dict[str, Any]) -> None:
+    # EUR -> ATS is stored in that direction, so the rate is used as-is.
     f = CommodityPricingHelper.calculate_fx_conversion_factor(
-        usd, usd, Date.from_ymd(1, Month.January, 2020)
+        EURCurrency(), ATSCurrency(), _FX_DATE
     )
-    tolerance.exact(f, 1.0)
+    tolerance.exact(f, cpp_fx["stored_orientation"])
 
 
-def test_helper_fx_cross_currency_deferred() -> None:
-    usd = USDCurrency()
-    eur = Currency(name="European Euro", code="EUR", numeric_code=978)
+@pytest.mark.exact
+@pytest.mark.usefixtures("known_rates")
+def test_helper_fx_inverts_the_stored_orientation(cpp_fx: dict[str, Any]) -> None:
+    # ATS -> EUR finds the same stored EUR -> ATS rate, so it is inverted.
+    f = CommodityPricingHelper.calculate_fx_conversion_factor(
+        ATSCurrency(), EURCurrency(), _FX_DATE
+    )
+    tolerance.exact(f, cpp_fx["inverted_orientation"])
+
+
+@pytest.mark.usefixtures("known_rates")
+def test_helper_fx_without_a_direct_rate_raises() -> None:
+    # calculate_fx_conversion_factor asks for Direct, so an unrelated pair
+    # fails rather than triangulating.
     with pytest.raises(LibraryException):
         CommodityPricingHelper.calculate_fx_conversion_factor(
-            usd, eur, Date.from_ymd(1, Month.January, 2020)
+            USDCurrency(), JPYCurrency(), _FX_DATE
         )
 
 

@@ -841,3 +841,12 @@ target_link_libraries(v143_trinomial_g2process_probe PRIVATE ${QUANTLIB_LIBRARY}
 # Emits references/currencies/all.json.
 add_executable(currencies_all_probe currencies_all/probe.cpp)
 target_link_libraries(currencies_all_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === currencies: ExchangeRate + ExchangeRateManager behaviour ===
+# Not data: direct/reversed/date-ranged/triangulated/smart-lookup branches of
+# ExchangeRateManager::lookup, the four orientations of ExchangeRate::chain,
+# and the two Money conversion modes those unlock. Failing branches are pinned
+# as {"raises": true}.
+# Emits references/currencies/exchangerate.json.
+add_executable(currencies_exchangerate_probe currencies_exchangerate/probe.cpp)
+target_link_libraries(currencies_exchangerate_probe PRIVATE ${QUANTLIB_LIBRARY})
