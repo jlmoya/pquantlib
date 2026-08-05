@@ -165,3 +165,26 @@ class SwapIndex(InterestRateIndex):
             self._ibor_index.clone(forwarding) if forwarding is not None else self._ibor_index,
             discounting if discounting is not None else self._discount,
         )
+
+    def clone_with_tenor(self, tenor: Period) -> SwapIndex:
+        """Same index at a different swap tenor.
+
+        # C++ parity: the ``SwapIndex::clone(const Period&)`` overload
+        # (swapindex.cpp:152-176). Python has no overloading, so the tenor
+        # variant gets its own name; everything else is carried across
+        # unchanged, and the discount curve only when it was exogenous —
+        # otherwise the clone would acquire an exogenous discount curve the
+        # original did not have.
+        """
+        return SwapIndex(
+            self._family_name,
+            tenor,
+            self._fixing_days,
+            self._currency,
+            self._fixing_calendar,
+            self._fixed_leg_tenor,
+            self._fixed_leg_convention,
+            self._fixed_leg_day_counter,
+            self._ibor_index,
+            self._discount if self._exogenous_discount else None,
+        )

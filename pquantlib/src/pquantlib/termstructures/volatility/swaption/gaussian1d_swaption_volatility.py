@@ -141,14 +141,17 @@ class Gaussian1dSwaptionVolatility(SwaptionVolatilityStructure):
     ) -> Gaussian1dSmileSection:
         """Build a smile section at ``(fixing_date, tenor)``.
 
-        # C++ parity: gaussian1dswaptionvolatility.cpp:38-43.
-
-        The C++ version clones the swap_index_base with the requested
-        tenor; PQuantLib's SwapIndex doesn't expose a tenor-clone
-        overload so we use the base index as-is. In practice all
-        callers pass tenor == swap_index_base.tenor().
+        # C++ parity: gaussian1dswaptionvolatility.cpp:38-43 —
+        # ``swapIndexBase_->clone(tenor)``.
+        #
+        # An earlier revision ignored ``swap_tenor`` entirely, on the grounds
+        # that SwapIndex had no tenor-clone overload. It didn't, but the
+        # consequence was that asking for a 10y-tenor smile silently returned
+        # the base index's tenor. ``SwapIndex.clone_with_tenor`` now exists;
+        # a Period tenor is honoured, and a bare Time is rejected rather than
+        # quietly dropped (there is no Time -> Period inverse here).
         """
-        _ = swap_tenor, extrapolate  # documented divergence — see Gaussian1dModel module docstring
+        _ = extrapolate
         # Convert option_expiry to a fixing Date.
         from pquantlib.time.date import Date as _Date  # noqa: PLC0415
 
@@ -164,9 +167,16 @@ class Gaussian1dSwaptionVolatility(SwaptionVolatilityStructure):
                 "Date or Period option_expiry; time-Float overload not "
                 "supported."
             )
+        if isinstance(swap_tenor, Period):
+            swap_index = self._swap_index_base.clone_with_tenor(swap_tenor)
+        else:
+            raise TypeError(
+                "Gaussian1dSwaptionVolatility.smile_section requires a Period "
+                "swap_tenor; a bare time cannot be turned back into a tenor."
+            )
         return Gaussian1dSmileSection(
             fixing_date=fixing_date,
-            swap_index=self._swap_index_base,
+            swap_index=swap_index,
             model=self._model,
             day_counter=self.day_counter(),
             engine=self._engine,

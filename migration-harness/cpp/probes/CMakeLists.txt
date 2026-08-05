@@ -901,3 +901,12 @@ target_link_libraries(v143_ts_bondhelper_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/ts/onfuture.json.
 add_executable(v143_ts_onfuture_probe v143_ts_onfuture/probe.cpp)
 target_link_libraries(v143_ts_onfuture_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === indexes: SwapIndex::clone(Period) ===
+# The tenor overload Gaussian1dSwaptionVolatility relies on. Pins the full
+# carried-over metadata plus the underlying swap's dates and fair rate, for
+# both an exogenous-discount base index and a non-exogenous one (the discount
+# curve must only travel in the former case).
+# Emits references/v143/ts/swapindexclone.json.
+add_executable(v143_ts_swapindexclone_probe v143_ts_swapindexclone/probe.cpp)
+target_link_libraries(v143_ts_swapindexclone_probe PRIVATE ${QUANTLIB_LIBRARY})
