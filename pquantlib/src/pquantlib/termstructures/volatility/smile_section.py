@@ -23,10 +23,11 @@ Notes:
   rare cases where the variance is computed directly.
 - ``atm_level()`` is abstract — concretes either store it (as
   ``FlatSmileSection`` does) or derive it from a referenced curve.
-- The expensive option-pricing methods (``option_price``,
-  ``digital_option_price``, ``vega``, ``density``, the implied-vol
-  conversion ``volatility(strike, type, shift)``) require ``BlackFormula``
-  and will be wired during Phase 3 L3-D (vanilla option pricing).
+- The option-pricing methods that need ``BlackFormula`` — ``option_price``,
+  ``digital_option_price``, ``density`` and ``vega`` — are wired. ``vega``
+  landed with ``LinearTsrPricer``, whose ``VegaRatio`` cut-off strategy
+  root-solves on it. Only the implied-vol conversion overload
+  ``volatility(strike, type, shift)`` is still unported.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ from pquantlib.payoffs import OptionType
 from pquantlib.pricingengines.black_formula import (
     bachelier_black_formula,
     black_formula,
+    black_formula_vol_derivative,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.time.date import Date
@@ -282,6 +284,41 @@ class SmileSection(Observable, ABC):
             self.option_price(kl, option_type, discount)
             - self.option_price(kr, option_type, discount)
         ) / gap
+
+    def vega(self, strike: float, discount: float = 1.0) -> float:
+        """Black vega of the option struck at ``strike``, per 1% of vol.
+
+        # C++ parity: SmileSection::vega (smilesection.cpp:105-116) —
+        # ``blackFormulaVolDerivative(strike, atmLevel(), sqrt(variance(strike)),
+        # exerciseTime(), discount, shift()) * 0.01``. The trailing ``* 0.01``
+        # rescales the derivative to "per volatility point", which is what
+        # makes a vega *ratio* dimensionless.
+
+        Normal (Bachelier) sections raise, exactly as C++ does.
+        """
+        atm = self.atm_level()
+        qassert.require(
+            not math.isnan(atm),
+            "smile section must provide atm level to compute option vega",
+        )
+        qassert.require(
+            self.volatility_type() == VolatilityType.ShiftedLognormal,
+            "vega for normal smilesection not yet implemented",
+        )
+        # Accessors, not the private fields: C++ dispatches through the
+        # virtuals here, which matters for adapters such as AtmSmileSection
+        # that delegate exercise_time / shift / volatility_type to a base.
+        return (
+            black_formula_vol_derivative(
+                strike,
+                atm,
+                math.sqrt(self.variance(strike)),
+                self.exercise_time(),
+                discount,
+                self.shift(),
+            )
+            * 0.01
+        )
 
     def density(self, strike: float, discount: float = 1.0, gap: float = 1.0e-4) -> float:
         """Risk-neutral density of the underlying at ``strike``.
