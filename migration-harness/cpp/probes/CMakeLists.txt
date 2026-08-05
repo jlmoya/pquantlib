@@ -840,3 +840,11 @@ target_link_libraries(v143_trinomial_g2process_probe PRIVATE ${QUANTLIB_LIBRARY}
 # Emits references/v143/indexes/ibor.json.
 add_executable(v143_indexes_ibor_probe v143_indexes_ibor/probe.cpp)
 target_link_libraries(v143_indexes_ibor_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 index coverage: the ql/indexes/swap/* ISDA/IFR-fix families plus
+# OvernightIndexedSwapIndex. Pins the fixed-leg tenor/convention, the
+# tenor-dependent choice of underlying ibor index, and the underlying-swap
+# driven maturityDate (which is not a plain tenor advance).
+# Emits references/v143/indexes/swap.json.
+add_executable(v143_indexes_swap_probe v143_indexes_swap/probe.cpp)
+target_link_libraries(v143_indexes_swap_probe PRIVATE ${QUANTLIB_LIBRARY})

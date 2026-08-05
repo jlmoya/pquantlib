@@ -236,6 +236,8 @@ def test_index_matches_cpp(key: str, cpp: dict[str, Any]) -> None:
     assert idx.currency().code == ref["currency_code"]
     assert idx.fixing_calendar().name() == ref["fixing_calendar"]
     assert idx.day_counter().name() == ref["day_counter"]
+    assert idx.tenor().length == ref["tenor_length"]
+    assert int(idx.tenor().units) == ref["tenor_units"]
     assert int(idx.business_day_convention()) == ref["business_day_convention"]
     assert idx.end_of_month() == ref["end_of_month"]
 
