@@ -310,7 +310,7 @@ class ConvertibleFixedCouponBond(ConvertibleBond):
 class ConvertibleFloatingRateBond(ConvertibleBond):
     """Convertible floating-rate (IBOR-indexed) bond.
 
-    # C++ parity: ``ConvertibleFloatingRateBond`` (convertiblebonds.hpp:120-142,
+    # C++ parity: ``ConvertibleFloatingRateBond`` (convertiblebonds.hpp:128-142,
     # convertiblebonds.cpp:112-150) @ v1.43.
     """
 
@@ -342,7 +342,7 @@ class ConvertibleFloatingRateBond(ConvertibleBond):
             redemption,
         )
 
-        # !!! notional forcibly set to 100 (convertiblebonds.cpp:136-144).
+        # !!! notional forcibly set to 100 (convertiblebonds.cpp:137-145).
         # The chained ``IborLeg`` builder is used directly rather than the
         # ``ibor_leg`` keyword façade, because the façade does not expose
         # ``with_ex_coupon_period``.

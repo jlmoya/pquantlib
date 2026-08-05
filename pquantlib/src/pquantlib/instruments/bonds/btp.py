@@ -73,7 +73,7 @@ _NULL_DATE: Date = Date()
 _NULL_REAL: float = math.nan
 
 #: ``ClosestRounding(5)`` is applied to the accrued amount of both Italian
-#: government bonds (btp.hpp:187-195): the Italian market quotes accruals to
+#: government bonds (btp.hpp:193-201): the Italian market quotes accruals to
 #: five decimals.
 _ACCRUAL_ROUNDING = ClosestRounding(5)
 
@@ -81,7 +81,7 @@ _ACCRUAL_ROUNDING = ClosestRounding(5)
 def _btp_schedule(maturity_date: Date, start_date: Date | None) -> Schedule:
     """The schedule shared by ``CCTEU`` and ``BTP``.
 
-    # C++ parity: btp.cpp:35-40 / :58-63 — ``Schedule(startDate, maturityDate,
+    # C++ parity: btp.cpp:39-44 / :60-65 / :74-79 — ``Schedule(startDate, maturityDate,
     # 6*Months, NullCalendar(), Unadjusted, Unadjusted,
     # DateGeneration::Backward, true)``. A null ``startDate`` is legal (the
     # Backward rule falls back to the evaluation date).
@@ -113,8 +113,8 @@ def _inner_product(a: Sequence[float], b: Sequence[float]) -> float:
 class CCTEU(FloatingRateBond):
     """Italian CCTEU — a Euribor6M-indexed floating-rate bond.
 
-    # C++ parity: ``class CCTEU : public FloatingRateBond`` (btp.hpp:41-56,
-    # btp.cpp:34-52).
+    # C++ parity: ``class CCTEU : public FloatingRateBond`` (btp.hpp:42-56,
+    # btp.cpp:33-52).
     """
 
     def __init__(
@@ -146,7 +146,7 @@ class CCTEU(FloatingRateBond):
     def accrued_amount(self, d: Date | None = None) -> float:
         """Accrued amount, rounded to five decimals.
 
-        # C++ parity: btp.hpp:187-190.
+        # C++ parity: btp.hpp:193-196.
         """
         return _ACCRUAL_ROUNDING(FloatingRateBond.accrued_amount(self, d))
 
@@ -154,8 +154,8 @@ class CCTEU(FloatingRateBond):
 class BTP(FixedRateBond):
     """Italian BTP — a fixed-rate government bond.
 
-    # C++ parity: ``class BTP : public FixedRateBond`` (btp.hpp:58-89,
-    # btp.cpp:54-88).
+    # C++ parity: ``class BTP : public FixedRateBond`` (btp.hpp:62-89,
+    # btp.cpp:55-80).
 
     C++ declares two constructors, the second of which inserts a
     ``redemption`` argument for the legacy non-par-redemption BTPs (as of
@@ -187,7 +187,7 @@ class BTP(FixedRateBond):
     def accrued_amount(self, d: Date | None = None) -> float:
         """Accrued amount, rounded to five decimals.
 
-        # C++ parity: btp.hpp:192-195.
+        # C++ parity: btp.hpp:198-201.
         """
         return _ACCRUAL_ROUNDING(FixedRateBond.accrued_amount(self, d))
 
@@ -203,7 +203,7 @@ class BTP(FixedRateBond):
         Actual/Actual (ISMA), Compounded, Annual; the bond's own settlement
         date is used when none is given.
 
-        # C++ parity: ``BTP::yield`` (btp.cpp:90-98). Named ``yield_`` because
+        # C++ parity: ``BTP::yield`` (btp.cpp:82-89). Named ``yield_`` because
         # ``yield`` is a Python keyword — see the module docstring.
         """
         return self.yield_from_price(
@@ -221,7 +221,7 @@ class RendistatoBasket(Observable):
     """Outstanding-weighted basket of BTPs with clean-price quotes.
 
     # C++ parity: ``class RendistatoBasket : public Observer, public Observable``
-    # (btp.hpp:91-116, btp.cpp:101-141). The basket observes its clean-price
+    # (btp.hpp:92-116, btp.cpp:92-131). The basket observes its clean-price
     # quotes and re-broadcasts their notifications.
     """
 
@@ -254,7 +254,7 @@ class RendistatoBasket(Observable):
                 f"negative outstanding for {i} bond, maturity {self._btps[i].maturity_date()}",
             )
 
-        # C++ TODO (btp.cpp:126): filter out expired / zero-outstanding bonds.
+        # C++ TODO (btp.cpp:117): filter out expired / zero-outstanding bonds.
         self._n: int = k
 
         self._outstanding: float = 0.0
@@ -289,7 +289,7 @@ class RendistatoBasket(Observable):
     # --- Observer interface ----------------------------------------------
 
     def update(self) -> None:
-        """# C++ parity: btp.hpp:110 — ``void update() { notifyObservers(); }``."""
+        """# C++ parity: btp.hpp:109 — ``void update() { notifyObservers(); }``."""
         self.notify_observers()
 
 
@@ -297,7 +297,7 @@ class RendistatoCalculator(LazyObject):
     """Maps a :class:`RendistatoBasket` onto its equivalent plain-vanilla swap.
 
     # C++ parity: ``class RendistatoCalculator : public LazyObject``
-    # (btp.hpp:118-166, btp.cpp:144-215).
+    # (btp.hpp:120-166, btp.cpp:134-221).
 
     Fifteen 1..15-year EUR vanilla swaps are built once (C++ TODO: generalise
     the number of swaps and their lengths). ``performCalculations`` then walks
@@ -352,80 +352,80 @@ class RendistatoCalculator(LazyObject):
     def yield_(self) -> float:
         """Outstanding-weighted average basket yield.
 
-        # C++ parity: btp.hpp:213-218. Named ``yield_`` — ``yield`` is a
+        # C++ parity: btp.hpp:213-217. Named ``yield_`` — ``yield`` is a
         # Python keyword.
         """
         return _inner_product(self._basket.weights(), self.yields())
 
     def duration(self) -> float:
-        """# C++ parity: btp.hpp:220-223."""
+        """# C++ parity: btp.hpp:219-222."""
         self.calculate()
         return self._duration
 
     def yields(self) -> list[float]:
-        """# C++ parity: btp.hpp:225-228."""
+        """# C++ parity: btp.hpp:224-227."""
         self.calculate()
         return list(self._yields)
 
     def durations(self) -> list[float]:
-        """# C++ parity: btp.hpp:230-233."""
+        """# C++ parity: btp.hpp:229-232."""
         self.calculate()
         return list(self._durations)
 
     def swap_lengths(self) -> list[float]:
-        """# C++ parity: btp.hpp:235-237 — no ``calculate()``, set in the ctor."""
+        """# C++ parity: btp.hpp:234-236 — no ``calculate()``, set in the ctor."""
         return list(self._swap_lengths)
 
     def swap_rates(self) -> list[float]:
-        """# C++ parity: btp.hpp:239-242."""
+        """# C++ parity: btp.hpp:238-241."""
         self.calculate()
         return list(self._swap_rates)
 
     def swap_yields(self) -> list[float]:
-        """# C++ parity: btp.hpp:244-247."""
+        """# C++ parity: btp.hpp:243-246."""
         self.calculate()
         return list(self._swap_bond_yields)
 
     def swap_durations(self) -> list[float]:
-        """# C++ parity: btp.hpp:249-252."""
+        """# C++ parity: btp.hpp:248-251."""
         self.calculate()
         return list(self._swap_bond_durations)
 
     # --- equivalent-swap proxy -------------------------------------------
 
     def equivalent_swap(self) -> VanillaSwap:
-        """# C++ parity: btp.hpp:254-258."""
+        """# C++ parity: btp.hpp:253-257."""
         self.calculate()
         return self._swaps[self._equivalent_swap_index]
 
     def equivalent_swap_rate(self) -> float:
-        """# C++ parity: btp.hpp:260-263."""
+        """# C++ parity: btp.hpp:259-262."""
         self.calculate()
         return self._swap_rates[self._equivalent_swap_index]
 
     def equivalent_swap_yield(self) -> float:
-        """# C++ parity: btp.hpp:265-268."""
+        """# C++ parity: btp.hpp:264-267."""
         self.calculate()
         return self._swap_bond_yields[self._equivalent_swap_index]
 
     def equivalent_swap_duration(self) -> float:
-        """# C++ parity: btp.hpp:270-273."""
+        """# C++ parity: btp.hpp:269-272."""
         self.calculate()
         return self._swap_bond_durations[self._equivalent_swap_index]
 
     def equivalent_swap_length(self) -> float:
-        """# C++ parity: btp.hpp:275-278."""
+        """# C++ parity: btp.hpp:274-277."""
         self.calculate()
         return self._swap_lengths[self._equivalent_swap_index]
 
     def equivalent_swap_spread(self) -> float:
-        """# C++ parity: btp.hpp:280-282."""
+        """# C++ parity: btp.hpp:279-281."""
         return self.yield_() - self.equivalent_swap_rate()
 
     # --- LazyObject interface --------------------------------------------
 
     def _perform_calculations(self) -> None:
-        # C++ parity: btp.cpp:167-215.
+        # C++ parity: btp.cpp:156-221.
         isma = ActualActual(ActualActualConvention.ISMA)
         btps = self._basket.btps()
         quotes = self._basket.clean_price_quotes()
@@ -487,7 +487,7 @@ class RendistatoCalculator(LazyObject):
                 bond_settlement_date,
             )
             # C++ unrolls i == 0 out of the loop precisely so that this test is
-            # skipped for it (btp.cpp:180-197 vs :198-214).
+            # skipped for it (btp.cpp:179-196 vs the i>=1 loop at :197-220).
             if i > 0 and self._swap_bond_durations[i] > self._duration:
                 self._equivalent_swap_index = i - 1
                 break
@@ -496,7 +496,7 @@ class RendistatoCalculator(LazyObject):
 class RendistatoEquivalentSwapLengthQuote(Quote):
     """``Quote`` adapter over ``RendistatoCalculator::equivalentSwapLength``.
 
-    # C++ parity: btp.hpp:168-176 + btp.cpp:217-227.
+    # C++ parity: btp.hpp:170-178 + btp.cpp:223-234.
     """
 
     def __init__(self, r: RendistatoCalculator) -> None:
@@ -504,11 +504,11 @@ class RendistatoEquivalentSwapLengthQuote(Quote):
         self._r: RendistatoCalculator = r
 
     def value(self) -> float:
-        """# C++ parity: btp.hpp:284-286."""
+        """# C++ parity: btp.hpp:283-285."""
         return self._r.equivalent_swap_length()
 
     def is_valid(self) -> bool:
-        """# C++ parity: btp.cpp:220-227 — ``try { value(); } catch (...)``."""
+        """# C++ parity: btp.cpp:227-234 — ``try { value(); } catch (...)``."""
         try:
             self.value()
         except Exception:
@@ -519,7 +519,7 @@ class RendistatoEquivalentSwapLengthQuote(Quote):
 class RendistatoEquivalentSwapSpreadQuote(Quote):
     """``Quote`` adapter over ``RendistatoCalculator::equivalentSwapSpread``.
 
-    # C++ parity: btp.hpp:178-186 + btp.cpp:229-239.
+    # C++ parity: btp.hpp:181-189 + btp.cpp:236-247.
     """
 
     def __init__(self, r: RendistatoCalculator) -> None:
@@ -527,11 +527,11 @@ class RendistatoEquivalentSwapSpreadQuote(Quote):
         self._r: RendistatoCalculator = r
 
     def value(self) -> float:
-        """# C++ parity: btp.hpp:288-290."""
+        """# C++ parity: btp.hpp:287-289."""
         return self._r.equivalent_swap_spread()
 
     def is_valid(self) -> bool:
-        """# C++ parity: btp.cpp:232-239 — ``try { value(); } catch (...)``."""
+        """# C++ parity: btp.cpp:240-247 — ``try { value(); } catch (...)``."""
         try:
             self.value()
         except Exception:
