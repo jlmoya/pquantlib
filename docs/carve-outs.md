@@ -1,6 +1,6 @@
 # PQuantLib carve-outs
 
-Comprehensive list of C++ QuantLib v1.42.1 surface area NOT ported to PQuantLib as of the terminal release (`pquantlib-final` / `pquantlib-100-complete` @ `1fdb1db`). Each item includes the C++ source location, the rationale for deferral, and (where applicable) the access pattern for users who need the functionality.
+Comprehensive list of C++ QuantLib surface area NOT ported to PQuantLib. **Re-baselined against v1.43 during the 2026-08 coverage programme; the file previously described itself as current "as of the terminal release" against v1.42.1.** Two of its structural claims did not survive that check and are struck through in place rather than deleted — see the currencies entry and the pricingengines/math entry. Treat the remaining rationales as unverified until each is re-checked against v1.43. Each item includes the C++ source location, the rationale for deferral, and (where applicable) the access pattern for users who need the functionality.
 
 Carve-out categories:
 
@@ -282,7 +282,7 @@ The audit script matches by `class Name`. The ~1000 raw "missing" names split in
    - ~~`currencies` (5/111): every per-currency class (`USDCurrency`, `EURCurrency`, …, 100+ of them) is ported as a `Currency` *instance / registry entry*, not a `class X` subclass. Functionally complete.~~ **This was wrong, and the v1.43 sweep CLOSED it.** There was no registry: only the 8 currencies some probe happened to reference existed at all, and the other 103 were a real gap, not a representation mismatch. All 111 v1.43 currency classes are now ported and cross-validated against the `currencies/all` probe, together with `ExchangeRate` + `ExchangeRateManager`; the `currencies` subsystem audits at 113/113.
    - Leg builders (`IborLeg`, `FixedRateLeg`, `CmsLeg`, …) are ported as `ibor_leg(...)` / `fixed_rate_leg(...)` *functions*, not classes.
    - Engine `Arguments` / `Results` nested structs are folded into the Python engine (no separate class).
-   - `pricingengines` (62/221 raw) and `math` (89/286 raw) are dominated by these nested-helper / template-tag / `detail::` names.
+   - ~~`pricingengines` (62/221 raw) and `math` (89/286 raw) are dominated by these nested-helper / template-tag / `detail::` names.~~ **This was wrong too.** Measured against v1.43 by classifying every missing name by its C++ declaration depth and path: of 157 missing `pricingengines` names **149 (94%) are genuine top-level classes**, 8 nested, 0 `detail::`; of 196 missing `math` names **168 (85%) are top-level**, 22 nested, 6 `detail::`/`Impl`. Repo-wide the figure is 890 top-level out of 985. The nested-helper explanation accounts for under a tenth of the gap — the rest is unported surface, and is being ported.
 
 3. **Superseded / not-in-scope** (formal carve-out): `ql/legacy/*` = the LIBOR Forward Model (`LiborForwardModel` + `Lm{Correlation,Volatility}Model` family + `LfmSwaptionEngine`) — **superseded** by the `marketmodels/*` (BGM) domain that Phase 11 W9–W11 fully ported; `ql/utilities/*` C++ idioms (`Clone`, `Null`, `Tracing`, `DateParser`, `PeriodParser`, `ObservableValue`) that Python handles natively (smart-pointer clone → `.clone()`, sentinel → `None`, RAII tracing → logging).
 
