@@ -1,0 +1,985 @@
+{
+  "meta": {
+    "today_serial": 45306,
+    "day_counter": "Actual/365 (Fixed)"
+  },
+  "margrabe": {
+    "base": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 8.8917930265531897,
+        "delta1": 0.48657246603869481,
+        "delta2": -0.37871860549825043,
+        "gamma1": 0.014501731745043881,
+        "gamma2": 0.0131534981814457,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -5.4766964328205061,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 8.8920839366728526,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "quantity1_2": {
+      "inputs": {
+        "Q1": 2,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 94.235406000495374,
+        "delta1": 1.950083960609365,
+        "delta2": -0.95974276248039148,
+        "gamma1": 0.00054490889231878145,
+        "gamma2": 0.00098849685681411592,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": 4.3820871936930823,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 95,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "quantity2_3": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 3,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 0.00012292253578044404,
+        "delta1": 2.1739222961287423e-05,
+        "delta2": -1.9533331050936173e-05,
+        "gamma1": 3.471227327240817e-06,
+        "gamma2": 1.0495018374121896e-06,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -0.0013994314386335676,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 0.00012292253584311741,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "quantity_ratio_5_4": {
+      "inputs": {
+        "Q1": 5,
+        "Q2": 4,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 100.1220409541954,
+        "delta1": 3.8887596052744335,
+        "delta2": -2.7500373292690283,
+        "gamma1": 0.010373079559669502,
+        "gamma2": 0.011760861178763611,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -14.56408099794645,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 100.14495265672774,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "div1_high": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.089999999999999997,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 5.9323642596093027,
+        "delta1": 0.35986939566428078,
+        "delta2": -0.28623405054113121,
+        "gamma1": 0.013037898369276423,
+        "gamma2": 0.011825758158073853,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -2.3890508570887365,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 6.3463981404085583,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "div2_zero": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 7.7435750424493168,
+        "delta1": 0.44306012269162365,
+        "delta2": -0.34821368787345758,
+        "gamma1": 0.014397369287336708,
+        "gamma2": 0.013058838355860958,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -4.332926121276313,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 7.8148824840838511,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "vol1_high": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.45000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 15.728351781294871,
+        "delta1": 0.54285746414496361,
+        "delta2": -0.36721328222096655,
+        "gamma1": 0.008706456118456404,
+        "gamma2": 0.0078970123523414114,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -8.6686323276818165,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 15.734453843581861,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "vol2_low": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.10000000000000001,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 5.9865999908006353,
+        "delta1": 0.45065587260074275,
+        "delta2": -0.37218083113593942,
+        "gamma1": 0.019929684425254862,
+        "gamma2": 0.018076811270072431,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -4.057697913675149,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 5.986614293782055,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "rho_zero": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 10.884291748534098,
+        "delta1": 0.50547013047456035,
+        "delta2": -0.37774020284687559,
+        "gamma1": 0.012187298463538205,
+        "gamma2": 0.011054238969195654,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -6.4249318405818672,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 10.885279237956697,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "rho_negative": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": -0.55000000000000004,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 13.879727459497213,
+        "delta1": 0.52956220181153357,
+        "delta2": -0.37215707353958238,
+        "gamma1": 0.0097891209015537415,
+        "gamma2": 0.0088790212258990833,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -7.8221030880001896,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 13.883185577792673,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "rho_high": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.84999999999999998,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 3.5653719936370649,
+        "delta1": 0.4023018309458562,
+        "delta2": -0.349188677151891,
+        "gamma1": 0.028771234904414127,
+        "gamma2": 0.026096358189944782,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -2.8128237252729806,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 3.5653720423274997,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "spot1_low": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 80,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 2.1077223911464613,
+        "delta1": 0.19742283476155692,
+        "delta2": -0.13034385133121992,
+        "gamma1": 0.012775658001118845,
+        "gamma2": 0.0074162549847764728,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -3.0586592523344245,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 2.1077306643772733,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "spot2_low": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 85,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 19.34427843152886,
+        "delta1": 0.76525677529529146,
+        "delta2": -0.67272234232941508,
+        "gamma1": 0.010742231942175055,
+        "gamma2": 0.01486814109643606,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -4.0789875013878838,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 19.348293410953442,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "maturity_2y": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 46037
+      },
+      "european": {
+        "value": 13.368426955997357,
+        "delta1": 0.5243643243221231,
+        "delta2": -0.3720762426306185,
+        "gamma1": 0.0099921599501006687,
+        "gamma2": 0.0090631836282092249,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -3.7454694975536973,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 13.375718030094502,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "maturity_3m": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0.02,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45397
+      },
+      "european": {
+        "value": 3.4216980061728939,
+        "delta1": 0.38889410591846174,
+        "delta2": -0.33778773891117403,
+        "gamma1": 0.028413419211082192,
+        "gamma2": 0.025771808808237817,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -10.586107629750563,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 3.4216980109560242,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "american_european_branch": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 100,
+        "s2": 105,
+        "r": 0.050000000000000003,
+        "q1": 0,
+        "q2": 0.029999999999999999,
+        "v1": 0.20000000000000001,
+        "v2": 0.25,
+        "rho": 0.29999999999999999,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 9.907003058051318,
+        "delta1": 0.52608367698501191,
+        "delta2": -0.4066796632423797,
+        "gamma1": 0.014764453019683762,
+        "gamma2": 0.01339179412216214,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": -6.6331551588488544,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 9.9070030580513215,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    },
+    "american_immediate_branch": {
+      "inputs": {
+        "Q1": 1,
+        "Q2": 1,
+        "s1": 200,
+        "s2": 60,
+        "r": 0.050000000000000003,
+        "q1": 0.29999999999999999,
+        "q2": 0.01,
+        "v1": 0.14999999999999999,
+        "v2": 0.14999999999999999,
+        "rho": 0.90000000000000002,
+        "maturity_serial": 45672
+      },
+      "european": {
+        "value": 88.640553262815686,
+        "delta1": 0.740209579154405,
+        "delta2": -0.99002270946775572,
+        "gamma1": 1.0325343962941485e-42,
+        "gamma2": 1.1472604403268369e-41,
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": 43.81856112358367,
+        "vega": {"raises": true},
+        "rho": 0,
+        "dividend_rho": {"raises": true}
+      },
+      "american": {
+        "value": 140,
+        "delta1": {"raises": true},
+        "delta2": {"raises": true},
+        "gamma1": {"raises": true},
+        "gamma2": {"raises": true},
+        "delta": {"raises": true},
+        "gamma": {"raises": true},
+        "theta": {"raises": true},
+        "vega": {"raises": true},
+        "rho": {"raises": true},
+        "dividend_rho": {"raises": true}
+      }
+    }
+  },
+  "margrabe_errors": {
+    "q1_zero": {"raises": true},
+    "q2_negative": {"raises": true},
+    "european_engine_american_exercise": {"raises": true},
+    "american_engine_european_exercise": {"raises": true}
+  },
+  "complex_chooser": {
+    "base": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 6.0566552108543341,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "strike_call_high": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 62,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 4.7414510921629223,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "strike_put_high": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 53,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 8.0830621480423321,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "choosing_later": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45427,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 5.9567706537134191,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "call_expiry_later": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45672,
+        "put_expiry_serial": 45611
+      },
+      "value": 6.8515214809901286,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "put_expiry_later": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45762
+      },
+      "value": 6.5824142923506921,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "put_expiry_before_call": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45366,
+        "call_expiry_serial": 45641,
+        "put_expiry_serial": 45519
+      },
+      "value": 6.1630744069108427,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "vol_low": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.20000000000000001,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 2.6322496536944624,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "dividend_zero": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 6.1532795646402549,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "rate_low": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.02,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 6.4292816143992404,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "spot_high": {
+      "inputs": {
+        "spot": 62,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 55,
+        "strike_put": 48,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 10.952982742832283,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    },
+    "strikes_swapped": {
+      "inputs": {
+        "spot": 50,
+        "r": 0.10000000000000001,
+        "q": 0.050000000000000003,
+        "vol": 0.34999999999999998,
+        "strike_call": 48,
+        "strike_put": 55,
+        "choosing_serial": 45397,
+        "call_expiry_serial": 45580,
+        "put_expiry_serial": 45611
+      },
+      "value": 10.931460673714923,
+      "delta": {"raises": true},
+      "gamma": {"raises": true},
+      "theta": {"raises": true},
+      "vega": {"raises": true},
+      "rho": {"raises": true},
+      "dividend_rho": {"raises": true}
+    }
+  },
+  "complex_chooser_errors": {
+    "null_choosing_date": {"raises": true},
+    "choosing_after_call_expiry": {"raises": true},
+    "choosing_after_put_expiry": {"raises": true}
+  },
+  "vanilla_forward_payoff": {
+    "prices": [0, 20, 50, 87.5, 99, 100, 101, 120, 175, 250],
+    "call_87_5": {
+      "strike": 87.5,
+      "name": "ForwardTypePayoff",
+      "description": "ForwardTypePayoff Call, 87.5 strike",
+      "values": [-87.5, -67.5, -37.5, 0, 11.5, 12.5, 13.5, 32.5, 87.5, 162.5]
+    },
+    "put_87_5": {
+      "strike": 87.5,
+      "name": "ForwardTypePayoff",
+      "description": "ForwardTypePayoff Put, 87.5 strike",
+      "values": [87.5, 67.5, 37.5, 0, -11.5, -12.5, -13.5, -32.5, -87.5, -162.5]
+    },
+    "call_100": {
+      "strike": 100,
+      "name": "ForwardTypePayoff",
+      "description": "ForwardTypePayoff Call, 100 strike",
+      "values": [-100, -80, -50, -12.5, -1, 0, 1, 20, 75, 150]
+    },
+    "put_100": {
+      "strike": 100,
+      "name": "ForwardTypePayoff",
+      "description": "ForwardTypePayoff Put, 100 strike",
+      "values": [100, 80, 50, 12.5, 1, 0, -1, -20, -75, -150]
+    }
+  }
+}
