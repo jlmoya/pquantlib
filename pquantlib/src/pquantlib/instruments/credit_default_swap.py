@@ -37,8 +37,7 @@ from typing import cast
 
 from pquantlib import qassert
 from pquantlib.cashflows.cash_flow import CashFlow
-from pquantlib.cashflows.fixed_rate_coupon import FixedRateCoupon
-from pquantlib.cashflows.fixed_rate_leg import fixed_rate_leg
+from pquantlib.cashflows.fixed_rate_coupon import FixedRateCoupon, FixedRateLeg
 from pquantlib.cashflows.simple_cash_flow import SimpleCashFlow
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.instruments.claim import Claim, FaceValueClaim
@@ -271,14 +270,23 @@ class CreditDefaultSwap(Instrument):
         # introspection. Skip the protection-start-vs-schedule-start
         # check, mirroring how the C++ default constructor handles missing
         # rule info. Per L8-B carve-out doc.
-        del last_period_day_counter  # not yet wired into fixed_rate_leg builder.
-        self._leg = fixed_rate_leg(
-            schedule=schedule,
-            nominals=[self._notional],
-            rates=[self._running_spread],
-            day_counter=day_counter,
-            payment_adjustment=payment_convention,
+        # C++ parity: creditdefaultswap.cpp:102-107 — the premium leg is a
+        # FixedRateLeg carrying ``withLastPeriodDayCounter``. That setter used
+        # to be accepted here and discarded ("not yet wired into fixed_rate_leg
+        # builder"); the builder class now exposes it, so it is threaded
+        # through. A ``None`` last-period day counter is C++'s empty
+        # DayCounter, i.e. "use the coupon rate's own", which is what the
+        # discarding code silently did — so default-argument callers are
+        # unaffected.
+        builder = (
+            FixedRateLeg(schedule)
+            .with_notionals([self._notional])
+            .with_coupon_rates([self._running_spread], day_counter)
+            .with_payment_adjustment(payment_convention)
         )
+        if last_period_day_counter is not None:
+            builder = builder.with_last_period_day_counter(last_period_day_counter)
+        self._leg = builder.build()
 
         # Deduce the trade date if not given (matches C++ creditdefaultswap.cpp:110-116).
         if self._trade_date == _NULL_DATE:

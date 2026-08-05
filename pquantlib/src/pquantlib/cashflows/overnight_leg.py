@@ -1,13 +1,19 @@
-"""overnight_leg — free-function OvernightLeg builder.
+"""overnight_leg — keyword-argument façade over :class:`OvernightLeg`.
 
-# C++ parity: ql/cashflows/overnightindexedcoupon.hpp class ``OvernightLeg``.
+# C++ parity: ql/cashflows/overnightindexedcoupon.hpp class ``OvernightLeg``
+  (v1.43).
 
-Same Python-idiomatic divergence as ``fixed_rate_leg``: the C++
-chained-builder ``with*`` setters become keyword arguments on a free
-function. Carve-outs (deferred): lookback_days, lockout_days,
-observation_shift, compound_spread_daily, averaging_method (Compound
-only), caps / floors, naked_option, last_recent_period, custom
-payment_dates, telescopic_value_dates.
+The chained builder itself lives next to the coupon it builds, in
+:mod:`pquantlib.cashflows.overnight_indexed_coupon`. This module keeps the
+older keyword-argument entry point that the instrument layer already calls;
+it constructs an
+:class:`~pquantlib.cashflows.overnight_indexed_coupon.OvernightLeg` and
+builds it, so there is exactly one implementation of the leg logic.
+
+The façade covers the common subset of the C++ setter surface. For caps,
+floors, naked options, averaging method, in-advance fixing, last-recent
+period, explicit payment dates and a custom coupon pricer, use the builder
+class directly.
 """
 
 from __future__ import annotations
@@ -15,23 +21,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from pquantlib import qassert
-from pquantlib.cashflows.cash_flow import CashFlow
-from pquantlib.cashflows.overnight_indexed_coupon import OvernightIndexedCoupon
-from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.cashflows.overnight_indexed_coupon import OvernightLeg
 from pquantlib.time.business_day_convention import BusinessDayConvention
-from pquantlib.time.calendar import Calendar
-from pquantlib.time.schedule import Schedule
-from pquantlib.time.time_unit import TimeUnit
 
 if TYPE_CHECKING:
+    from pquantlib.cashflows.cash_flow import CashFlow
+    from pquantlib.daycounters.day_counter import DayCounter
     from pquantlib.termstructures.protocols import OvernightIndexProtocol
-
-
-def _scalar_or_seq(value: float | Sequence[float], i: int, default: float) -> float:
-    if isinstance(value, int | float):
-        return float(value)
-    return float(value[i] if i < len(value) else value[-1] if len(value) > 0 else default)
+    from pquantlib.time.calendar import Calendar
+    from pquantlib.time.schedule import Schedule
 
 
 def overnight_leg(
@@ -53,38 +51,23 @@ def overnight_leg(
 
     ``payment_lag`` mirrors C++ ``withPaymentLag``: the payment date is
     ``payment_calendar.advance(end, payment_lag, Days, payment_adjustment)``.
-    A lag of 0 collapses to ``adjust(end, payment_adjustment)``, which is
-    exactly what this builder did before the parameter existed. Overnight
+    A lag of 0 collapses to ``adjust(end, payment_adjustment)``. Overnight
     legs are the main user of the lag — a compounded overnight coupon only
     fixes on its accrual end date, so it is normally paid a day or two later.
     """
-    qassert.require(len(nominals) > 0, "no notional given")
-    qassert.require(len(schedule) >= 2, "schedule has fewer than 2 dates")
+    builder = (
+        OvernightLeg(schedule, index)
+        .with_notionals(nominals)
+        .with_payment_adjustment(payment_adjustment)
+        .with_payment_lag(payment_lag)
+        .with_gearings(gearings)
+        .with_spreads(spreads)
+    )
+    if payment_day_counter is not None:
+        builder = builder.with_payment_day_counter(payment_day_counter)
+    if payment_calendar is not None:
+        builder = builder.with_payment_calendar(payment_calendar)
+    return builder.build()
 
-    cal = payment_calendar if payment_calendar is not None else schedule.calendar
-    dc = payment_day_counter if payment_day_counter is not None else index.day_counter()
 
-    leg: list[CashFlow] = []
-    n_periods = len(schedule) - 1
-    for i in range(n_periods):
-        start = schedule.date(i)
-        end = schedule.date(i + 1)
-        payment_date = cal.advance(end, payment_lag, TimeUnit.Days, payment_adjustment)
-        nominal_val = float(nominals[i] if i < len(nominals) else nominals[-1])
-        g = _scalar_or_seq(gearings, i, 1.0)
-        s = _scalar_or_seq(spreads, i, 0.0)
-        leg.append(
-            OvernightIndexedCoupon(
-                payment_date,
-                nominal_val,
-                start,
-                end,
-                index,
-                g,
-                s,
-                None,
-                None,
-                dc,
-            )
-        )
-    return leg
+__all__ = ["overnight_leg"]

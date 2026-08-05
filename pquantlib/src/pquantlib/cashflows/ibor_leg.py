@@ -1,17 +1,17 @@
-"""ibor_leg — free-function IborLeg builder.
+"""ibor_leg — keyword-argument façade over :class:`IborLeg`.
 
-# C++ parity: ql/cashflows/iborcoupon.hpp class ``IborLeg`` (operator Leg()).
+# C++ parity: ql/cashflows/iborcoupon.hpp class ``IborLeg`` (v1.43).
 
-Same Python-idiomatic divergence as ``fixed_rate_leg``: the C++
-chained-builder ``with*`` setters become keyword arguments on a free
-function. Carve-outs (deferred):
+The chained builder itself lives next to the coupon it builds, in
+:mod:`pquantlib.cashflows.ibor_coupon`. This module keeps the older
+keyword-argument entry point that the instrument layer already calls; it
+constructs an :class:`~pquantlib.cashflows.ibor_coupon.IborLeg` and builds
+it, so there is exactly one implementation of the leg logic.
 
-- ``with_caps`` / ``with_floors`` (cap/floor coupons require
-  OptionletVolatilityStructure — deferred).
-- ``with_zero_payments`` / ``with_ex_coupon_period``.
-- ``with_indexed_coupons`` / ``with_at_par_coupons`` (Settings toggle).
-- Per-period fixing_days / gearings / spreads vectors collapse to
-  scalar-or-uniform-list for L2-D coverage.
+The façade covers the common subset of the C++ setter surface. For
+``with_caps`` / ``with_floors`` / ``with_zero_payments`` /
+``with_ex_coupon_period`` / ``with_indexed_coupons`` / ``with_at_par_coupons``
+and per-period fixing-day vectors, use the builder class directly.
 """
 
 from __future__ import annotations
@@ -19,23 +19,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from pquantlib import qassert
-from pquantlib.cashflows.cash_flow import CashFlow
-from pquantlib.cashflows.ibor_coupon import IborCoupon
-from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.cashflows.ibor_coupon import IborLeg
 from pquantlib.time.business_day_convention import BusinessDayConvention
-from pquantlib.time.calendar import Calendar
-from pquantlib.time.schedule import Schedule
-from pquantlib.time.time_unit import TimeUnit
 
 if TYPE_CHECKING:
+    from pquantlib.cashflows.cash_flow import CashFlow
+    from pquantlib.daycounters.day_counter import DayCounter
     from pquantlib.termstructures.protocols import IborIndexProtocol
-
-
-def _scalar_or_seq(value: float | Sequence[float], i: int, default: float) -> float:
-    if isinstance(value, int | float):
-        return float(value)
-    return float(value[i] if i < len(value) else value[-1] if len(value) > 0 else default)
+    from pquantlib.time.calendar import Calendar
+    from pquantlib.time.schedule import Schedule
 
 
 def ibor_leg(
@@ -62,42 +54,25 @@ def ibor_leg(
 
     ``payment_lag`` mirrors C++ ``withPaymentLag``: the payment date is
     ``payment_calendar.advance(end, payment_lag, Days, payment_adjustment)``.
-    A lag of 0 collapses to ``adjust(end, payment_adjustment)``, which is
-    exactly what this builder did before the parameter existed.
+    A lag of 0 collapses to ``adjust(end, payment_adjustment)``.
     """
-    qassert.require(len(nominals) > 0, "no notional given")
-    qassert.require(len(schedule) >= 2, "schedule has fewer than 2 dates")
+    builder = (
+        IborLeg(schedule, index)
+        .with_notionals(nominals)
+        .with_payment_adjustment(payment_adjustment)
+        .with_payment_lag(payment_lag)
+        .with_gearings(gearings)
+        .with_spreads(spreads)
+        .in_arrears(in_arrears)
+        .with_fixing_convention(fixing_convention)
+    )
+    if payment_day_counter is not None:
+        builder = builder.with_payment_day_counter(payment_day_counter)
+    if payment_calendar is not None:
+        builder = builder.with_payment_calendar(payment_calendar)
+    if fixing_days is not None:
+        builder = builder.with_fixing_days(fixing_days)
+    return builder.build()
 
-    cal = payment_calendar if payment_calendar is not None else schedule.calendar
-    dc = payment_day_counter if payment_day_counter is not None else index.day_counter()
-    fix_days = fixing_days if fixing_days is not None else index.fixing_days()
 
-    leg: list[CashFlow] = []
-    n_periods = len(schedule) - 1
-
-    for i in range(n_periods):
-        start = schedule.date(i)
-        end = schedule.date(i + 1)
-        payment_date = cal.advance(end, payment_lag, TimeUnit.Days, payment_adjustment)
-        nominal_val = float(nominals[i] if i < len(nominals) else nominals[-1])
-        g = _scalar_or_seq(gearings, i, 1.0)
-        s = _scalar_or_seq(spreads, i, 0.0)
-        leg.append(
-            IborCoupon(
-                payment_date,
-                nominal_val,
-                start,
-                end,
-                fix_days,
-                index,
-                g,
-                s,
-                None,
-                None,
-                dc,
-                in_arrears,
-                None,
-                fixing_convention,
-            )
-        )
-    return leg
+__all__ = ["ibor_leg"]

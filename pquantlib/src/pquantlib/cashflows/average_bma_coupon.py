@@ -31,9 +31,11 @@ Python divergences from C++:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from pquantlib import qassert
+from pquantlib.cashflows import cash_flow_vectors as cfv
 from pquantlib.cashflows.coupon_pricer import FloatingRateCouponPricer
 from pquantlib.cashflows.floating_rate_coupon import FloatingRateCoupon
 from pquantlib.exceptions import LibraryException
@@ -249,6 +251,109 @@ class AverageBMACouponPricer(FloatingRateCouponPricer):
         raise LibraryException(msg)
 
 
+class AverageBMALeg:
+    """Chained builder for a sequence of average-BMA coupons.
+
+    # C++ parity: ``AverageBMALeg`` (averagebmacoupon.hpp:82-101,
+    # .cpp:180-251).
+
+    Every C++ ``withXxx`` setter is present as ``with_xxx`` and returns
+    ``self``; C++'s ``operator Leg()`` is :meth:`build`. Note that
+    ``AverageBMALeg`` has **no** payment-lag, payment-calendar, fixing-days,
+    cap/floor or ex-coupon setter: the C++ class is the smallest of the
+    family, and its payment date is a plain ``calendar.adjust(end, adj)``.
+    """
+
+    def __init__(self, schedule: Schedule, index: BMAIndex) -> None:
+        self._schedule: Schedule = schedule
+        self._index: BMAIndex = index
+        self._notionals: list[float] = []
+        self._payment_day_counter: DayCounter | None = None
+        self._payment_adjustment: BusinessDayConvention = BusinessDayConvention.Following
+        self._gearings: list[float] = []
+        self._spreads: list[float] = []
+
+    # --- chained setters -----------------------------------------------
+
+    def with_notionals(self, notionals: float | Sequence[float]) -> AverageBMALeg:
+        """# C++ parity: ``withNotionals`` (.cpp:183-192)."""
+        self._notionals = cfv.as_float_list(notionals)
+        return self
+
+    def with_payment_day_counter(self, day_counter: DayCounter) -> AverageBMALeg:
+        """# C++ parity: ``withPaymentDayCounter`` (.cpp:194-198)."""
+        self._payment_day_counter = day_counter
+        return self
+
+    def with_payment_adjustment(self, convention: BusinessDayConvention) -> AverageBMALeg:
+        """# C++ parity: ``withPaymentAdjustment`` (.cpp:200-204)."""
+        self._payment_adjustment = convention
+        return self
+
+    def with_gearings(self, gearings: float | Sequence[float]) -> AverageBMALeg:
+        """# C++ parity: ``withGearings`` (.cpp:206-215)."""
+        self._gearings = cfv.as_float_list(gearings)
+        return self
+
+    def with_spreads(self, spreads: float | Sequence[float]) -> AverageBMALeg:
+        """# C++ parity: ``withSpreads`` (.cpp:217-226)."""
+        self._spreads = cfv.as_float_list(spreads)
+        return self
+
+    # --- operator Leg() -------------------------------------------------
+
+    def build(self) -> list[CashFlow]:
+        """Build the leg.
+
+        # C++ parity: ``AverageBMALeg::operator Leg()`` (.cpp:228-251).
+
+        Note the C++ stub-reference blocks use ``paymentAdjustment_`` rather
+        than the schedule's own business-day convention (.cpp:239-245), and
+        that the notional falls back to ``notionals_.back()`` rather than to
+        ``1.0`` (.cpp:248).
+        """
+        qassert.require(len(self._notionals) > 0, "no notional given")
+
+        schedule = self._schedule
+        # NB: Schedule exposes ``calendar`` / ``tenor`` / ``is_regular`` as
+        # properties (no parens) in this port; ``size()`` / ``date(i)`` /
+        # ``has_*()`` remain methods.
+        calendar = schedule.calendar
+        cashflows: list[CashFlow] = []
+        n = schedule.size() - 1
+        for i in range(n):
+            start = schedule.date(i)
+            end = schedule.date(i + 1)
+            ref_start = start
+            ref_end = end
+            payment_date = calendar.adjust(end, self._payment_adjustment)
+            if schedule.has_is_regular() and schedule.has_tenor():
+                if i == 0 and not schedule.is_regular[i]:
+                    ref_start = calendar.adjust(
+                        end - schedule.tenor, self._payment_adjustment
+                    )
+                if i == n - 1 and not schedule.is_regular[i]:
+                    ref_end = calendar.adjust(
+                        start + schedule.tenor, self._payment_adjustment
+                    )
+
+            cashflows.append(
+                AverageBMACoupon(
+                    payment_date,
+                    cfv.get(self._notionals, i, self._notionals[-1]),
+                    start,
+                    end,
+                    self._index,
+                    cfv.get(self._gearings, i, 1.0),
+                    cfv.get(self._spreads, i, 0.0),
+                    ref_start,
+                    ref_end,
+                    self._payment_day_counter,
+                )
+            )
+        return cashflows
+
+
 def average_bma_leg(
     schedule: Schedule,
     index: BMAIndex,
@@ -260,53 +365,26 @@ def average_bma_leg(
 ) -> list[CashFlow]:
     """Build a leg of :class:`AverageBMACoupon` from ``schedule``.
 
-    # C++ parity: ``AverageBMALeg::operator Leg`` (averagebmacoupon.cpp:213-251).
-    The C++ fluent ``with*`` setters are collapsed into keyword arguments,
-    matching this port's ``ibor_leg`` / ``overnight_leg`` convention.
+    Keyword-argument façade over :class:`AverageBMALeg`; the leg logic lives
+    there, so there is exactly one implementation.
     """
-    qassert.require(len(notionals) > 0, "no notional given")
-    gearings = gearings if gearings is not None else [1.0]
-    spreads = spreads if spreads is not None else [0.0]
+    builder = (
+        AverageBMALeg(schedule, index)
+        .with_notionals(notionals)
+        .with_payment_adjustment(payment_adjustment)
+    )
+    if payment_day_counter is not None:
+        builder = builder.with_payment_day_counter(payment_day_counter)
+    if gearings is not None:
+        builder = builder.with_gearings(gearings)
+    if spreads is not None:
+        builder = builder.with_spreads(spreads)
+    return builder.build()
 
-    cashflows: list[CashFlow] = []
-    # NB: Schedule exposes ``calendar`` / ``tenor`` / ``is_regular`` as
-    # properties (no parens) in this port; ``size()`` / ``date(i)`` /
-    # ``has_*()`` remain methods.
-    calendar = schedule.calendar
-    n = schedule.size() - 1
-    for i in range(n):
-        start = schedule.date(i)
-        end = schedule.date(i + 1)
-        ref_start = start
-        ref_end = end
-        payment_date = calendar.adjust(end, payment_adjustment)
-        if (
-            i == 0
-            and schedule.has_is_regular()
-            and not schedule.is_regular[i]
-            and schedule.has_tenor()
-        ):
-            ref_start = calendar.adjust(end - schedule.tenor, payment_adjustment)
-        if (
-            i == n - 1
-            and schedule.has_is_regular()
-            and not schedule.is_regular[i]
-            and schedule.has_tenor()
-        ):
-            ref_end = calendar.adjust(start + schedule.tenor, payment_adjustment)
 
-        cashflows.append(
-            AverageBMACoupon(
-                payment_date,
-                notionals[min(i, len(notionals) - 1)],
-                start,
-                end,
-                index,
-                gearings[min(i, len(gearings) - 1)],
-                spreads[min(i, len(spreads) - 1)],
-                ref_start,
-                ref_end,
-                payment_day_counter,
-            )
-        )
-    return cashflows
+__all__ = [
+    "AverageBMACoupon",
+    "AverageBMACouponPricer",
+    "AverageBMALeg",
+    "average_bma_leg",
+]
