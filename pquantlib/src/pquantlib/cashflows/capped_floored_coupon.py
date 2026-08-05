@@ -336,6 +336,18 @@ class CappedFlooredOvernightIndexedCoupon(CappedFlooredCoupon):
         """# C++ parity: ``CappedFlooredOvernightIndexedCoupon::nakedOption``."""
         return self._naked_option
 
+    def fixing_date(self) -> Date:
+        """The underlying's fixing date — the last of its daily fixings.
+
+        # C++ parity: ``CappedFlooredOvernightIndexedCoupon::fixingDate``
+        (overnightindexedcoupon.hpp:170). Unlike the plain
+        :class:`CappedFlooredCoupon`, which inherits ``FloatingRateCoupon``'s
+        accrual-start-minus-fixing-days computation, the overnight variant
+        delegates: an overnight coupon is only fully determined by its last
+        daily fixing.
+        """
+        return self._underlying.fixing_date()
+
     def rate(self) -> float:
         """``swapletRate + floorletRate - capletRate`` with naked-option support.
 
