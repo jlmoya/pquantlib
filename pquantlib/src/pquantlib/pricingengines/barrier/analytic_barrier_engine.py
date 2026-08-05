@@ -127,12 +127,18 @@ class AnalyticBarrierEngine(
         return (1.0 + self._mu()) * self._std_deviation()
 
     def _triggered(self, underlying: float) -> bool:
-        """Check if the spot is on the wrong side of the barrier."""
+        """Check if the spot is on the wrong side of the barrier.
+
+        # C++ parity: ``BarrierOption::engine::triggered``
+        # (ql/instruments/barrieroption.cpp:126-136, unchanged from
+        # v1.42.1 through v1.43) uses STRICT ``<`` / ``>``: a spot sitting
+        # exactly on the barrier is not considered triggered.
+        """
         bt = self._arguments.barrier_type
         b = self._barrier()
         if bt in (BarrierType.DownIn, BarrierType.DownOut):
-            return underlying <= b
-        return underlying >= b
+            return underlying < b
+        return underlying > b
 
     # --- closed-form helper terms A..F (Haug p. 69) ---------------------
 
