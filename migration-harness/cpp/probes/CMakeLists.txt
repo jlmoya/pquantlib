@@ -861,3 +861,23 @@ target_link_libraries(currencies_exchangerate_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/ts/swaphelper.json.
 add_executable(v143_ts_swaphelper_probe v143_ts_swaphelper/probe.cpp)
 target_link_libraries(v143_ts_swaphelper_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/yield: InterpolatedDiscountCurve extrapolation ===
+# Past the last node discountImpl switches to an explicit flat-forward
+# extension instead of continuing to interpolate. LogLinear makes the two
+# indistinguishable; Linear / Cubic / LogCubic do not. Probed on a node,
+# between nodes and past the last node, for discount / zero / instantaneous
+# forward.
+# Emits references/v143/ts/discountcurve.json.
+add_executable(v143_ts_discountcurve_probe v143_ts_discountcurve/probe.cpp)
+target_link_libraries(v143_ts_discountcurve_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/yield: layered term-structure adapters ===
+# UltimateForwardTermStructure, CompositeZeroYieldStructure,
+# QuantoTermStructure, InterpolatedPiecewiseZero/ForwardSpreadedTermStructure
+# and InterpolatedSimpleZeroCurve, each read at t values straddling every
+# branch boundary in its implementation (smoothing point, spread dates, last
+# node) so an off-by-a-branch port cannot pass.
+# Emits references/v143/ts/yieldadapters.json.
+add_executable(v143_ts_yieldadapters_probe v143_ts_yieldadapters/probe.cpp)
+target_link_libraries(v143_ts_yieldadapters_probe PRIVATE ${QUANTLIB_LIBRARY})
