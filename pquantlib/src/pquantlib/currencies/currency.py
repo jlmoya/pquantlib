@@ -72,4 +72,6 @@ class Currency:
         return hash(self.name)
 
     def __str__(self) -> str:
-        return self.code if self.code else "(null currency)"
+        # C++ parity: ql/currency.cpp operator<< prints the code for a usable
+        # currency and the bare words "null currency" for an empty one.
+        return self.code if self.code else "null currency"
