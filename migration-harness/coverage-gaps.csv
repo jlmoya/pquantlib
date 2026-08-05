@@ -1,6 +1,7 @@
 subsystem,class,status,rationale
-(root),BaseCurrencyProxy,UNFLAGGED,
-(root),ConversionTypeProxy,UNFLAGGED,
+(root),BaseCurrencyProxy,ALLOWLISTED,"private assignment-proxy struct inside C++ Money, exists only so `settings.conversionType() = X` compiles; Python properties give that syntax natively"
+(root),ConversionTypeProxy,ALLOWLISTED,"private assignment-proxy struct inside C++ Money; see BaseCurrencyProxy"
+indexes,CaseInsensitiveCompare,ALLOWLISTED,"nested comparator inside C++ IndexManager; Python normalises with name.lower() (pinned by the IndexManager tests)"
 (root),DateProxy,UNFLAGGED,
 (root),Error,UNFLAGGED,
 (root),Event,UNFLAGGED,
@@ -121,7 +122,6 @@ experimental,TenorSwaptionSmileSection,UNFLAGGED,
 experimental,VannaVolga,UNFLAGGED,
 experimental,VectorIntegrator,UNFLAGGED,
 experimental,Ziggurat,UNFLAGGED,
-indexes,CaseInsensitiveCompare,UNFLAGGED,
 instruments,AmortizingCmsRateBond,UNFLAGGED,
 instruments,AmortizingFloatingRateBond,UNFLAGGED,
 instruments,AssetSwap,UNFLAGGED,

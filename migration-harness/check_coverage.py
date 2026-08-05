@@ -56,7 +56,17 @@ def cpp_subsystem(hpp: pathlib.Path) -> str:
 # docs/carve-outs.md and still counts as UNFLAGGED here, because a coverage
 # gate that can be silenced by intent is not a gate.
 # ---------------------------------------------------------------------------
-ALLOWLIST: dict[str, str] = {}
+ALLOWLIST: dict[str, str] = {
+    # --- nested comparator / proxy structs with no standalone Python counterpart ---
+    "CaseInsensitiveCompare":
+        "nested comparator inside C++ IndexManager; Python normalises with name.lower() "
+        "(pinned by the IndexManager tests)",
+    "BaseCurrencyProxy":
+        "private assignment-proxy struct inside C++ Money, exists only so "
+        "`settings.conversionType() = X` compiles; Python properties give that syntax natively",
+    "ConversionTypeProxy":
+        "private assignment-proxy struct inside C++ Money; see BaseCurrencyProxy",
+}
 
 
 def main() -> None:
