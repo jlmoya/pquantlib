@@ -891,3 +891,13 @@ target_link_libraries(v143_ts_yieldadapters_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/ts/bondhelper.json.
 add_executable(v143_ts_bondhelper_probe v143_ts_bondhelper/probe.cpp)
 target_link_libraries(v143_ts_bondhelper_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/yield: OvernightIndexFuture + its rate helpers ===
+# Both averaging branches (simple vs compounded) over the same period, at
+# three valuation regimes (before the period, inside it with today's fixing
+# published, inside it without), plus a weekend maturity where the daily roll
+# overshoots. SofrFutureRateHelper is probed for quarterly (third Wednesday to
+# third Wednesday, compounded) and monthly (first to first, simple) contracts.
+# Emits references/v143/ts/onfuture.json.
+add_executable(v143_ts_onfuture_probe v143_ts_onfuture/probe.cpp)
+target_link_libraries(v143_ts_onfuture_probe PRIVATE ${QUANTLIB_LIBRARY})
