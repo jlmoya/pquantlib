@@ -26,8 +26,8 @@ from pquantlib.termstructures.credit.piecewise_default_curve import (
     PiecewiseDefaultCurve,
 )
 from pquantlib.termstructures.credit.probability_traits import (
-    HazardRateTrait,
-    SurvivalProbabilityTrait,
+    HazardRate,
+    SurvivalProbability,
 )
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.tolerance import loose
@@ -73,8 +73,8 @@ def test_piecewise_default_curve_constructs(
     helpers_and_curve: tuple[Date, list[SpreadCdsHelper]],
 ) -> None:
     d, helpers = helpers_and_curve
-    curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
-    assert curve.traits() is HazardRateTrait
+    curve = PiecewiseDefaultCurve(HazardRate, d, helpers, Actual365Fixed())
+    assert curve.traits() is HazardRate
     assert len(curve.instruments()) == 3
 
 
@@ -83,14 +83,14 @@ def test_piecewise_default_curve_requires_at_least_one_helper(
 ) -> None:
     d, _ = helpers_and_curve
     with pytest.raises(LibraryException, match="at least one instrument"):
-        PiecewiseDefaultCurve(HazardRateTrait, d, [], Actual365Fixed())
+        PiecewiseDefaultCurve(HazardRate, d, [], Actual365Fixed())
 
 
 def test_piecewise_default_curve_max_date_matches_helpers_before_bootstrap(
     helpers_and_curve: tuple[Date, list[SpreadCdsHelper]],
 ) -> None:
     d, helpers = helpers_and_curve
-    curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
+    curve = PiecewiseDefaultCurve(HazardRate, d, helpers, Actual365Fixed())
     # Before bootstrap runs, max_date falls back to the latest helper.
     assert curve.max_date() == max(h.latest_date() for h in helpers)
 
@@ -100,7 +100,7 @@ def test_piecewise_default_curve_hazard_rate_traits_roundtrip(
 ) -> None:
     """Bootstrapped curve reproduces input CDS quotes (HazardRate)."""
     d, helpers = helpers_and_curve
-    curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
+    curve = PiecewiseDefaultCurve(HazardRate, d, helpers, Actual365Fixed())
     # Trigger bootstrap.
     _ = curve.survival_probability(1.0, extrapolate=True)
     # All helpers should be re-priced to their input quote (0.02) by
@@ -115,7 +115,7 @@ def test_piecewise_default_curve_survival_probability_traits_roundtrip(
 ) -> None:
     """Bootstrapped curve reproduces input CDS quotes (SurvivalProbability)."""
     d, helpers = helpers_and_curve
-    curve = PiecewiseDefaultCurve(SurvivalProbabilityTrait, d, helpers, Actual365Fixed())
+    curve = PiecewiseDefaultCurve(SurvivalProbability, d, helpers, Actual365Fixed())
     _ = curve.survival_probability(1.0, extrapolate=True)
     for h in helpers:
         implied = h.implied_quote()
@@ -127,7 +127,7 @@ def test_piecewise_default_curve_data_after_bootstrap(
 ) -> None:
     """After bootstrap the curve exposes a non-trivial data grid."""
     d, helpers = helpers_and_curve
-    curve = PiecewiseDefaultCurve(HazardRateTrait, d, helpers, Actual365Fixed())
+    curve = PiecewiseDefaultCurve(HazardRate, d, helpers, Actual365Fixed())
     _ = curve.survival_probability(1.0, extrapolate=True)
     assert len(curve.data()) == len(helpers) + 1
     # Hazard rates should be positive.

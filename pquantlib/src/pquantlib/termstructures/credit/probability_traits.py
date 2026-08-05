@@ -12,11 +12,11 @@ traits provide static methods to:
 - bound the search (``minValueAfter`` / ``maxValueAfter``),
 - update the curve data after a successful solve (``updateGuess``).
 
-Python ports these as ``@staticmethod`` members on three classes
-(:class:`SurvivalProbabilityTrait` / :class:`HazardRateTrait` /
-:class:`DefaultDensityTrait`) so both class-bound usage
-(``SurvivalProbabilityTrait.initial_value()``) and instance-bound usage
-(``SurvivalProbabilityTrait().initial_value()``) work — matching how the
+Python ports these as ``@staticmethod`` members on three classes carrying
+the C++ names (:class:`SurvivalProbability` / :class:`HazardRate` /
+:class:`DefaultDensity`) so both class-bound usage
+(``SurvivalProbability.initial_value()``) and instance-bound usage
+(``SurvivalProbability().initial_value()``) work — matching how the
 C++ ``struct`` traits are consumed without instantiation.
 
 :class:`PiecewiseDefaultCurve` and :class:`IterativeBootstrap` accept
@@ -43,7 +43,7 @@ _MAX_HAZARD_RATE: Final[float] = 1.0
 _QL_EPSILON: Final[float] = sys.float_info.epsilon
 
 
-class SurvivalProbabilityTrait:
+class SurvivalProbability:
     """Survival-probability bootstrap trait.
 
     # C++ parity: ``struct SurvivalProbability`` in
@@ -132,10 +132,10 @@ class SurvivalProbabilityTrait:
 
     @staticmethod
     def max_iterations() -> int:
-        return SurvivalProbabilityTrait.max_iterations_value
+        return SurvivalProbability.max_iterations_value
 
 
-class HazardRateTrait:
+class HazardRate:
     """Hazard-rate bootstrap trait.
 
     # C++ parity: ``struct HazardRate`` in probabilitytraits.hpp:115-188.
@@ -199,10 +199,10 @@ class HazardRateTrait:
 
     @staticmethod
     def max_iterations() -> int:
-        return HazardRateTrait.max_iterations_value
+        return HazardRate.max_iterations_value
 
 
-class DefaultDensityTrait:
+class DefaultDensity:
     """Default-density bootstrap trait.
 
     # C++ parity: ``struct DefaultDensity`` in probabilitytraits.hpp:192-265.
@@ -265,14 +265,16 @@ class DefaultDensityTrait:
 
     @staticmethod
     def max_iterations() -> int:
-        return DefaultDensityTrait.max_iterations_value
+        return DefaultDensity.max_iterations_value
 
 
-# Convenience aliases matching C++ struct names.
-SurvivalProbability = SurvivalProbabilityTrait
-HazardRate = HazardRateTrait
-DefaultDensity = DefaultDensityTrait
-
+# Backwards-compatible aliases: these classes shipped with a ``Trait`` suffix
+# before the v1.43 sweep restored the C++ names. The yield-curve traits
+# (``Discount`` / ``ZeroYield`` / ``ForwardRate``) never carried the suffix, so
+# the suffix was also inconsistent within the port.
+SurvivalProbabilityTrait = SurvivalProbability
+HazardRateTrait = HazardRate
+DefaultDensityTrait = DefaultDensity
 
 __all__ = [
     "DefaultDensity",
