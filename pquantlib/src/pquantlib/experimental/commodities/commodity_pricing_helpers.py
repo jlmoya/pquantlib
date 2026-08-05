@@ -1,24 +1,20 @@
 """CommodityPricingHelper — static helpers for commodity pricing engines.
 
 # C++ parity: ql/experimental/commodities/commoditypricinghelpers.hpp +
-#             commoditypricinghelpers.cpp (v1.42.1).
+#             commoditypricinghelpers.cpp (v1.43).
 
 Self-contained date/UOM/FX arithmetic helpers used by commodity engines.
 
 Deferred to W7-C (where ``EnergyCommodity`` lands):
 - ``createPricingPeriods`` — depends on ``EnergyCommodity.DeliverySchedule`` /
   ``EnergyCommodity.QuantityPeriodicity`` enums.
-
-Partially deferred:
-- ``calculate_fx_conversion_factor`` returns 1 for same-currency (the common
-  case); cross-currency requires ``ExchangeRateManager`` (not yet ported) and
-  raises with a documented message (see docs/carve-outs.md).
 """
 
 from __future__ import annotations
 
-from pquantlib import qassert
 from pquantlib.currencies.currency import Currency
+from pquantlib.currencies.exchange_rate import ExchangeRateType
+from pquantlib.currencies.exchange_rate_manager import ExchangeRateManager
 from pquantlib.experimental.commodities.commodity_type import CommodityType
 from pquantlib.experimental.commodities.commodity_unit_cost import CommodityUnitCost
 from pquantlib.experimental.commodities.unit_of_measure import UnitOfMeasure
@@ -53,15 +49,17 @@ class CommodityPricingHelper:
     ) -> float:
         """FX factor to convert ``from`` currency into ``to`` currency.
 
-        # Deferral: the cross-currency case requires ``ExchangeRateManager``,
-        # which is not yet ported. Same-currency returns 1 (the common path).
+        Asks ``ExchangeRateManager`` for a *direct* rate and inverts it when
+        the stored rate runs the other way round.
         """
         if from_currency != to_currency:
-            qassert.fail(
-                "calculate_fx_conversion_factor across currencies requires "
-                "ExchangeRateManager, which is not yet ported "
-                "(see docs/carve-outs.md)"
+            rate = ExchangeRateManager.instance().lookup(
+                from_currency, to_currency, evaluation_date, ExchangeRateType.Direct
             )
+            assert rate.rate is not None
+            if from_currency != rate.source:
+                return 1.0 / rate.rate
+            return rate.rate
         return 1.0
 
     @staticmethod

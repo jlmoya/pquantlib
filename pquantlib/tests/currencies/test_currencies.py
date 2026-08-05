@@ -87,4 +87,4 @@ def test_str_returns_code() -> None:
 
 
 def test_str_empty_currency() -> None:
-    assert str(Currency()) == "(null currency)"
+    assert str(Currency()) == "null currency"

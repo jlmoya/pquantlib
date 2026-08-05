@@ -1,0 +1,139 @@
+{
+  "quantlib_version": "1.43",
+  "exchange_rate": {
+    "direct": {
+      "source": "EUR",
+      "target": "USD",
+      "rate": 1.1000000000000001,
+      "type": 0
+    },
+    "exchange_from_source": {
+      "value": 110.00000000000001,
+      "currency": "USD"
+    },
+    "exchange_from_target": {
+      "value": 99.999999999999986,
+      "currency": "EUR"
+    },
+    "exchange_unrelated_currency": { "raises": true },
+    "chain_source_eq_source": {
+      "source": "USD",
+      "target": "GBP",
+      "rate": 0.7727272727272726,
+      "type": 1
+    },
+    "chain_source_eq_target": {
+      "source": "USD",
+      "target": "GBP",
+      "rate": 0.75757575757575757,
+      "type": 1
+    },
+    "chain_target_eq_source": {
+      "source": "EUR",
+      "target": "JPY",
+      "rate": 165,
+      "type": 1
+    },
+    "chain_target_eq_target": {
+      "source": "EUR",
+      "target": "GBP",
+      "rate": 0.84615384615384615,
+      "type": 1
+    },
+    "chain_not_chainable": { "raises": true },
+    "chain_exchange_from_source": {
+      "value": 16500.000000000004,
+      "currency": "JPY"
+    },
+    "chain_exchange_from_target": {
+      "value": 99.999999999999986,
+      "currency": "EUR"
+    }
+  },
+  "manager": {
+    "same_currency": {
+      "source": "EUR",
+      "target": "EUR",
+      "rate": 1,
+      "type": 0
+    },
+    "direct_eur_ats": {
+      "source": "EUR",
+      "target": "ATS",
+      "rate": 13.760300000000001,
+      "type": 0
+    },
+    "reversed_ats_eur": {
+      "source": "EUR",
+      "target": "ATS",
+      "rate": 13.760300000000001,
+      "type": 0
+    },
+    "dated_grd_before_start": { "raises": true },
+    "dated_grd_after_start": {
+      "source": "EUR",
+      "target": "GRD",
+      "rate": 340.75,
+      "type": 0
+    },
+    "triangulated_ats_dem": {
+      "source": "ATS",
+      "target": "DEM",
+      "rate": 0.14213570925052504,
+      "type": 1
+    },
+    "direct_only_ats_dem": { "raises": true },
+    "smart_peh_pen": {
+      "source": "PEH",
+      "target": "PEN",
+      "rate": 1.0000000000000001e-09,
+      "type": 1
+    },
+    "unreachable_usd_jpy": { "raises": true },
+    "default_date_after_start": {
+      "source": "EUR",
+      "target": "GRD",
+      "rate": 340.75,
+      "type": 0
+    },
+    "default_date_before_start": { "raises": true },
+    "user_added_in_range": {
+      "source": "USD",
+      "target": "EUR",
+      "rate": 1.25,
+      "type": 0
+    },
+    "user_added_before_range": { "raises": true },
+    "user_added_after_range": { "raises": true },
+    "user_added_latest_wins": {
+      "source": "USD",
+      "target": "EUR",
+      "rate": 1.5,
+      "type": 0
+    },
+    "cleared_drops_user_rate": { "raises": true },
+    "cleared_restores_known": {
+      "source": "EUR",
+      "target": "ATS",
+      "rate": 13.760300000000001,
+      "type": 0
+    }
+  },
+  "money": {
+    "automated_conversion_sum": {
+      "value": 113.7603,
+      "currency": "ATS"
+    },
+    "base_currency_conversion_sum": {
+      "value": 8.2699999999999996,
+      "currency": "EUR"
+    },
+    "base_currency_conversion_less": true,
+    "no_conversion_sum": { "raises": true }
+  },
+  "fx_conversion_factor": {
+    "same_currency": 1,
+    "stored_orientation": 13.760300000000001,
+    "inverted_orientation": 0.072672834167859704
+  }
+}
