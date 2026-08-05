@@ -100,9 +100,7 @@ class VanillaOptionPricer(ABC):
     """
 
     @abstractmethod
-    def __call__(
-        self, strike: float, option_type: OptionType, deflator: float
-    ) -> float: ...
+    def __call__(self, strike: float, option_type: OptionType, deflator: float) -> float: ...
 
 
 class MarketQuotedOptionPricer(VanillaOptionPricer):
@@ -125,21 +123,15 @@ class MarketQuotedOptionPricer(VanillaOptionPricer):
             volatility_structure.volatility_type() == VolatilityType.Normal
             or (
                 volatility_structure.volatility_type() == VolatilityType.ShiftedLognormal
-                and math.isclose(
-                    volatility_structure.shift(expiry_date, swap_tenor), 0.0, abs_tol=1e-15
-                )
+                and math.isclose(volatility_structure.shift(expiry_date, swap_tenor), 0.0, abs_tol=1e-15)
             ),
             "VanillaOptionPricer: a normal or a zero-shift lognormal volatility is required",
         )
 
-    def __call__(
-        self, strike: float, option_type: OptionType, deflator: float
-    ) -> float:
+    def __call__(self, strike: float, option_type: OptionType, deflator: float) -> float:
         variance = self._smile.variance(strike)
         if self._volatility_structure.volatility_type() == VolatilityType.ShiftedLognormal:
-            return deflator * black_formula(
-                option_type, strike, self._forward_value, math.sqrt(variance)
-            )
+            return deflator * black_formula(option_type, strike, self._forward_value, math.sqrt(variance))
         return deflator * bachelier_black_formula(
             option_type, strike, self._forward_value, math.sqrt(variance)
         )
@@ -183,12 +175,7 @@ class GFunctionStandard(GFunction):
         q = self._q
         delta = self._delta
         n = float(self._swap_length) * q
-        return (
-            x
-            / math.pow(1.0 + x / q, delta)
-            * 1.0
-            / (1.0 - 1.0 / math.pow(1.0 + x / q, n))
-        )
+        return x / math.pow(1.0 + x / q, delta) * 1.0 / (1.0 - 1.0 / math.pow(1.0 + x / q, n))
 
     def first_derivative(self, x: float) -> float:
         # C++ parity: conundrumpricer.cpp:594-606.
@@ -221,14 +208,11 @@ class GFunctionStandard(GFunction):
         b1 = 1.0 / q * num / den
 
         c = x / math.pow(a, delta)
-        c1 = (math.pow(a, delta) - delta / q * x * math.pow(a, delta - 1.0)) / math.pow(
-            a, 2 * delta
-        )
+        c1 = (math.pow(a, delta) - delta / q * x * math.pow(a, delta - 1.0)) / math.pow(a, 2 * delta)
 
         d = math.pow(a, n - 1.0) / ((math.pow(a, n) - 1.0) * (math.pow(a, n) - 1.0))
         d1 = (
-            (n - 1.0) * math.pow(a, n - 2.0) * (math.pow(a, n) - 1.0)
-            - 2 * n * math.pow(a, 2 * (n - 1.0))
+            (n - 1.0) * math.pow(a, n - 2.0) * (math.pow(a, n) - 1.0) - 2 * n * math.pow(a, 2 * (n - 1.0))
         ) / (q * (math.pow(a, n) - 1.0) * (math.pow(a, n) - 1.0) * (math.pow(a, n) - 1.0))
 
         return a1 * b + aa * b1 - n / q * (c1 * d + c * d1)
@@ -251,14 +235,10 @@ class GFunctionExactYield(GFunction):
         dc = swap_index.day_counter()
 
         swap_start_time = dc.year_fraction(rate_curve.reference_date(), schedule.start_date)
-        swap_first_payment_time = dc.year_fraction(
-            rate_curve.reference_date(), schedule.date(1)
-        )
+        swap_first_payment_time = dc.year_fraction(rate_curve.reference_date(), schedule.date(1))
         payment_time = dc.year_fraction(rate_curve.reference_date(), coupon.date())
 
-        self._delta = (payment_time - swap_start_time) / (
-            swap_first_payment_time - swap_start_time
-        )
+        self._delta = (payment_time - swap_start_time) / (swap_first_payment_time - swap_start_time)
 
         self._accruals: list[float] = _fixed_leg_accruals(swap)
 
@@ -308,9 +288,9 @@ class GFunctionExactYield(GFunction):
         der_c = s * (c - c * c)
 
         a0 = self._accruals[0]
-        return (
-            -delta * a0 * math.pow(b[0], delta + 1.0) * c + math.pow(b[0], delta) * der_c
-        ) * (-delta * a0 * b[0] * x + 1.0 + x * (1.0 - c) * s) + math.pow(b[0], delta) * c * (
+        return (-delta * a0 * math.pow(b[0], delta + 1.0) * c + math.pow(b[0], delta) * der_c) * (
+            -delta * a0 * b[0] * x + 1.0 + x * (1.0 - c) * s
+        ) + math.pow(b[0], delta) * c * (
             delta * math.pow(a0 * b[0], 2.0) * x
             - delta * a0 * b[0]
             - x * der_c * s
@@ -319,7 +299,7 @@ class GFunctionExactYield(GFunction):
         )
 
 
-class _GFunctionWithShiftsObjective:
+class ObjectiveFunction:
     """Newton objective: f(x) = 0 calibrates the parallel/non-parallel shift.
 
     C++ parity: conundrumpricer.cpp ``GFunctionWithShifts::ObjectiveFunction``.
@@ -364,9 +344,7 @@ class _GFunctionWithShiftsObjective:
             self._derivative -= self._shaped_swap_payment_times[i] * temp
         result *= self._rs
         self._derivative *= self._rs
-        temp = self._swap_payment_discounts[-1] * math.exp(
-            -self._shaped_swap_payment_times[-1] * x
-        )
+        temp = self._swap_payment_discounts[-1] * math.exp(-self._shaped_swap_payment_times[-1] * x)
         result += temp - self._discount_at_start
         self._derivative -= self._shaped_swap_payment_times[-1] * temp
         return result
@@ -396,7 +374,7 @@ class GFunctionWithShifts(GFunction):
         swap = swap_index.underlying_swap(coupon.fixing_date())
         self._swap_rate_value = swap.fair_rate()
 
-        self._objective = _GFunctionWithShiftsObjective(self._swap_rate_value)
+        self._objective = ObjectiveFunction(self._swap_rate_value)
 
         schedule = swap.fixed_schedule()
         rate_curve = swap_index.forwarding_term_structure()
@@ -404,9 +382,7 @@ class GFunctionWithShifts(GFunction):
         assert rate_curve is not None
         dc = swap_index.day_counter()
 
-        self._swap_start_time = dc.year_fraction(
-            rate_curve.reference_date(), schedule.start_date
-        )
+        self._swap_start_time = dc.year_fraction(rate_curve.reference_date(), schedule.start_date)
         self._discount_at_start = rate_curve.discount(schedule.start_date)
 
         payment_time = dc.year_fraction(rate_curve.reference_date(), coupon.date())
@@ -455,18 +431,13 @@ class GFunctionWithShifts(GFunction):
             e = math.exp(-self._shaped_swap_payment_times[i] * x)
             sqrt_denominator += self._accruals[i] * self._swap_payment_discounts[i] * e
             der_sqrt_denominator -= (
-                self._shaped_swap_payment_times[i]
-                * self._accruals[i]
-                * self._swap_payment_discounts[i]
-                * e
+                self._shaped_swap_payment_times[i] * self._accruals[i] * self._swap_payment_discounts[i] * e
             )
         denominator = sqrt_denominator * sqrt_denominator
         last_t = self._shaped_swap_payment_times[-1]
         last_d = self._swap_payment_discounts[-1]
         numerator = last_t * last_d * math.exp(-last_t * x) * sqrt_denominator
-        numerator -= (
-            self._discount_at_start - last_d * math.exp(-last_t * x)
-        ) * der_sqrt_denominator
+        numerator -= (self._discount_at_start - last_d * math.exp(-last_t * x)) * der_sqrt_denominator
         qassert.require(denominator != 0, "GFunctionWithShifts::derRs_derX: denominator == 0")
         return numerator / denominator
 
@@ -499,9 +470,7 @@ class GFunctionWithShifts(GFunction):
 
         der_den_of_der_r = 2 * den_of_r * der_den_of_r
         numerator = der_num_of_der_r * den_of_der_r - num_of_der_r * der_den_of_der_r
-        qassert.require(
-            denominator != 0, "GFunctionWithShifts::der2Rs_derX2: denominator == 0"
-        )
+        qassert.require(denominator != 0, "GFunctionWithShifts::der2Rs_derX2: denominator == 0")
         return numerator / denominator
 
     def _der_z_der_x(self, x: float) -> float:
@@ -574,15 +543,8 @@ class GFunctionWithShifts(GFunction):
                 d += ad * self._shaped_swap_payment_times[i]
             n *= rs
             d *= rs
-            n += (
-                self._accruals[-1] * self._swap_payment_discounts[-1]
-                - self._discount_at_start
-            )
-            d += (
-                self._accruals[-1]
-                * self._swap_payment_discounts[-1]
-                * self._shaped_swap_payment_times[-1]
-            )
+            n += self._accruals[-1] * self._swap_payment_discounts[-1] - self._discount_at_start
+            d += self._accruals[-1] * self._swap_payment_discounts[-1] * self._shaped_swap_payment_times[-1]
             initial_guess = n / d
 
             self._objective.set_swap_rate_value(rs)
@@ -714,9 +676,7 @@ class HaganPricer(CmsCouponPricer, MeanRevertingPricer):
         self._payment_date = coupon.date()
         swap_index = coupon.swap_index()
         disc_ts = swap_index.discounting_term_structure()
-        self._rate_curve = (
-            disc_ts if disc_ts is not None else swap_index.forwarding_term_structure()
-        )
+        self._rate_curve = disc_ts if disc_ts is not None else swap_index.forwarding_term_structure()
 
         today = ObservableSettings().evaluation_date_or_today()
 
@@ -741,23 +701,17 @@ class HaganPricer(CmsCouponPricer, MeanRevertingPricer):
             schedule = swap.fixed_schedule()
             dc = swap_index.day_counter()
             start_time = dc.year_fraction(rate_curve.reference_date(), swap.start_date())
-            swap_first_payment_time = dc.year_fraction(
-                rate_curve.reference_date(), schedule.date(1)
-            )
+            swap_first_payment_time = dc.year_fraction(rate_curve.reference_date(), schedule.date(1))
             payment_time = dc.year_fraction(rate_curve.reference_date(), self._payment_date)
             delta = (payment_time - start_time) / (swap_first_payment_time - start_time)
 
             model = self._model_of_yield_curve
             if model == YieldCurveModel.Standard:
-                self._g_function = GFunctionFactory.new_g_function_standard(
-                    q, delta, self._swap_tenor.length
-                )
+                self._g_function = GFunctionFactory.new_g_function_standard(q, delta, self._swap_tenor.length)
             elif model == YieldCurveModel.ExactYield:
                 self._g_function = GFunctionFactory.new_g_function_exact_yield(coupon)
             elif model == YieldCurveModel.ParallelShifts:
-                self._g_function = GFunctionFactory.new_g_function_with_shifts(
-                    coupon, SimpleQuote(0.0)
-                )
+                self._g_function = GFunctionFactory.new_g_function_with_shifts(coupon, SimpleQuote(0.0))
             elif model == YieldCurveModel.NonParallelShifts:
                 self._g_function = GFunctionFactory.new_g_function_with_shifts(
                     coupon, self._mean_reversion_quote
@@ -784,9 +738,7 @@ class HaganPricer(CmsCouponPricer, MeanRevertingPricer):
         assert self._fixing_date is not None
         today = ObservableSettings().evaluation_date_or_today()
         if self._fixing_date <= today:
-            rs = max(
-                self._coupon.swap_index().fixing(self._fixing_date) - effective_cap, 0.0
-            )
+            rs = max(self._coupon.swap_index().fixing(self._fixing_date) - effective_cap, 0.0)
             return (self._gearing * rs) * (self._coupon.accrual_period() * self._discount)
         caplet_price = 0.0
         vol = self.swaption_volatility()
@@ -802,9 +754,7 @@ class HaganPricer(CmsCouponPricer, MeanRevertingPricer):
 
     def caplet_rate(self, effective_cap: float) -> float:
         assert self._coupon is not None
-        return self.caplet_price(effective_cap) / (
-            self._coupon.accrual_period() * self._discount
-        )
+        return self.caplet_price(effective_cap) / (self._coupon.accrual_period() * self._discount)
 
     def floorlet_price(self, effective_floor: float) -> float:
         # C++ parity: conundrumpricer.cpp:192-220.
@@ -812,9 +762,7 @@ class HaganPricer(CmsCouponPricer, MeanRevertingPricer):
         assert self._fixing_date is not None
         today = ObservableSettings().evaluation_date_or_today()
         if self._fixing_date <= today:
-            rs = max(
-                effective_floor - self._coupon.swap_index().fixing(self._fixing_date), 0.0
-            )
+            rs = max(effective_floor - self._coupon.swap_index().fixing(self._fixing_date), 0.0)
             return (self._gearing * rs) * (self._coupon.accrual_period() * self._discount)
         floorlet_price = 0.0
         vol = self.swaption_volatility()
@@ -830,9 +778,7 @@ class HaganPricer(CmsCouponPricer, MeanRevertingPricer):
 
     def floorlet_rate(self, effective_floor: float) -> float:
         assert self._coupon is not None
-        return self.floorlet_price(effective_floor) / (
-            self._coupon.accrual_period() * self._discount
-        )
+        return self.floorlet_price(effective_floor) / (self._coupon.accrual_period() * self._discount)
 
 
 # =====================================================================
@@ -840,7 +786,23 @@ class HaganPricer(CmsCouponPricer, MeanRevertingPricer):
 # =====================================================================
 
 
-class ConundrumIntegrand:
+class Function(ABC):
+    """Abstract ``Real operator()(Real) const`` used by the numeric integrator.
+
+    C++ parity: ``NumericHaganPricer::Function``
+    (conundrumpricer.hpp:263-267) — the base of ``ConundrumIntegrand`` and
+    the argument type of ``NumericHaganPricer::integrate``.
+
+    C++ nests it inside ``NumericHaganPricer``; this module flattens it to
+    module scope for the same reason it flattens ``ConundrumIntegrand``
+    (which C++ nests in the same class) — the module name already scopes it.
+    """
+
+    @abstractmethod
+    def __call__(self, x: float) -> float: ...
+
+
+class ConundrumIntegrand(Function):
     """Integrand for the numeric Hagan static replication.
 
     C++ parity: conundrumpricer.hpp/.cpp
@@ -1045,9 +1007,7 @@ class NumericHaganPricer(HaganPricer):
         today = ObservableSettings().evaluation_date_or_today()
         if self._fixing_date <= today:
             rs = self._coupon.swap_index().fixing(self._fixing_date)
-            return (self._gearing * rs + self._spread) * (
-                self._coupon.accrual_period() * self._discount
-            )
+            return (self._gearing * rs + self._spread) * (self._coupon.accrual_period() * self._discount)
         atm_caplet_price = self._optionlet_price(OptionType.Call, self._swap_rate_value)
         atm_floorlet_price = self._optionlet_price(OptionType.Put, self._swap_rate_value)
         return (
@@ -1066,13 +1026,9 @@ class NumericHaganPricer(HaganPricer):
         assert vol is not None
         assert self._fixing_date is not None
         assert self._swap_tenor is not None
-        variance = vol.black_variance(
-            self._fixing_date, self._swap_tenor, self._swap_rate_value
-        )
+        variance = vol.black_variance(self._fixing_date, self._swap_tenor, self._swap_rate_value)
         if vol.volatility_type() == VolatilityType.ShiftedLognormal:
-            return self._swap_rate_value * math.exp(
-                std_deviations_for_upper_limit * math.sqrt(variance)
-            )
+            return self._swap_rate_value * math.exp(std_deviations_for_upper_limit * math.sqrt(variance))
         return self._swap_rate_value + std_deviations_for_upper_limit * math.sqrt(variance)
 
     def _reset_lower_limit(self, std_deviations_for_upper_limit: float) -> float:
@@ -1081,9 +1037,7 @@ class NumericHaganPricer(HaganPricer):
         assert vol is not None
         assert self._fixing_date is not None
         assert self._swap_tenor is not None
-        variance = vol.black_variance(
-            self._fixing_date, self._swap_tenor, self._swap_rate_value
-        )
+        variance = vol.black_variance(self._fixing_date, self._swap_tenor, self._swap_rate_value)
         if vol.volatility_type() == VolatilityType.ShiftedLognormal:
             return self._lower_limit
         return self._swap_rate_value - std_deviations_for_upper_limit * math.sqrt(variance)
@@ -1154,9 +1108,7 @@ class AnalyticHaganPricer(HaganPricer):
         today = ObservableSettings().evaluation_date_or_today()
         if self._fixing_date <= today:
             rs = self._coupon.swap_index().fixing(self._fixing_date)
-            return (self._gearing * rs + self._spread) * (
-                self._coupon.accrual_period() * self._discount
-            )
+            return (self._gearing * rs + self._spread) * (self._coupon.accrual_period() * self._discount)
         vol = self.swaption_volatility()
         assert vol is not None
         assert self._g_function is not None
@@ -1175,6 +1127,4 @@ class AnalyticHaganPricer(HaganPricer):
             )
         else:
             price += first_derivative_of_g * self._annuity * variance
-        return (self._gearing * price + self._spread * self._discount) * (
-            self._coupon.accrual_period()
-        )
+        return (self._gearing * price + self._spread * self._discount) * (self._coupon.accrual_period())
