@@ -26,8 +26,12 @@ from scipy.stats import (  # pyright: ignore[reportMissingTypeStubs]
 )
 
 from pquantlib import qassert
+from pquantlib.math.distributions.cumulative_normal_distribution import (
+    CumulativeNormalDistribution,
+)
 
 _MEAN_ZERO: Final[list[float]] = [0.0, 0.0]
+_CND: Final[CumulativeNormalDistribution] = CumulativeNormalDistribution()
 
 
 class BivariateCumulativeNormalDistribution:
@@ -48,6 +52,33 @@ class BivariateCumulativeNormalDistribution:
 
     def __call__(self, a: float, b: float) -> float:
         """Return P(X <= a, Y <= b) for standard bivariate normal."""
+        # |rho| == 1 is admitted by the constructor above and is reached
+        # by real engines (both partial-time lookback engines build the
+        # degenerate copula when the lookback window coincides with the
+        # option's own window). The covariance matrix is singular there,
+        # and scipy's ``cdf`` refuses it outright with
+        # ``LinAlgError: the input matrix must be symmetric positive
+        # definite``, so the two degenerate limits are taken in closed
+        # form. This is not an approximation of C++: at |rho| == 1 the
+        # Genz series block is skipped entirely
+        # (bivariatenormaldistribution.cpp:212 ``if (fabs(correlation_) < 1)``)
+        # and ONLY the closing correction survives, which is exactly the
+        # comonotone / countermonotone limit computed below.
+        if self._rho == 1.0:
+            # cpp:242 -- BVN = cumnorm(-max(h, k)) with h = -a, k = -b.
+            return min(_CND(a), _CND(b))
+        if self._rho == -1.0:
+            # cpp:244-255. After the rho < 0 sign flip the guard is
+            # ``k > h`` i.e. ``a + b > 0``; below that the probability is
+            # exactly zero. The two branches are algebraically the same
+            # ``N(a) + N(b) - 1``; C++ picks whichever one evaluates
+            # cumnorm in its accurate lower tail, and so does this.
+            if a + b <= 0.0:
+                return 0.0
+            if a <= 0.0:
+                return _CND(a) - _CND(-b)
+            return _CND(b) - _CND(-a)
+
         # scipy stubs for ``multivariate_normal.cdf`` are incomplete in
         # current scipy-stubs: ``cov`` is declared as int rather than
         # array-like. Cast to ``Any`` and discard the unknown return type
