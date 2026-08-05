@@ -1,4 +1,4 @@
-"""SabrInterpolation — fits SABR (alpha, beta, nu, rho) to a strike-vol slice.
+"""SABRInterpolation — fits SABR (alpha, beta, nu, rho) to a strike-vol slice.
 
 # C++ parity: ql/math/interpolations/sabrinterpolation.hpp (v1.42.1).
 
@@ -37,6 +37,7 @@ Documented divergences from C++:
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import Any, Final
 
@@ -44,8 +45,17 @@ import numpy as np
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from pquantlib import qassert
-from pquantlib.math.interpolations.sabr_formula import shifted_sabr_volatility
+from pquantlib.math.array import Array
+from pquantlib.math.interpolations.sabr_formula import (
+    shifted_sabr_volatility,
+    validate_sabr_parameters,
+)
+from pquantlib.pricingengines.black_formula import black_formula_std_dev_derivative
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
+
+# C++ ``Null<Real>()`` is ``std::numeric_limits<float>::max()`` — the sentinel
+# SABRSpecs::defaultValues tests against (ql/utilities/null.hpp).
+NULL_REAL: Final[float] = float(np.finfo(np.float32).max)
 
 # Reasonable default initial guesses for unconstrained params (mirrors
 # the C++ ``SABRSpecs::defaultValues`` and Hagan's typical starting
@@ -74,7 +84,260 @@ def _default_alpha(beta: float, forward: float, shift: float) -> float:
     return _ALPHA_DEFAULT_ATM_VOL
 
 
-class SabrInterpolation:
+class SABRWrapper:
+    """Bind (t, forward, params, shift) and evaluate the SABR smile.
+
+    # C++ parity: ``class detail::SABRWrapper`` (sabrinterpolation.hpp:41-62).
+
+    The model instance the XABR machinery holds while calibrating: it
+    validates its inputs once at construction and then answers
+    ``volatility(strike, volatility_type)`` from the closed form.
+
+    Args:
+        t: option expiry, in year fractions.
+        forward: the ATM forward.
+        params: ``[alpha, beta, nu, rho]``.
+        add_params: model extras; ``add_params[0]`` is the shift when
+            present, otherwise the shift is 0.
+    """
+
+    __slots__ = ("_forward", "_params", "_shift", "_t")
+
+    def __init__(
+        self,
+        t: float,
+        forward: float,
+        params: Sequence[float],
+        add_params: Sequence[float] = (),
+    ) -> None:
+        self._t: float = t
+        self._forward: float = forward
+        self._params: list[float] = list(params)
+        self._shift: float = 0.0 if len(add_params) == 0 else float(add_params[0])
+        qassert.require(
+            self._forward + self._shift > 0.0,
+            f"forward+shift must be positive: {self._forward} with shift "
+            f"{self._shift} not allowed",
+        )
+        validate_sabr_parameters(
+            self._params[0], self._params[1], self._params[2], self._params[3]
+        )
+
+    def volatility(self, x: float, volatility_type: VolatilityType) -> float:
+        """SABR volatility at strike ``x``.
+
+        # C++ parity: sabrinterpolation.hpp:53-56.
+        """
+        return shifted_sabr_volatility(
+            x,
+            self._forward,
+            self._t,
+            self._params[0],
+            self._params[1],
+            self._params[2],
+            self._params[3],
+            self._shift,
+            volatility_type,
+        )
+
+
+class SABRSpecs:
+    """The SABR model policy the C++ XABR template is instantiated with.
+
+    # C++ parity: ``struct detail::SABRSpecs`` (sabrinterpolation.hpp:64-142).
+
+    ``XABRInterpolation<Model>`` is generic over a "specs" type supplying the
+    parameter count, the default/initial values, the residual weights and —
+    the substantive part — a bijection between the constrained parameter box
+    and unconstrained R^4, so that an *unconstrained* optimiser can be used.
+    :meth:`direct` maps R^4 into the box, :meth:`inverse` maps back.
+
+    PQuantLib's :class:`SabrInterpolation` does not currently route its
+    optimisation through this reparameterisation (it uses scipy's native box
+    constraints instead — see the module docstring), so these methods exist
+    as a faithful, cross-validated transcription rather than as the live
+    calibration path. They are what any port of the C++ optimiser arm needs.
+
+    Every method is stateless; the class is instantiable to mirror the C++
+    call sites (``Model().direct(...)``).
+    """
+
+    __slots__ = ()
+
+    def dimension(self) -> int:
+        """Number of model parameters (4). C++ ``dimension``."""
+        return 4
+
+    def eps1(self) -> float:
+        """Lower clamp used by :meth:`direct` / :meth:`inverse`. C++ ``eps1``."""
+        return 0.0000001
+
+    def eps2(self) -> float:
+        """Rho saturation level. C++ ``eps2``."""
+        return 0.9999
+
+    def dilation_factor(self) -> float:
+        """Unused in the live formulas; kept for parity. C++ ``dilationFactor``."""
+        return 0.001
+
+    def default_values(
+        self,
+        params: list[float],
+        param_is_fixed: list[bool],
+        forward: float,
+        expiry_time: float,
+        add_params: Sequence[float],
+    ) -> None:
+        """Fill any ``NULL_REAL`` slot of ``params`` in place.
+
+        # C++ parity: ``defaultValues`` (sabrinterpolation.hpp:66-81).
+
+        Order matters: beta is defaulted first because alpha's default reads
+        it. ``expiry_time`` and ``param_is_fixed`` are accepted and ignored,
+        as in C++.
+        """
+        del param_is_fixed, expiry_time
+        shift = 0.0 if len(add_params) == 0 else float(add_params[0])
+        if params[1] == NULL_REAL:
+            params[1] = 0.5
+        if params[0] == NULL_REAL:
+            # adapt alpha to beta level
+            params[0] = 0.2 * (
+                math.pow(forward + shift, 1.0 - params[1]) if params[1] < 0.9999 else 1.0
+            )
+        if params[2] == NULL_REAL:
+            params[2] = math.sqrt(0.4)
+        if params[3] == NULL_REAL:
+            params[3] = 0.0
+
+    def guess(
+        self,
+        values: Array,
+        param_is_fixed: Sequence[bool],
+        forward: float,
+        expiry_time: float,
+        r: Sequence[float],
+        add_params: Sequence[float],
+    ) -> None:
+        """Seed ``values`` in place from the low-discrepancy draws ``r``.
+
+        # C++ parity: ``guess`` (sabrinterpolation.hpp:82-99).
+
+        ``r`` is consumed by a single running index in the order
+        beta, alpha, nu, rho — *not* the parameter order — and a fixed
+        parameter consumes nothing. Getting that order wrong silently
+        reshuffles a multi-start search.
+        """
+        del expiry_time
+        shift = 0.0 if len(add_params) == 0 else float(add_params[0])
+        j = 0
+        if not param_is_fixed[1]:
+            values[1] = (1.0 - 2e-6) * r[j] + 1e-6
+            j += 1
+        if not param_is_fixed[0]:
+            values[0] = (1.0 - 2e-6) * r[j] + 1e-6  # lognormal vol guess
+            j += 1
+            # adapt this to beta level
+            if values[1] < 0.999:
+                values[0] *= math.pow(forward + shift, 1.0 - float(values[1]))
+        if not param_is_fixed[2]:
+            values[2] = 1.5 * r[j] + 1e-6
+            j += 1
+        if not param_is_fixed[3]:
+            values[3] = (2.0 * r[j] - 1.0) * (1.0 - 1e-6)
+
+    def inverse(
+        self,
+        y: Array,
+        param_is_fixed: Sequence[bool],
+        params: Sequence[float],
+        forward: float,
+    ) -> Array:
+        """Constrained ``y`` -> unconstrained ``x``.
+
+        # C++ parity: ``inverse`` (sabrinterpolation.hpp:103-114).
+
+        Inverse of :meth:`direct`. The alpha/nu branches switch to a linear
+        arm above ``25 + eps1`` so the map stays well conditioned far out;
+        beta goes through ``sqrt(-log(.))`` and rho through ``asin(./eps2)``.
+        """
+        del param_is_fixed, params, forward
+        eps1 = self.eps1()
+        x = np.zeros(4, dtype=np.float64)
+        y0 = float(y[0])
+        x[0] = math.sqrt(y0 - eps1) if y0 < 25.0 + eps1 else (y0 - eps1 + 25.0) / 10.0
+        # C++ keeps the commented-out arctan alternative for beta; the live
+        # branch is the sqrt(-log(.)) one.
+        x[1] = math.sqrt(-math.log(float(y[1])))
+        y2 = float(y[2])
+        x[2] = math.sqrt(y2 - eps1) if y2 < 25.0 + eps1 else (y2 - eps1 + 25.0) / 10.0
+        x[3] = math.asin(float(y[3]) / self.eps2())
+        return x
+
+    def direct(
+        self,
+        x: Array,
+        param_is_fixed: Sequence[bool],
+        params: Sequence[float],
+        forward: float,
+    ) -> Array:
+        """Unconstrained ``x`` -> constrained ``y``.
+
+        # C++ parity: ``direct`` (sabrinterpolation.hpp:115-130).
+
+        Note the saturating arms: beyond ``|x| = 5`` alpha and nu grow
+        linearly rather than quadratically, beta collapses to ``eps1`` once
+        ``|x1|`` reaches ``sqrt(-log(eps1))``, and rho saturates at
+        ``+/- eps2`` beyond ``|x3| = 2.5 pi``. Those are the branches a port
+        is tempted to drop as unreachable; the optimiser does reach them.
+        """
+        del param_is_fixed, params, forward
+        eps1 = self.eps1()
+        eps2 = self.eps2()
+        y = np.zeros(4, dtype=np.float64)
+        x0 = float(x[0])
+        y[0] = x0 * x0 + eps1 if abs(x0) < 5.0 else (10.0 * abs(x0) - 25.0) + eps1
+        x1 = float(x[1])
+        y[1] = math.exp(-(x1 * x1)) if abs(x1) < math.sqrt(-math.log(eps1)) else eps1
+        x2 = float(x[2])
+        y[2] = x2 * x2 + eps1 if abs(x2) < 5.0 else (10.0 * abs(x2) - 25.0) + eps1
+        x3 = float(x[3])
+        y[3] = (
+            eps2 * math.sin(x3)
+            if abs(x3) < 2.5 * math.pi
+            else eps2 * (1.0 if x3 > 0.0 else -1.0)
+        )
+        return y
+
+    def weight(
+        self,
+        strike: float,
+        forward: float,
+        std_dev: float,
+        add_params: Sequence[float],
+    ) -> float:
+        """Per-strike residual weight — the Black vega wrt std dev.
+
+        # C++ parity: ``weight`` (sabrinterpolation.hpp:131-135). Note C++
+        # indexes ``addParams[0]`` unconditionally here, so a caller that
+        # reaches ``weight`` must supply the shift.
+        """
+        return black_formula_std_dev_derivative(
+            strike, forward, std_dev, 1.0, float(add_params[0])
+        )
+
+    def instance(
+        self,
+        t: float,
+        forward: float,
+        params: Sequence[float],
+        add_params: Sequence[float],
+    ) -> SABRWrapper:
+        """Build the bound model. C++ ``instance`` / ``typedef SABRWrapper type``."""
+        return SABRWrapper(t, forward, params, add_params)
+
+
+class SABRInterpolation:
     """Fit SABR (alpha, beta, nu, rho) to a strike-vol slice.
 
     # C++ parity: ``SABRInterpolation`` (sabrinterpolation.hpp:150-194).
@@ -467,3 +730,106 @@ class SabrInterpolation:
 
     def __call__(self, strike: float) -> float:
         return self.value(strike)
+
+
+# The class carries the C++ spelling, ``SABRInterpolation``. PQuantLib
+# originally landed it as ``SabrInterpolation`` and a good deal of the library
+# imports that name, so it stays as the alias.
+SabrInterpolation = SABRInterpolation
+
+
+class SABR:
+    """SABR interpolation factory and traits.
+
+    # C++ parity: ``class SABR`` (sabrinterpolation.hpp:198-245).
+
+    Holds the fit configuration and stamps out a
+    :class:`SabrInterpolation` per strike/vol slice, so a caller can
+    configure the smile model once and hand the factory to something that
+    interpolates many slices. ``global`` is the C++ static traits flag that
+    tells the interpolated-curve machinery this interpolation is fitted over
+    all points at once rather than piecewise.
+
+    Note the C++ default for ``vega_weighted`` differs between ``SABR``
+    (``false``) and ``SABRInterpolation`` (``true``); the factory default is
+    reproduced here.
+    """
+
+    #: C++ ``static const bool global = true``.
+    global_: Final[bool] = True
+
+    def __init__(
+        self,
+        t: float,
+        forward: float,
+        alpha: float,
+        beta: float,
+        nu: float,
+        rho: float,
+        alpha_is_fixed: bool,
+        beta_is_fixed: bool,
+        nu_is_fixed: bool,
+        rho_is_fixed: bool,
+        vega_weighted: bool = False,
+        end_criteria: Any = None,
+        optimization_method: Any = None,
+        error_accept: float = 0.0020,
+        use_max_error: bool = False,
+        max_guesses: int = 50,
+        shift: float = 0.0,
+    ) -> None:
+        self._t: float = t
+        self._forward: float = forward
+        self._alpha: float = alpha
+        self._beta: float = beta
+        self._nu: float = nu
+        self._rho: float = rho
+        self._alpha_is_fixed: bool = alpha_is_fixed
+        self._beta_is_fixed: bool = beta_is_fixed
+        self._nu_is_fixed: bool = nu_is_fixed
+        self._rho_is_fixed: bool = rho_is_fixed
+        self._vega_weighted: bool = vega_weighted
+        # C++ takes ext::shared_ptr<EndCriteria> / <OptimizationMethod>
+        # pass-throughs; PQuantLib's fitter is fixed at the scipy TRF arm, so
+        # they are accepted and unused (same treatment as AbcdInterpolation).
+        self._end_criteria: Any = end_criteria
+        self._optimization_method: Any = optimization_method
+        self._error_accept: float = error_accept
+        self._use_max_error: bool = use_max_error
+        self._max_guesses: int = max_guesses
+        self._shift: float = shift
+
+    def interpolate(
+        self, strikes: Sequence[float], volatilities: Sequence[float]
+    ) -> SabrInterpolation:
+        """Fit a :class:`SabrInterpolation` to one strike/vol slice.
+
+        # C++ parity: ``SABR::interpolate`` (sabrinterpolation.hpp:222-230).
+        """
+        return SabrInterpolation(
+            strikes,
+            volatilities,
+            self._t,
+            self._forward,
+            alpha=self._alpha,
+            beta=self._beta,
+            nu=self._nu,
+            rho=self._rho,
+            alpha_is_fixed=self._alpha_is_fixed,
+            beta_is_fixed=self._beta_is_fixed,
+            nu_is_fixed=self._nu_is_fixed,
+            rho_is_fixed=self._rho_is_fixed,
+            vega_weighted=self._vega_weighted,
+            shift=self._shift,
+            max_guesses=self._max_guesses,
+        )
+
+
+__all__ = [
+    "NULL_REAL",
+    "SABR",
+    "SABRInterpolation",
+    "SABRSpecs",
+    "SABRWrapper",
+    "SabrInterpolation",
+]

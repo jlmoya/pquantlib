@@ -8,12 +8,13 @@ that to a single abstract base ``Constraint`` whose subclasses
 override ``test``, ``upper_bound``, ``lower_bound`` directly — there
 is no need for a separate Impl layer.
 
-L1-D ported the simple constraints used by the optimization
-scaffolding: ``NoConstraint``, ``PositiveConstraint``,
-``BoundaryConstraint``. ``NonhomogeneousBoundaryConstraint`` follows
-here — it is the per-coordinate box that ``LBFGSB`` reads its bounds
-from. ``CompositeConstraint`` is still deferred to a later cluster
-that needs it.
+The full v1.43 hierarchy is present: ``NoConstraint``,
+``PositiveConstraint``, ``BoundaryConstraint``,
+``NonhomogeneousBoundaryConstraint`` (the per-coordinate box ``LBFGSB``
+reads its bounds from) and ``CompositeConstraint`` (the conjunction of
+two constraints, with element-wise tightest bounds). ``Constraint.update``
+— the halving loop ``Simplex`` and ``SimulatedAnnealing`` build their
+initial simplex with — is here too.
 """
 
 from __future__ import annotations
@@ -76,6 +77,35 @@ class Constraint(ABC):
         )
         return result
 
+    def update(
+        self,
+        params: npt.NDArray[np.float64],
+        direction: npt.NDArray[np.float64],
+        beta: float,
+    ) -> float:
+        """Step ``params`` along ``direction``, halving ``beta`` until feasible.
+
+        # C++ parity: constraint.cpp:27-43 — ``Constraint::update``.
+
+        ``params`` is mutated in place (the C++ signature takes
+        ``Array&``); the accepted step length is returned. The halving
+        loop gives up after 200 halvings, matching the C++ ``icount > 200``
+        guard, and raises rather than returning an infeasible point.
+        """
+        diff = beta
+        new_params = params + diff * direction
+        valid = self.test(new_params)
+        icount = 0
+        while not valid:
+            if icount > 200:
+                qassert.fail("can't update parameter vector")
+            diff *= 0.5
+            icount += 1
+            new_params = params + diff * direction
+            valid = self.test(new_params)
+        params += diff * direction
+        return diff
+
 
 class NoConstraint(Constraint):
     """Unconstrained — always satisfied.
@@ -124,6 +154,38 @@ class BoundaryConstraint(Constraint):
 
     def lower_bound(self, params: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         return np.full(params.shape, self._low, dtype=np.float64)
+
+
+class CompositeConstraint(Constraint):
+    """Conjunction of two constraints.
+
+    # C++ parity: ``class CompositeConstraint`` in
+    # ql/math/optimization/constraint.hpp:140-174 (v1.43).
+
+    ``test`` is the logical AND of both sub-tests; the bounds are the
+    tightest of the two (element-wise ``min`` of the upper bounds,
+    element-wise ``max`` of the lower bounds). Composites nest, so
+    ``CompositeConstraint(CompositeConstraint(a, b), c)`` expresses a
+    three-way conjunction.
+    """
+
+    __slots__ = ("_c1", "_c2")
+
+    def __init__(self, c1: Constraint, c2: Constraint) -> None:
+        self._c1: Constraint = c1
+        self._c2: Constraint = c2
+
+    def test(self, params: npt.NDArray[np.float64]) -> bool:
+        # C++ parity: constraint.hpp:145-147 — short-circuiting ``&&``.
+        return self._c1.test(params) and self._c2.test(params)
+
+    def upper_bound(self, params: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        # C++ parity: constraint.hpp:148-156 — element-wise minimum.
+        return np.minimum(self._c1.upper_bound(params), self._c2.upper_bound(params))
+
+    def lower_bound(self, params: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        # C++ parity: constraint.hpp:157-165 — element-wise maximum.
+        return np.maximum(self._c1.lower_bound(params), self._c2.lower_bound(params))
 
 
 class NonhomogeneousBoundaryConstraint(Constraint):

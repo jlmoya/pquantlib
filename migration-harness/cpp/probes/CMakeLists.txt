@@ -881,3 +881,20 @@ target_link_libraries(v143_indexes_inflation_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/indexes/equity.json.
 add_executable(v143_indexes_equity_probe v143_indexes_equity/probe.cpp)
 target_link_libraries(v143_indexes_equity_probe PRIVATE ${QUANTLIB_LIBRARY})
+# === v1.43 math-subsystem coverage closure =================================
+# One probe per math area. Each emits references/v143/math/<area>.json — note
+# that generate-references.sh turns every underscore in the target name into a
+# slash, so the two interpolation areas land at v143/math/interp/{cubic,kernel}.
+foreach(area
+        distributions
+        integrals
+        interp_cubic
+        interp_kernel
+        matrixutilities
+        optimization
+        randomnumbers
+        statistics
+        tail)
+    add_executable(v143_math_${area}_probe v143_math_${area}/probe.cpp)
+    target_link_libraries(v143_math_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
+endforeach()

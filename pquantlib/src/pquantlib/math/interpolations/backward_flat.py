@@ -13,6 +13,8 @@ are 0 (piecewise constant). ``primitive(x) = primitive_[i] + dx*ys[i+1]``.
 
 from __future__ import annotations
 
+from typing import final
+
 import numpy as np
 
 from pquantlib.math.array import Array
@@ -63,3 +65,29 @@ class BackwardFlatInterpolation(Interpolation):
         # Piecewise-constant — derivative is zero everywhere (C++ parity).
         del x
         return 0.0
+
+
+@final
+class BackwardFlat:
+    """Backward-flat interpolation factory and traits.
+
+    # C++ parity: ``class BackwardFlat`` (backwardflatinterpolation.hpp:57-66).
+
+    Note ``requiredPoints == 1``: a single-knot backward-flat curve is legal
+    and constant.
+    """
+
+    global_ = False  # C++ ``static const bool global = false``.
+    required_points = 1  # C++ ``static const Size requiredPoints = 1``.
+
+    def interpolate(
+        self, x_seq: Array, y_seq: Array, update: bool = True
+    ) -> BackwardFlatInterpolation:
+        """Build a :class:`BackwardFlatInterpolation` over ``(x, y)``."""
+        f = BackwardFlatInterpolation(x_seq, y_seq)
+        if update:
+            f.update()
+        return f
+
+
+__all__ = ["BackwardFlat", "BackwardFlatInterpolation"]

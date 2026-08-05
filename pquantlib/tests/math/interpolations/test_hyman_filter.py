@@ -3,6 +3,12 @@
 Reference: ``migration-harness/references/cluster/l10c.json`` —
 ``hyman_filtered_cubic`` section. Knots y = (0, 0.5, 1.5, 3, 3.2) at
 x = 0..4 — strictly monotone-increasing input.
+
+A second, independent pin on the same algorithm: the ``v143/math/interp/cubic``
+probe covers it as ``Spline.Natural.monotonic`` and
+``MonotonicCubicNaturalSpline`` over two curves in
+``test_cubic_interpolation.py``, including the per-interval coefficients and
+the monotonicity-adjustment flags.
 """
 
 from __future__ import annotations
@@ -122,7 +128,8 @@ def test_monotonic_cubic_natural_spline_is_this_algorithm() -> None:
     """``MonotonicCubicNaturalSpline`` must be exactly this interpolant.
 
     C++'s ``MonotonicCubicNaturalSpline`` is ``CubicInterpolation(Spline,
-    monotonic=true, natural BC)`` — the very thing this module ports — so
+    monotonic=true, natural BC)``, and so is ``HymanFilteredCubic`` — both
+    are now that one preset of the transcribed ``CubicInterpolation``, so
     the two classes must agree bit for bit, not merely closely. This used
     to be a *divergence* test: the public class delegated to scipy's
     Fritsch-Carlson PCHIP, which is a different function off the pillars

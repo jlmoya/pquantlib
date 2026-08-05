@@ -138,10 +138,16 @@ def test_ziggurat_statistical_moments(cpp_ref: dict[str, Any]) -> None:
     tolerance.tight(var, float(zr["stat_var"]), reason="vs C++ probe var (EXACT stream)")
 
 
-def test_ziggurat_rejects_zero_seed() -> None:
-    """Seed 0 is rejected (C++ SeedGenerator clock fallback not ported)."""
-    with pytest.raises(ValueError, match="nonzero seed"):
-        ZigguratRng(0)
+def test_zero_seed_is_clock_derived() -> None:
+    """Seed 0 defers to ``SeedGenerator``, as in C++.
+
+    This test previously asserted that seed 0 was *rejected*, a documented
+    divergence taken while ``SeedGenerator`` was unported. It is ported now
+    (ql/math/randomnumbers/seedgenerator.cpp), and every QuantLib RNG reads
+    ``seed != 0 ? seed : SeedGenerator::instance().get()``. The generator is
+    clock-seeded, so two instances disagree with probability 1 - 2^-32.
+    """
+    assert ZigguratRng(0).next().value != ZigguratRng(0).next().value
 
 
 # --------------------------------------------------------------------------

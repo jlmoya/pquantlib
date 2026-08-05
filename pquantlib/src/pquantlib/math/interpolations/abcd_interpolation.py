@@ -74,6 +74,10 @@ _B_DEFAULT: Final[float] = 0.17
 _C_DEFAULT: Final[float] = 0.54
 _D_DEFAULT: Final[float] = 0.17
 
+# C++ ``Null<Real>()`` is ``std::numeric_limits<float>::max()``
+# (ql/utilities/null.hpp) — the sentinel ``AbcdCoeffHolder`` tests against.
+NULL_REAL: Final[float] = float(np.finfo(np.float32).max)
+
 
 def abcd_value(t: float, a: float, b: float, c: float, d: float) -> float:
     """Evaluate the abcd functional form at ``t``.
@@ -102,6 +106,91 @@ def validate_abcd(a: float, b: float, c: float, d: float) -> None:
         a + d >= 0.0,
         f"a+d must be non-negative: a={a}, d={d}, a+d={a + d} not allowed",
     )
+
+
+class AbcdCoeffHolder:
+    """The abcd coefficients, their fixed-ness, and the fit diagnostics.
+
+    # C++ parity: ``class detail::AbcdCoeffHolder``
+    # (abcdinterpolation.hpp:42-75).
+
+    In C++ this sits in the ``Interpolation::Impl`` hierarchy purely so that
+    ``AbcdInterpolation`` can ``static_cast`` its type-erased impl back to
+    something with ``a_``/``b_``/``c_``/``d_``/``k_``/``error_`` on it.
+    Python needs no such indirection, so this is a plain mutable holder —
+    but the constructor logic is real and is reproduced exactly:
+
+    - A parameter equal to :data:`NULL_REAL` is replaced by its hard-coded
+      default (``-0.06, 0.17, 0.54, 0.17``) **and** its ``*_is_fixed`` flag
+      is left at ``False``, whatever the caller passed. Only a non-Null
+      parameter gets to be pinned. That asymmetry is easy to miss and is
+      pinned by the reference probe.
+    - ``AbcdMathFunction::validate`` runs on the **original arguments**, not
+      on the defaulted ones — so a Null ``a`` is validated as ``+3.4e38``,
+      which sails through ``a + d >= 0``. Reproduced, quirk and all.
+    """
+
+    __slots__ = (
+        "a",
+        "a_is_fixed",
+        "abcd_end_criteria",
+        "b",
+        "b_is_fixed",
+        "c",
+        "c_is_fixed",
+        "d",
+        "d_is_fixed",
+        "error",
+        "k",
+        "max_error",
+    )
+
+    def __init__(
+        self,
+        a: float,
+        b: float,
+        c: float,
+        d: float,
+        a_is_fixed: bool,
+        b_is_fixed: bool,
+        c_is_fixed: bool,
+        d_is_fixed: bool,
+    ) -> None:
+        # C++ parity: abcdinterpolation.hpp:52-67.
+        self.a: float = a
+        self.b: float = b
+        self.c: float = c
+        self.d: float = d
+        self.a_is_fixed: bool = False
+        self.b_is_fixed: bool = False
+        self.c_is_fixed: bool = False
+        self.d_is_fixed: bool = False
+        self.k: list[float] = []
+        self.error: float | None = None
+        self.max_error: float | None = None
+        #: C++ ``EndCriteria::Type abcdEndCriteria_ = EndCriteria::None``
+        #: (enum value 0).
+        self.abcd_end_criteria: int = 0
+
+        if self.a != NULL_REAL:
+            self.a_is_fixed = a_is_fixed
+        else:
+            self.a = _A_DEFAULT
+        if self.b != NULL_REAL:
+            self.b_is_fixed = b_is_fixed
+        else:
+            self.b = _B_DEFAULT
+        if self.c != NULL_REAL:
+            self.c_is_fixed = c_is_fixed
+        else:
+            self.c = _C_DEFAULT
+        if self.d != NULL_REAL:
+            self.d_is_fixed = d_is_fixed
+        else:
+            self.d = _D_DEFAULT
+
+        # C++ validates the INCOMING a, b, c, d, not the defaulted members.
+        validate_abcd(a, b, c, d)
 
 
 class AbcdInterpolation(Interpolation):
@@ -155,16 +244,23 @@ class AbcdInterpolation(Interpolation):
             bool(np.all(self._xs >= 0.0)),
             "AbcdInterpolation requires non-negative times",
         )
-        # C++ defers validation to ``AbcdMathFunction::validate`` after
-        # ``compute()``; we validate the initial guess too (the solver
-        # will keep the iterate feasible via the box bounds).
-        validate_abcd(a, b, c, d)
-        self._initial: list[float] = [a, b, c, d]
+        # C++ parity: AbcdInterpolationImpl derives from AbcdCoeffHolder, so
+        # the Null-defaulting rule AND ``AbcdMathFunction::validate`` run in
+        # the coefficient holder's constructor before anything else.
+        self._coeffs: AbcdCoeffHolder = AbcdCoeffHolder(
+            a, b, c, d, a_is_fixed, b_is_fixed, c_is_fixed, d_is_fixed
+        )
+        self._initial: list[float] = [
+            self._coeffs.a,
+            self._coeffs.b,
+            self._coeffs.c,
+            self._coeffs.d,
+        ]
         self._is_fixed: list[bool] = [
-            a_is_fixed,
-            b_is_fixed,
-            c_is_fixed,
-            d_is_fixed,
+            self._coeffs.a_is_fixed,
+            self._coeffs.b_is_fixed,
+            self._coeffs.c_is_fixed,
+            self._coeffs.d_is_fixed,
         ]
         self._vega_weighted: bool = vega_weighted
         # Read max iterations from end_criteria if present (C++ allows
@@ -177,10 +273,10 @@ class AbcdInterpolation(Interpolation):
         # ``optimization_method`` is accepted but ignored — see docstring.
         _ = optimization_method
         # Fitted state — populated by ``update``.
-        self._a: float = a
-        self._b: float = b
-        self._c: float = c
-        self._d: float = d
+        self._a: float = self._coeffs.a
+        self._b: float = self._coeffs.b
+        self._c: float = self._coeffs.c
+        self._d: float = self._coeffs.d
         self._rms_error: float = 0.0
         self._max_error: float = 0.0
         self._converged: bool = False
@@ -320,7 +416,93 @@ class AbcdInterpolation(Interpolation):
     def converged(self) -> bool:
         return self._converged
 
+    @property
+    def coeffs(self) -> AbcdCoeffHolder:
+        """The coefficient holder built from the constructor arguments.
+
+        # C++ parity: ``AbcdInterpolation::coeffs()`` (abcdinterpolation.hpp:205-208),
+        # which is the ``static_cast`` of the impl back to
+        # ``detail::AbcdCoeffHolder``.
+        """
+        return self._coeffs
+
     def _value(self, x: float) -> float:
         return abcd_value(x, self._a, self._b, self._c, self._d)
+
+
+class Abcd:
+    """Abcd interpolation factory and traits.
+
+    # C++ parity: ``class Abcd`` (abcdinterpolation.hpp:213-247).
+
+    Holds the fit configuration and stamps out an :class:`AbcdInterpolation`
+    per (times, vols) curve. ``global_`` / ``required_points`` are the C++
+    static traits the interpolated-curve machinery reads.
+    """
+
+    #: C++ ``static const bool global = true``.
+    global_: Final[bool] = True
+    #: C++ ``static const Size requiredPoints = 2``.
+    required_points: Final[int] = 2
+
+    def __init__(
+        self,
+        a: float,
+        b: float,
+        c: float,
+        d: float,
+        a_is_fixed: bool,
+        b_is_fixed: bool,
+        c_is_fixed: bool,
+        d_is_fixed: bool,
+        vega_weighted: bool = False,
+        end_criteria: Any = None,
+        optimization_method: Any = None,
+    ) -> None:
+        self._a: float = a
+        self._b: float = b
+        self._c: float = c
+        self._d: float = d
+        self._a_is_fixed: bool = a_is_fixed
+        self._b_is_fixed: bool = b_is_fixed
+        self._c_is_fixed: bool = c_is_fixed
+        self._d_is_fixed: bool = d_is_fixed
+        self._vega_weighted: bool = vega_weighted
+        self._end_criteria: Any = end_criteria
+        self._optimization_method: Any = optimization_method
+
+    def interpolate(self, x_seq: Array, y_seq: Array) -> AbcdInterpolation:
+        """Fit an :class:`AbcdInterpolation` to ``(times, volatilities)``.
+
+        # C++ parity: ``Abcd::interpolate`` (abcdinterpolation.hpp:229-238).
+        # The C++ ``update`` flag (defer the first fit) has no counterpart
+        # here: PQuantLib's ``AbcdInterpolation`` always fits in its
+        # constructor.
+        """
+        return AbcdInterpolation(
+            x_seq,
+            y_seq,
+            a=self._a,
+            b=self._b,
+            c=self._c,
+            d=self._d,
+            a_is_fixed=self._a_is_fixed,
+            b_is_fixed=self._b_is_fixed,
+            c_is_fixed=self._c_is_fixed,
+            d_is_fixed=self._d_is_fixed,
+            vega_weighted=self._vega_weighted,
+            end_criteria=self._end_criteria,
+            optimization_method=self._optimization_method,
+        )
+
+
+__all__ = [
+    "NULL_REAL",
+    "Abcd",
+    "AbcdCoeffHolder",
+    "AbcdInterpolation",
+    "abcd_value",
+    "validate_abcd",
+]
 
 

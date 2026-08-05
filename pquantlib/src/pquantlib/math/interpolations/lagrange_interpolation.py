@@ -1,6 +1,6 @@
 """LagrangeInterpolation — barycentric Lagrange interpolation.
 
-# C++ parity: ql/math/interpolations/lagrangeinterpolation.hpp (v1.42.1).
+# C++ parity: ql/math/interpolations/lagrangeinterpolation.hpp (v1.43).
 
 Berrut-Trefethen barycentric Lagrange interpolation (SIAM Review 46(3),
 2004, https://people.maths.ox.ac.uk/trefethen/barycentric.pdf):
@@ -28,6 +28,7 @@ overload backed by ``UpdatedYInterpolation::updatedValue``).
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from typing import final
 
 import numpy as np
@@ -39,12 +40,35 @@ from pquantlib.math.constants import QL_EPSILON
 from pquantlib.math.interpolations.interpolation import Interpolation
 
 
+class UpdatedYInterpolation(ABC):
+    """Interpolation that can be re-evaluated against a fresh y vector.
+
+    # C++ parity: ``class detail::UpdatedYInterpolation``
+    # (lagrangeinterpolation.hpp:37-40).
+
+    C++ declares this as an ``Interpolation::Impl`` subclass carrying one
+    extra pure virtual, ``updatedValue(const Array&, Real)``, purely so that
+    ``LagrangeInterpolation::value(const Array&, Real)`` has something to
+    ``static_cast`` its type-erased impl to. The contract itself is real and
+    is what the CLV models consume: the expensive part of a barycentric
+    Lagrange fit is the weight vector, which depends only on the abscissae,
+    so a new set of ordinates can be interpolated without refitting.
+    """
+
+    __slots__ = ()
+
+    @abstractmethod
+    def updated_value(self, y: Array, x: float) -> float:
+        """Interpolate at ``x`` against the ordinates ``y``. C++ ``updatedValue``."""
+
+
 @final
-class LagrangeInterpolation(Interpolation):
+class LagrangeInterpolation(Interpolation, UpdatedYInterpolation):
     """Barycentric Lagrange interpolation through ``(x, y)``.
 
     # C++ parity: ``class LagrangeInterpolation : public Interpolation``
-    # (Impl at lagrangeinterpolation.hpp:42-134).
+    # (Impl at lagrangeinterpolation.hpp:42-134), which implements
+    # ``detail::UpdatedYInterpolation``.
     """
 
     __slots__ = ("_lambda", "_n")
@@ -78,7 +102,7 @@ class LagrangeInterpolation(Interpolation):
         # C++ parity: LagrangeInterpolationImpl::value -> _value(yBegin_, x).
         return self._eval(self._ys, x)
 
-    def value_with(self, y: Array, x: float) -> float:
+    def updated_value(self, y: Array, x: float) -> float:
         """Interpolate at ``x`` using a fresh y-vector (cached weights).
 
         # C++ parity: ``LagrangeInterpolation::value(const Array&, Real)``
@@ -92,6 +116,10 @@ class LagrangeInterpolation(Interpolation):
             f"y vector length {ys.shape[0]} != node count {self._n}",
         )
         return self._eval(ys, x)
+
+    def value_with(self, y: Array, x: float) -> float:
+        """Alias for :meth:`updated_value`, kept for existing callers."""
+        return self.updated_value(y, x)
 
     def _eval(self, ys: Array, x: float) -> float:
         # C++ parity: LagrangeInterpolationImpl::_value (lines 113-130).
@@ -147,4 +175,4 @@ class LagrangeInterpolation(Interpolation):
         return (numer_d * denom - numer * denom_d) / (denom * denom)
 
 
-__all__ = ["LagrangeInterpolation"]
+__all__ = ["LagrangeInterpolation", "UpdatedYInterpolation"]

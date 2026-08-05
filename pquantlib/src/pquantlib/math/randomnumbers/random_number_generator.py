@@ -25,6 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from pquantlib.math.array import Array
+
 
 @dataclass(frozen=True, slots=True)
 class Sample:
@@ -62,3 +64,65 @@ class RandomNumberGenerator(Protocol):
     def dimension(self) -> int:
         """Default scalar dimension (1)."""
         return 1
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class SequenceSample:
+    """One draw from a sequence generator.
+
+    # C++ parity: ``Sample<std::vector<Real>>``
+    # (ql/methods/montecarlo/sample.hpp).
+
+    ``eq=False`` because ``value`` is a numpy array: the generated
+    ``__eq__`` would return an array and blow up in a boolean context.
+    """
+
+    value: Array
+    weight: float = 1.0
+
+
+#: What a uniform sequence generator's ``next_sequence`` may return.
+#:
+#: The pure low-discrepancy generators in this package (``SobolRsg``,
+#: ``Burley2020SobolRsg``) return a bare ``Array``: their C++ counterparts
+#: always set ``weight = 1``, and the repo-wide convention is that a vector of
+#: reals is an ``Array``. The weight-carrying generators
+#: (``RandomSequenceGenerator``, ``InverseCumulativeRsg``, ``RandomizedLDS``)
+#: return a ``SequenceSample``. Consumers call :func:`sequence_parts` rather
+#: than caring which.
+type SequenceValue = SequenceSample | Array
+
+
+def sequence_parts(sample: SequenceValue) -> tuple[Array, float]:
+    """Split either sequence representation into ``(values, weight)``."""
+    if isinstance(sample, SequenceSample):
+        return sample.value, sample.weight
+    return sample, 1.0
+
+
+@runtime_checkable
+class UniformSequenceGenerator(Protocol):
+    """Structural type for multi-dimensional (sequence) generators.
+
+    # C++ parity: the duck-typed ``USG`` template parameter of
+    # ``InverseCumulativeRsg`` and the ``LDS``/``PRS`` parameters of
+    # ``RandomizedLDS``:
+    #     USG::sample_type USG::nextSequence() const;
+    #     Size USG::dimension() const;
+    """
+
+    def next_sequence(self) -> SequenceValue: ...
+
+    def dimension(self) -> int: ...
+
+
+@runtime_checkable
+class InverseCumulative(Protocol):
+    """Structural type for an inverse cumulative distribution function.
+
+    # C++ parity: the duck-typed ``IC`` template parameter of
+    # ``InverseCumulativeRng`` / ``InverseCumulativeRsg``:
+    #     IC::IC(); Real IC::operator()(Real) const;
+    """
+
+    def __call__(self, x: float, /) -> float: ...

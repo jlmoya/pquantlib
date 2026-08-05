@@ -42,7 +42,14 @@ def test_gamma1_atm_matches_cpp(cpp: dict[str, Any]) -> None:
     """gamma = 1 ATM vol equals ``alpha * F^(beta-1)`` (TIGHT)."""
     block = cpp["zabr_formula"]
     actual = zabr_volatility(
-        FORWARD, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 1.0,
+        FORWARD,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        1.0,
         mode=ZabrEvaluation.ShortMaturityLognormal,
     )
     tolerance.tight(actual, float(block["gamma1_vol_atm"]))
@@ -52,11 +59,25 @@ def test_gamma1_otm_strikes_match_cpp(cpp: dict[str, Any]) -> None:
     """gamma = 1 OTM (strike != forward) vol matches C++."""
     block = cpp["zabr_formula"]
     actual_4 = zabr_volatility(
-        0.04, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 1.0,
+        0.04,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        1.0,
         mode=ZabrEvaluation.ShortMaturityLognormal,
     )
     actual_6 = zabr_volatility(
-        0.06, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 1.0,
+        0.06,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        1.0,
         mode=ZabrEvaluation.ShortMaturityLognormal,
     )
     tolerance.tight(actual_4, float(block["gamma1_vol_strike_4pct"]))
@@ -67,45 +88,74 @@ def test_gamma75_atm_matches_cpp(cpp: dict[str, Any]) -> None:
     """gamma = 0.75 ATM vol matches C++ (closed-form at ATM)."""
     block = cpp["zabr_formula"]
     actual = zabr_volatility(
-        FORWARD, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 0.75,
+        FORWARD,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        0.75,
         mode=ZabrEvaluation.ShortMaturityLognormal,
     )
     tolerance.tight(actual, float(block["gamma75_vol_atm"]))
 
 
 def test_gamma75_otm_strikes_match_cpp(cpp: dict[str, Any]) -> None:
-    """gamma = 0.75 OTM vol matches C++ (RK45 integration).
+    """gamma = 0.75 OTM vol matches C++ bit for bit.
 
-    TIGHT — both Python (scipy.solve_ivp RK45) and C++
-    (AdaptiveRungeKutta) implement the same Andreasen-Huge ODE with
-    matching tolerances (rtol=1e-5, atol=1e-8).
+    EXACT. The Andreasen-Huge x(K) ODE is integrated by the ported
+    ``AdaptiveRungeKutta(1e-8, 1e-5, 0.0)`` — the same Cash-Karp pair, the
+    same step controller and the same parameters as C++, so the whole
+    trajectory coincides.
+
+    This assertion used to be ``custom(abs_tol=1e-5, rel_tol=1e-5)``, excused
+    as "RK45 rtol/atol drift between scipy.solve_ivp and C++
+    AdaptiveRungeKutta". The drift was real (8.1e-8 relative at the 4%
+    strike) but the excuse was not: scipy's RK45 is Dormand-Prince, C++'s is
+    Cash-Karp, and the 1e-5 that was being passed as scipy's ``rtol`` is the
+    C++ integrator's *initial step size*. Porting the integrator removed the
+    difference entirely.
     """
     block = cpp["zabr_formula"]
     actual_4 = zabr_volatility(
-        0.04, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 0.75,
+        0.04,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        0.75,
         mode=ZabrEvaluation.ShortMaturityLognormal,
     )
     actual_6 = zabr_volatility(
-        0.06, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 0.75,
+        0.06,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        0.75,
         mode=ZabrEvaluation.ShortMaturityLognormal,
     )
-    tolerance.custom(
-        actual_4, float(block["gamma75_vol_strike_4pct"]),
-        abs_tol=1.0e-5, rel_tol=1.0e-5,
-        reason="RK45 rtol/atol drift between scipy.solve_ivp and C++ AdaptiveRungeKutta",
-    )
-    tolerance.custom(
-        actual_6, float(block["gamma75_vol_strike_6pct"]),
-        abs_tol=1.0e-5, rel_tol=1.0e-5,
-        reason="RK45 rtol/atol drift between scipy.solve_ivp and C++ AdaptiveRungeKutta",
-    )
+    tolerance.exact(actual_4, float(block["gamma75_vol_strike_4pct"]))
+    tolerance.exact(actual_6, float(block["gamma75_vol_strike_6pct"]))
 
 
 def test_gamma1_normal_atm_matches_cpp(cpp: dict[str, Any]) -> None:
     """Normal arm: gamma=1 ATM equals ``alpha * F^beta``."""
     block = cpp["zabr_formula"]
     actual = zabr_volatility(
-        FORWARD, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 1.0,
+        FORWARD,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        1.0,
         mode=ZabrEvaluation.ShortMaturityNormal,
     )
     tolerance.tight(actual, float(block["gamma1_normal_vol_atm"]))
@@ -115,7 +165,14 @@ def test_gamma75_normal_atm_matches_cpp(cpp: dict[str, Any]) -> None:
     """Normal arm: gamma=0.75 ATM also closed-form."""
     block = cpp["zabr_formula"]
     actual = zabr_volatility(
-        FORWARD, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 0.75,
+        FORWARD,
+        FORWARD,
+        EXPIRY,
+        ALPHA,
+        BETA,
+        NU,
+        RHO,
+        0.75,
         mode=ZabrEvaluation.ShortMaturityNormal,
     )
     tolerance.tight(actual, float(block["gamma75_normal_vol_atm"]))
@@ -128,7 +185,14 @@ def test_atm_lognormal_closed_form() -> None:
         for nu in (0.1, 0.4, 0.6):
             for rho in (-0.3, 0.0, 0.5):
                 actual = zabr_volatility(
-                    FORWARD, FORWARD, EXPIRY, ALPHA, BETA, nu, rho, gamma,
+                    FORWARD,
+                    FORWARD,
+                    EXPIRY,
+                    ALPHA,
+                    BETA,
+                    nu,
+                    rho,
+                    gamma,
                     mode=ZabrEvaluation.ShortMaturityLognormal,
                 )
                 tolerance.tight(actual, expected)
@@ -139,7 +203,14 @@ def test_atm_normal_closed_form() -> None:
     expected = ALPHA * (FORWARD**BETA)
     for gamma in (0.5, 0.75, 1.0, 1.25):
         actual = zabr_volatility(
-            FORWARD, FORWARD, EXPIRY, ALPHA, BETA, 0.3, 0.0, gamma,
+            FORWARD,
+            FORWARD,
+            EXPIRY,
+            ALPHA,
+            BETA,
+            0.3,
+            0.0,
+            gamma,
             mode=ZabrEvaluation.ShortMaturityNormal,
         )
         tolerance.tight(actual, expected)
@@ -154,33 +225,73 @@ def test_fd_modes_raise() -> None:
     ):
         with pytest.raises(LibraryException, match="not implemented"):
             zabr_volatility(
-                0.05, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 1.0, mode=mode,
+                0.05,
+                FORWARD,
+                EXPIRY,
+                ALPHA,
+                BETA,
+                NU,
+                RHO,
+                1.0,
+                mode=mode,
             )
 
 
 def test_negative_gamma_raises() -> None:
     with pytest.raises(LibraryException, match="gamma"):
         zabr_volatility(
-            0.05, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, -0.1,
+            0.05,
+            FORWARD,
+            EXPIRY,
+            ALPHA,
+            BETA,
+            NU,
+            RHO,
+            -0.1,
         )
 
 
 def test_zero_expiry_raises() -> None:
     with pytest.raises(LibraryException, match="expiry"):
         zabr_volatility(
-            0.05, FORWARD, 0.0, ALPHA, BETA, NU, RHO, 1.0,
+            0.05,
+            FORWARD,
+            0.0,
+            ALPHA,
+            BETA,
+            NU,
+            RHO,
+            1.0,
         )
 
 
 def test_smile_shape_is_smooth() -> None:
     """ZABR smile is C^infinity on its support — sample fine grid."""
     strikes: list[float] = [
-        0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05,
-        0.055, 0.06, 0.065, 0.07, 0.075, 0.08,
+        0.02,
+        0.025,
+        0.03,
+        0.035,
+        0.04,
+        0.045,
+        0.05,
+        0.055,
+        0.06,
+        0.065,
+        0.07,
+        0.075,
+        0.08,
     ]
     vols: list[float] = [
         zabr_volatility(
-            strike, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 0.75,
+            strike,
+            FORWARD,
+            EXPIRY,
+            ALPHA,
+            BETA,
+            NU,
+            RHO,
+            0.75,
             mode=ZabrEvaluation.ShortMaturityLognormal,
         )
         for strike in strikes

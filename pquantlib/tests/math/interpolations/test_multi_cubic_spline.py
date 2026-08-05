@@ -1,8 +1,17 @@
-"""Cross-validate MultiCubicSpline against the L10-C C++ probe.
+"""Cross-validate MultiCubicSpline against the C++ probes.
 
-Reference: ``migration-harness/references/cluster/l10c.json`` —
-``multi_cubic_spline`` section. 4x4 grid of ``z = sin(x) + cos(y)``
-on ``x, y in {0, 1, 2, 3}``.
+References:
+
+* ``migration-harness/references/cluster/l10c.json`` — ``multi_cubic_spline``
+  section: a uniform 4x4 grid of ``z = sin(x) + cos(y)``.
+* ``migration-harness/references/v143/math/interp/kernel.json`` —
+  ``multi_cubic_spline`` section: a **non-uniform** 5x4 grid and a
+  non-uniform 5x4x4 grid, which is what actually discriminates a
+  tensor-product natural spline from a local cubic.
+
+The 2-D and 3-D cases used to delegate to
+``scipy.interpolate.RegularGridInterpolator(method='cubic')`` and were 8-9 %
+off C++; see the module docstring of the implementation.
 """
 
 from __future__ import annotations
@@ -14,6 +23,7 @@ import numpy as np
 import pytest
 
 from pquantlib.exceptions import LibraryException
+from pquantlib.math.interpolations.cubic_interpolation import CubicNaturalSpline
 from pquantlib.math.interpolations.multi_cubic_spline import MultiCubicSpline
 from pquantlib.testing import reference_reader, tolerance
 
@@ -21,6 +31,11 @@ from pquantlib.testing import reference_reader, tolerance
 @pytest.fixture(scope="module")
 def cpp() -> dict[str, Any]:
     return reference_reader.load("cluster/l10c")
+
+
+@pytest.fixture(scope="module")
+def cpp143() -> dict[str, Any]:
+    return reference_reader.load("v143/math/interp/kernel")
 
 
 def _make_2d() -> MultiCubicSpline:
@@ -50,32 +65,80 @@ def test_pillars_match_input(cpp: dict[str, Any]) -> None:
             tolerance.tight(interp([x, y]), float(pillars[j][i]))
 
 
-def test_intermediates_qualitative(cpp: dict[str, Any]) -> None:
-    """Intermediate values are *qualitatively* close to C++.
+def test_intermediates_match_cpp_tight(cpp: dict[str, Any]) -> None:
+    """Off-node values match C++ to TIGHT.
 
-    Documented divergence (see module docstring): scipy's
-    ``RegularGridInterpolator(method='cubic')`` uses a Hermite cubic
-    with one-sided three-point boundary slopes; QuantLib's
-    ``BicubicSpline`` uses a natural-BC composition. On a coarse 4x4
-    grid the two can differ by ~10% at interior points (BC pollution
-    propagates inward). We use a CUSTOM tier with a large absolute
-    tolerance to certify the divergence is bounded, not that the
-    interpolants agree at LOOSE.
+    This used to be a 0.2 absolute/relative "certify the divergence is
+    bounded" assertion, because the port delegated to scipy's
+    ``RegularGridInterpolator(method='cubic')`` — a local cubic — where C++
+    tensor-products *natural* cubic splines. Now that the recursion is
+    transcribed the two describe the same function.
     """
     block = cpp["multi_cubic_spline"]
     mids = block["mids"]
     expected = [float(e) for e in block["mids_y"]]
     interp = _make_2d()
     for (x, y), exp in zip(mids, expected, strict=True):
-        tolerance.custom(
-            interp([float(x), float(y)]), exp,
-            abs_tol=0.2, rel_tol=0.2,
-            reason=(
-                "scipy RGI Hermite cubic vs C++ natural-BC bicubic — "
-                "BC pollution on a coarse 4x4 grid drives ~10% diff at "
-                "interior points; pillar correctness is preserved (TIGHT)"
-            ),
-        )
+        tolerance.tight(interp([float(x), float(y)]), exp)
+
+
+def test_v143_2d_matches_cpp_tight(cpp143: dict[str, Any]) -> None:
+    """Non-uniform 5x4 grid: interior nodes and off-node points, TIGHT.
+
+    Non-uniform spacing is what separates the natural spline from a local
+    cubic — on a uniform grid many schemes coincide much more closely.
+    """
+    block = cpp143["multi_cubic_spline"]["dim2"]
+    interp = MultiCubicSpline(
+        [np.asarray(block["axis0"], dtype=np.float64),
+         np.asarray(block["axis1"], dtype=np.float64)],
+        np.asarray(block["values"], dtype=np.float64),
+    )
+    for x, y, expected in block["evals"]:
+        tolerance.tight(interp([float(x), float(y)]), float(expected))
+
+
+def test_v143_3d_matches_cpp_tight(cpp143: dict[str, Any]) -> None:
+    """Non-uniform 5x4x4 grid: the recursion has to hold at depth 3 too."""
+    block = cpp143["multi_cubic_spline"]["dim3"]
+    axes = [
+        np.asarray(block[f"axis{k}"], dtype=np.float64) for k in range(3)
+    ]
+    values = np.asarray(block["values_flat"], dtype=np.float64).reshape(
+        tuple(a.shape[0] for a in axes)
+    )
+    interp = MultiCubicSpline(axes, values)
+    for x, y, z, expected in block["evals"]:
+        tolerance.tight(interp([float(x), float(y), float(z)]), float(expected))
+
+
+def test_v143_2d_reproduces_boundary_nodes(cpp143: dict[str, Any]) -> None:
+    """Grid values are reproduced on the boundary surface as well.
+
+    Not cross-validated against C++ on purpose: the C++ header carries a
+    standing ``\\bug`` note that it "cannot interpolate at the grid points on
+    the boundary surface", and its own test-suite only checks strictly
+    interior nodes. The port has no such restriction, so the property is
+    asserted directly instead.
+    """
+    block = cpp143["multi_cubic_spline"]["dim2"]
+    axis0 = np.asarray(block["axis0"], dtype=np.float64)
+    axis1 = np.asarray(block["axis1"], dtype=np.float64)
+    values = np.asarray(block["values"], dtype=np.float64)
+    interp = MultiCubicSpline([axis0, axis1], values)
+    for i, x in enumerate(axis0):
+        for j, y in enumerate(axis1):
+            tolerance.tight(interp([float(x), float(y)]), float(values[i, j]))
+
+
+def test_1d_is_the_natural_cubic_spline() -> None:
+    """The 1-D degenerate case is exactly ``CubicNaturalSpline``."""
+    xs = np.array([0.0, 1.0, 2.0, 3.5, 4.0], dtype=np.float64)
+    ys = np.array([0.0, 0.5, 1.5, 3.0, 3.2], dtype=np.float64)
+    interp = MultiCubicSpline([xs], ys)
+    reference = CubicNaturalSpline(xs, ys)
+    for x in (0.0, 0.5, 1.25, 2.75, 3.9, 4.0):
+        tolerance.exact(interp(x), reference(x))
 
 
 def test_n_dim_2() -> None:

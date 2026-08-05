@@ -22,6 +22,7 @@ import sys
 from typing import Final
 
 from pquantlib.math.randomnumbers.random_number_generator import Sample
+from pquantlib.math.randomnumbers.seed_generator import SeedGenerator
 
 _M1: Final[int] = 2147483563
 _A1: Final[int] = 40014
@@ -47,18 +48,16 @@ class LecuyerUniformRng:
     # C++ parity: ``LecuyerUniformRng`` in
     # ql/math/randomnumbers/lecuyeruniformrng.{hpp,cpp} (v1.42.1).
 
-    Seed 0 is rejected (the C++ version falls back to ``SeedGenerator``,
-    which is deferred to a later cluster — pquantlib refuses seed 0
-    explicitly rather than silently picking a clock-derived seed).
+    Seed 0 defers to the clock-seeded ``SeedGenerator``, as in C++.
     """
 
     __slots__ = ("_buffer", "_temp1", "_temp2", "_y")
 
     def __init__(self, seed: int) -> None:
         if seed == 0:
-            raise ValueError(
-                "LecuyerUniformRng requires nonzero seed (C++ SeedGenerator clock fallback not yet ported)"
-            )
+            # C++ parity: lecuyeruniformrng.cpp:45 — seed 0 defers to the
+            # clock-seeded SeedGenerator singleton.
+            seed = SeedGenerator.instance().get()
         # Mutable state. C++ marks all as ``mutable``; Python plain attrs.
         self._temp1: int = seed
         self._temp2: int = seed

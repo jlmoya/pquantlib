@@ -10,7 +10,8 @@ iterations — this is what the spec calls "seed expansion".
 
 Floating-point output uses ``(nextInt64() >> 11 + 0.5) / 2^53`` so that
 the entire 53-bit mantissa is filled randomly. Bit-identical sequences
-to the C++ reference for any nonzero seed.
+to the C++ reference for any nonzero seed; seed 0 means "ask
+``SeedGenerator``", which is clock-derived.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from __future__ import annotations
 from typing import Final
 
 from pquantlib.math.randomnumbers.random_number_generator import Sample
+from pquantlib.math.randomnumbers.seed_generator import SeedGenerator
 
 _MASK64: Final[int] = (1 << 64) - 1
 _INV_2_POW_53: Final[float] = 1.0 / (1 << 53)
@@ -64,19 +66,19 @@ class Xoshiro256StarStarUniformRng:
     the C++ four-arg ctor for use cases that already hold a 256-bit
     state (e.g. resuming from a snapshot).
 
-    Seed 0 is rejected (C++ falls back to ``SeedGenerator``, deferred).
-    The all-zero direct state is also rejected — xoshiro is degenerate
-    at zero (always returns 0).
+    Seed 0 defers to the clock-seeded ``SeedGenerator``, as in C++. The
+    all-zero direct state is still rejected — xoshiro is degenerate at
+    zero (always returns 0), and C++ offers no way to reach that state
+    other than passing it explicitly.
     """
 
     __slots__ = ("_s0", "_s1", "_s2", "_s3")
 
     def __init__(self, seed: int) -> None:
         if seed == 0:
-            raise ValueError(
-                "Xoshiro256StarStarUniformRng requires nonzero seed "
-                "(C++ SeedGenerator clock fallback not yet ported)"
-            )
+            # C++ parity: xoshiro256starstaruniformrng.cpp:55 — seed 0 defers
+            # to the clock-seeded SeedGenerator singleton.
+            seed = SeedGenerator.instance().get()
         # C++ parity: cpp:54-60 — four SplitMix64 outputs from the seed.
         sm = _SplitMix64(seed)
         self._s0: int = sm.next()

@@ -8,6 +8,7 @@ Tested via direct calls.
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 import numpy as np
 import pytest
@@ -15,11 +16,13 @@ import pytest
 from pquantlib.exceptions import LibraryException
 from pquantlib.math.optimization.constraint import (
     BoundaryConstraint,
+    CompositeConstraint,
     Constraint,
     NoConstraint,
     NonhomogeneousBoundaryConstraint,
     PositiveConstraint,
 )
+from pquantlib.testing import reference_reader, tolerance
 
 
 def _arr(*xs: float) -> np.ndarray:
@@ -112,3 +115,61 @@ def test_nonhomogeneous_boundary_constraint_rejects_wrong_parameter_count() -> N
     c = NonhomogeneousBoundaryConstraint(_arr(0.0, 0.0), _arr(1.0, 1.0))
     with pytest.raises(LibraryException, match="parameters and boundaries sizes"):
         c.test(_arr(0.5))
+
+
+# --- CompositeConstraint + Constraint.update (v1.43 additions) --------------
+
+
+def _cpp_optimization() -> dict[str, Any]:
+    return reference_reader.load("v143/math/optimization")
+
+
+def test_composite_constraint_test_is_the_conjunction() -> None:
+    """# C++ parity: constraint.hpp:145-147 — short-circuiting ``&&``."""
+    cpp = _cpp_optimization()
+    comp = CompositeConstraint(PositiveConstraint(), BoundaryConstraint(-1.0, 2.0))
+    assert comp.test(np.array([0.5, 1.5])) is bool(cpp["composite_test_both_ok"])
+    assert comp.test(np.array([-0.5, 1.5])) is bool(
+        cpp["composite_test_violates_positive"]
+    )
+    assert comp.test(np.array([0.5, 3.0])) is bool(
+        cpp["composite_test_violates_boundary"]
+    )
+
+
+def test_composite_constraint_bounds_are_the_tightest_of_the_two() -> None:
+    """upper = elementwise min, lower = elementwise max.
+
+    # C++ parity: constraint.hpp:148-165.
+    """
+    cpp = _cpp_optimization()
+    comp = CompositeConstraint(PositiveConstraint(), BoundaryConstraint(-1.0, 2.0))
+    probe = np.array([0.5, 1.5])
+    for got, expected in zip(comp.upper_bound(probe), cpp["composite_upper"], strict=True):
+        tolerance.exact(float(got), float(expected))
+    for got, expected in zip(comp.lower_bound(probe), cpp["composite_lower"], strict=True):
+        tolerance.exact(float(got), float(expected))
+
+
+def test_composite_constraints_nest() -> None:
+    cpp = _cpp_optimization()
+    comp = CompositeConstraint(PositiveConstraint(), BoundaryConstraint(-1.0, 2.0))
+    nested = CompositeConstraint(comp, BoundaryConstraint(0.25, 5.0))
+    assert nested.test(np.array([0.5, 1.5])) is bool(cpp["composite_nested_test_ok"])
+    assert nested.test(np.array([0.1, 1.5])) is bool(cpp["composite_nested_test_low"])
+    probe = np.array([0.5, 1.5])
+    for got, expected in zip(nested.upper_bound(probe), cpp["composite_nested_upper"], strict=True):
+        tolerance.exact(float(got), float(expected))
+    for got, expected in zip(nested.lower_bound(probe), cpp["composite_nested_lower"], strict=True):
+        tolerance.exact(float(got), float(expected))
+
+
+def test_composite_of_no_constraints_keeps_the_open_bounds() -> None:
+    """min/max over two +/-DBL_MAX defaults leaves them unchanged."""
+    cpp = _cpp_optimization()
+    comp = CompositeConstraint(NoConstraint(), NoConstraint())
+    probe = np.array([0.5, 1.5])
+    for got, expected in zip(comp.upper_bound(probe), cpp["composite_open_upper"], strict=True):
+        tolerance.exact(float(got), float(expected))
+    for got, expected in zip(comp.lower_bound(probe), cpp["composite_open_lower"], strict=True):
+        tolerance.exact(float(got), float(expected))

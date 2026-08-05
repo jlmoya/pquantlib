@@ -1,88 +1,211 @@
 """Bicubic spline interpolation on a 2-D grid.
 
-# C++ parity: ql/math/interpolations/bicubicsplineinterpolation.hpp
-# (v1.42.1).
+# C++ parity: ql/math/interpolations/bicubicsplineinterpolation.hpp (v1.43).
 
-C++ ``BicubicSpline`` builds a 2-D natural cubic spline by composing
-1-D ``CubicSpline``s row-by-row then column-by-column on the (M, N)
-matrix ``z[y_index, x_index]``. Each evaluation at ``(x, y)``:
+C++ ``BicubicSpline`` is **not** a tensor-product B-spline. It is a
+composition of 1-D *natural* cubic splines, rebuilt on every evaluation:
 
-1. Build a 1-D spline through ``z[0, :], ..., z[M-1, :]`` at column
-   ``y`` — i.e. for each y-row, evaluate at ``x``, yielding a column
-   of M values.
-2. Build a 1-D natural cubic spline through those M values at the
-   y-coordinates ``ys``, and evaluate at ``y``.
+1. At construction, one natural cubic spline per grid **row** — spline
+   ``i`` runs over ``xs`` through ``z[i, :]``. There are ``len(ys)`` of them.
+2. To evaluate at ``(x, y)``: evaluate every row spline at ``x`` (allowing
+   extrapolation), giving a column of ``len(ys)`` values, then build a
+   *fresh* natural cubic spline over ``ys`` through that column and
+   evaluate it at ``y`` (again allowing extrapolation).
 
-The Python port delegates to ``scipy.interpolate.RectBivariateSpline``
-with ``kx=ky=3`` — bicubic spline on a rectilinear (but not
-necessarily uniform) grid.
+Each of those 1-D splines is ``CubicInterpolation(Spline, monotonic=false,
+SecondDerivative 0.0 at both ends)`` — i.e. ``CubicNaturalSpline``.
 
-**Documented divergence — boundary condition.** scipy's
-``RectBivariateSpline`` uses *not-a-knot* boundary conditions (the
-default for ``scipy.interpolate.UnivariateSpline``); QuantLib's
-``BicubicSpline`` uses *natural* boundary conditions (it composes
-``CubicNaturalSpline``s row-by-row and column-by-column). At pillar
-nodes both implementations roundtrip exactly to the input data
-(both interpolate, neither approximates). At off-pillar interior
-points on a small grid the two BCs measurably disagree: observed
-~10% relative error on the L9-A probe's 4x4 ``sin(x)+cos(y)`` grid.
-This grows tighter (~1% or better) on larger grids where boundary
-effects are diluted. The pillar-correctness contract is preserved;
-off-pillar agreement is qualitative. For the L8-C surface-upgrade
-use-case (cap/floor and swaption vol surfaces with 20+ points per
-axis) the BC difference is negligible compared to the input vol
-quote noise.
+**This module used to delegate to ``scipy.interpolate.RectBivariateSpline``**
+with ``kx = ky = 3``. That is a genuinely different function: a tensor-product
+B-spline with *not-a-knot* end conditions. It interpolates the same pillars,
+so pillar round-trips passed, but off-pillar values were wrong by ~10 %
+relative on a 4x4 grid (the old test asserted only a 0.15 relative-error
+envelope and called the disagreement "qualitative"). It also could not
+produce ``derivativeXY`` at all, and it refused grids with fewer than 4
+points per axis, which C++ accepts. The composition above is now transcribed
+directly and agrees with C++ to TIGHT.
 
-**Indexing convention** (matches C++ ``zData_[j][i]``): the matrix is
-indexed as ``z[y_index, x_index]`` — rows are y, columns are x. We
-pass ``RectBivariateSpline(x=xs, y=ys, z=z.T)`` because scipy's
-``RectBivariateSpline`` expects ``z`` shaped ``(len(x), len(y))``,
-which is the *transpose* of our convention. (The scipy docs are
-explicit about this layout.)
+The derivative API (C++ ``detail::BicubicSplineDerivatives``, reached through
+a ``dynamic_pointer_cast`` on the impl) follows the same
+build-a-fresh-spline-and-differentiate-it pattern:
+
+- ``derivative_x`` / ``second_derivative_x``: sample ``value(xs[i], y)``
+  across the x pillars, spline it over ``xs``, differentiate at ``x``.
+- ``derivative_y`` / ``second_derivative_y``: sample the row splines at
+  ``x``, spline that column over ``ys``, differentiate at ``y``.
+- ``derivative_xy``: sample ``derivative_y(xs[i], y)`` across the x pillars,
+  spline it over ``xs``, differentiate at ``x``.
+
+Note the asymmetry C++ has here and which is preserved: ``value`` evaluates
+its inner splines with extrapolation enabled, but the *derivative* entry
+points build a plain ``CubicInterpolation`` and call
+``derivative``/``secondDerivative`` with ``allowExtrapolation`` left at its
+``false`` default. Asking for a derivative outside the grid therefore raises,
+even on an interpolation with extrapolation enabled.
+
+**Indexing convention** (matches C++ ``zData_``): ``z[y_index, x_index]`` —
+rows are y, columns are x, so ``z`` is shaped ``(len(ys), len(xs))`` and
+``zData_.rows()`` is ``len(ys)``.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from abc import ABC, abstractmethod
 
-from scipy.interpolate import (  # type: ignore[import-untyped]
-    RectBivariateSpline,
-)
+import numpy as np
 
 from pquantlib.math.array import Array
+from pquantlib.math.interpolations.cubic_interpolation import CubicNaturalSpline
 from pquantlib.math.interpolations.interpolation_2d import Interpolation2D
 from pquantlib.math.matrix import Matrix
 
 
-class BicubicSpline(Interpolation2D):
-    """2-D bicubic spline on a rectilinear grid indexed as ``z[y, x]``.
+class BicubicSplineDerivatives(ABC):
+    """The partial-derivative interface of a bicubic surface.
 
-    # C++ parity: ``BicubicSpline`` (bicubicsplineinterpolation.hpp).
+    # C++ parity: ``class detail::BicubicSplineDerivatives``
+    # (bicubicsplineinterpolation.hpp:35-43).
+
+    In C++ this is a pure-virtual mix-in that ``BicubicSplineImpl`` inherits
+    alongside ``Interpolation2D::templateImpl``, so that ``BicubicSpline``
+    can ``dynamic_pointer_cast`` its type-erased impl back to something with
+    derivatives on it. Python has no type erasure to undo, but the interface
+    is still the contract a bicubic surface offers beyond
+    ``Interpolation2D``, so it is kept as an ABC.
     """
 
+    __slots__ = ()
+
+    @abstractmethod
+    def derivative_x(self, x: float, y: float) -> float:
+        """d/dx of the surface at ``(x, y)``. C++ ``derivativeX``."""
+
+    @abstractmethod
+    def derivative_y(self, x: float, y: float) -> float:
+        """d/dy of the surface at ``(x, y)``. C++ ``derivativeY``."""
+
+    @abstractmethod
+    def derivative_xy(self, x: float, y: float) -> float:
+        """d2/dxdy of the surface at ``(x, y)``. C++ ``derivativeXY``."""
+
+    @abstractmethod
+    def second_derivative_x(self, x: float, y: float) -> float:
+        """d2/dx2 of the surface at ``(x, y)``. C++ ``secondDerivativeX``."""
+
+    @abstractmethod
+    def second_derivative_y(self, x: float, y: float) -> float:
+        """d2/dy2 of the surface at ``(x, y)``. C++ ``secondDerivativeY``."""
+
+
+class BicubicSpline(Interpolation2D, BicubicSplineDerivatives):
+    """2-D bicubic spline on a rectilinear grid indexed as ``z[y, x]``.
+
+    # C++ parity: ``class BicubicSpline : public Interpolation2D``
+    # (bicubicsplineinterpolation.hpp:163-196), Impl at lines 45-153.
+    """
+
+    __slots__ = ("_splines",)
+
     def __init__(self, xs: Array, ys: Array, z: Matrix) -> None:
-        # Bicubic needs at least 4 points in each axis for a proper
-        # cubic; scipy.RectBivariateSpline allows kx+1=4 minimum.
-        # C++ does not enforce this explicitly — it relies on the
-        # composed 1-D ``CubicSpline`` to fail at construction.
-        # We match: minimum 2 (the base abstract's requirement)
-        # but scipy will raise if < 4 on either axis.
         super().__init__(xs, ys, z, required_points=2)
-        self._spline: Any = None
+        self._splines: list[CubicNaturalSpline] = []
+        # C++ parity: BicubicSplineImpl's ctor calls calculate().
         self.update()
 
     def update(self) -> None:
-        """Rebuild the underlying scipy spline.
+        """Rebuild the per-row (per-y) natural cubic splines.
 
-        # C++ parity: ``BicubicSpline::calculate()`` (PIMPL).
+        # C++ parity: ``BicubicSplineImpl::calculate``
+        # (bicubicsplineinterpolation.hpp:58-67) — one CubicInterpolation per
+        # ``zData_`` ROW, over the x abscissae.
         """
-        # scipy.RectBivariateSpline expects z shaped ``(len(x), len(y))``,
-        # which is the *transpose* of our ``z[y, x]`` convention.
-        self._spline = RectBivariateSpline(
-            self._xs, self._ys, self._z.T, kx=3, ky=3
-        )
+        self._splines = [
+            CubicNaturalSpline(self._xs, self._z[i, :]) for i in range(self._z.shape[0])
+        ]
+
+    # ----- value ----------------------------------------------------------
 
     def _value(self, x: float, y: float) -> float:
-        # ``ev`` evaluates a single (x, y) point; equivalent to
-        # ``self._spline(x, y, grid=False)`` but slightly faster.
-        return float(self._spline.ev(x, y))
+        # C++ parity: bicubicsplineinterpolation.hpp:68-79.
+        section = self._section_at_x(x)
+        return CubicNaturalSpline(self._ys, section)(y, allow_extrapolation=True)
+
+    # ----- BicubicSplineDerivatives --------------------------------------
+
+    def derivative_x(self, x: float, y: float) -> float:
+        """d/dx at ``(x, y)``.
+
+        # C++ parity: ``derivativeX`` (bicubicsplineinterpolation.hpp:81-93).
+        """
+        return CubicNaturalSpline(self._xs, self._x_section(y)).derivative(x)
+
+    def second_derivative_x(self, x: float, y: float) -> float:
+        """d2/dx2 at ``(x, y)``.
+
+        # C++ parity: ``secondDerivativeX`` (bicubicsplineinterpolation.hpp:95-108).
+        """
+        return CubicNaturalSpline(self._xs, self._x_section(y)).second_derivative(x)
+
+    def derivative_y(self, x: float, y: float) -> float:
+        """d/dy at ``(x, y)``.
+
+        # C++ parity: ``derivativeY`` (bicubicsplineinterpolation.hpp:110-121).
+        """
+        return CubicNaturalSpline(self._ys, self._section_at_x(x)).derivative(y)
+
+    def second_derivative_y(self, x: float, y: float) -> float:
+        """d2/dy2 at ``(x, y)``.
+
+        # C++ parity: ``secondDerivativeY`` (bicubicsplineinterpolation.hpp:123-135).
+        """
+        return CubicNaturalSpline(self._ys, self._section_at_x(x)).second_derivative(y)
+
+    def derivative_xy(self, x: float, y: float) -> float:
+        """d2/dxdy at ``(x, y)``.
+
+        # C++ parity: ``derivativeXY`` (bicubicsplineinterpolation.hpp:137-149).
+        """
+        section = np.array(
+            [self.derivative_y(float(xi), y) for xi in self._xs], dtype=np.float64
+        )
+        return CubicNaturalSpline(self._xs, section).derivative(x)
+
+    # ----- helpers --------------------------------------------------------
+
+    def _section_at_x(self, x: float) -> Array:
+        """Every row spline evaluated at ``x`` — a column of ``len(ys)`` values.
+
+        # C++ parity: the ``section[i] = splines_[i](x, true)`` loop that
+        # appears in ``value``, ``derivativeY`` and ``secondDerivativeY``.
+        """
+        return np.array(
+            [s(x, allow_extrapolation=True) for s in self._splines], dtype=np.float64
+        )
+
+    def _x_section(self, y: float) -> Array:
+        """``value(xs[i], y)`` across the x pillars — ``len(xs)`` values.
+
+        # C++ parity: the ``section[i] = value(xBegin_[i], y)`` loop in
+        # ``derivativeX`` and ``secondDerivativeX``. Note it calls the Impl's
+        # ``value`` directly, i.e. WITHOUT the range check.
+        """
+        return np.array([self._value(float(xi), y) for xi in self._xs], dtype=np.float64)
+
+
+class Bicubic:
+    """Bicubic-spline-interpolation factory.
+
+    # C++ parity: ``class Bicubic`` (bicubicsplineinterpolation.hpp:199-207).
+
+    See :class:`~pquantlib.math.interpolations.bilinear.Bilinear` for why the
+    C++ traits struct becomes an instantiable class here.
+    """
+
+    __slots__ = ()
+
+    def interpolate(self, xs: Array, ys: Array, z: Matrix) -> BicubicSpline:
+        """Build a :class:`BicubicSpline` over ``(xs, ys, z)``."""
+        return BicubicSpline(xs, ys, z)
+
+
+__all__ = ["Bicubic", "BicubicSpline", "BicubicSplineDerivatives"]
