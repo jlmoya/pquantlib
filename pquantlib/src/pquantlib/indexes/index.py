@@ -1,6 +1,6 @@
 """Index — purely virtual base for all rate / equity / inflation indexes.
 
-# C++ parity: ql/index.hpp (v1.42.1)
+# C++ parity: ql/index.hpp (v1.43)
 
 Index IS both Observer and Observable (C++): rate-helper-style downstream
 consumers register with the index; the index may itself register with
@@ -11,6 +11,7 @@ on update().
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 
 from pquantlib import qassert
 from pquantlib.indexes.index_manager import IndexManager
@@ -63,14 +64,50 @@ class Index(Observable, ABC):
         return True
 
     def add_fixing(self, fixing_date: Date, fixing: float, force_overwrite: bool = False) -> None:
-        qassert.require(
-            self.allows_native_fixings(),
-            f"{self.name()} does not allow native fixings",
+        """Mirror C++ ``Index::addFixing`` — a one-element ``add_fixings``.
+
+        Routing through ``add_fixings`` is what applies the index's own
+        ``is_valid_fixing_date`` check, so a fixing dated on a non-business day
+        is rejected rather than silently stored.
+        """
+        self.add_fixings([fixing_date], [fixing], force_overwrite)
+
+    def add_fixings(
+        self,
+        dates: Iterable[Date],
+        values: Iterable[float],
+        force_overwrite: bool = False,
+    ) -> None:
+        """Mirror C++ ``Index::addFixings(dBegin, dEnd, vBegin, forceOverwrite)``."""
+        self._check_native_fixings_allowed()
+        IndexManager().add_fixings(
+            self.name(), dates, values, force_overwrite, self.is_valid_fixing_date,
         )
-        IndexManager().add_fixing(self.name(), fixing_date, fixing, force_overwrite)
+
+    def add_fixings_from_time_series(
+        self, series: TimeSeries[float], force_overwrite: bool = False,
+    ) -> None:
+        """Mirror C++ ``Index::addFixings(const TimeSeries<Real>&, bool)``.
+
+        Separate name rather than an overload: Python has no overload
+        resolution, and a runtime type switch on the first argument would be
+        the kind of implicit behaviour this port avoids.
+        """
+        self._check_native_fixings_allowed()
+        self.add_fixings(series.dates(), series.values(), force_overwrite)
 
     def clear_fixings(self) -> None:
+        """Mirror C++ ``Index::clearFixings`` — native fixings must be allowed."""
+        self._check_native_fixings_allowed()
         IndexManager().clear_history(self.name())
+
+    def _check_native_fixings_allowed(self) -> None:
+        """Mirror C++ ``Index::checkNativeFixingsAllowed``."""
+        qassert.require(
+            self.allows_native_fixings(),
+            f"native fixings not allowed for {self.name()}; "
+            f"refer to underlying indices instead",
+        )
 
     def update(self) -> None:
         self.notify_observers()
