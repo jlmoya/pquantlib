@@ -33,6 +33,7 @@
 #include <vector>
 
 #include <ql/math/abcdmathfunction.hpp>
+#include <ql/math/linearleastsquaresregression.hpp>
 #include <ql/math/bspline.hpp>
 #include <ql/math/copulas/gaussiancopula.hpp>
 #include <ql/math/fastfouriertransform.hpp>
@@ -406,7 +407,110 @@ void emitGaussianCopula() {
         }
         out << "]}";
     }
-    out << "\n  ]\n";
+    out << "\n  ],\n";
+}
+
+// ------------------------------------------------------ least squares -----
+
+void emitLeastSquares() {
+    // A well-conditioned design and a deliberately rank-deficient one: the
+    // second has a basis function that is an exact multiple of another, so a
+    // singular value falls under the n*eps*w[0] threshold and its whole
+    // contribution is dropped. That branch is invisible in the well-posed case
+    // and is where a reimplementation using a plain normal-equation solve
+    // diverges (it would blow up instead of dropping the direction).
+    const std::vector<Real> x = {-2.0, -1.0, -0.5, 0.0, 0.25, 1.0, 1.5, 2.0,
+                                 3.0, 4.5};
+    std::vector<Real> y(x.size());
+    for (std::size_t i = 0; i < x.size(); ++i)
+        y[i] = 1.5 - 0.75 * x[i] + 0.25 * x[i] * x[i] + 0.02 * std::sin(7.0 * x[i]);
+
+    const std::vector<std::function<Real(Real)>> quad = {
+        [](Real) { return 1.0; },
+        [](Real v) { return v; },
+        [](Real v) { return v * v; }
+    };
+    const std::vector<std::function<Real(Real)>> deficient = {
+        [](Real) { return 1.0; },
+        [](Real v) { return v; },
+        [](Real v) { return 2.0 * v; }
+    };
+
+    struct Case { const char* name; const std::vector<std::function<Real(Real)>>* v; };
+    const Case cases[] = {{"quadratic", &quad}, {"rank_deficient", &deficient}};
+
+    out << "  \"general_linear_least_squares\": {\n    \"x\": ";
+    numArray(x);
+    out << ",\n    \"y\": ";
+    numArray(y);
+    out << ",\n    \"cases\": [";
+    bool first = true;
+    for (const auto& c : cases) {
+        GeneralLinearLeastSquares ls(x, y, *c.v);
+        out << (first ? "\n      " : ",\n      ");
+        first = false;
+        out << "{\"basis\": \"" << c.name << "\", \"size\": " << ls.size()
+            << ", \"dim\": " << ls.dim();
+        out << ",\n       \"coefficients\": ";
+        numArray(std::vector<Real>(ls.coefficients().begin(), ls.coefficients().end()));
+        out << ",\n       \"error\": ";
+        numArray(std::vector<Real>(ls.error().begin(), ls.error().end()));
+        out << ",\n       \"standard_errors\": ";
+        numArray(std::vector<Real>(ls.standardErrors().begin(), ls.standardErrors().end()));
+        out << ",\n       \"residuals\": ";
+        numArray(std::vector<Real>(ls.residuals().begin(), ls.residuals().end()));
+        out << "}";
+    }
+    out << "\n    ]\n  },\n";
+
+    // LinearRegression over a scalar x (basis = [intercept, x]) at two
+    // intercept values, including the 0.0 that suppresses the constant term
+    // entirely rather than fitting it to zero.
+    out << "  \"linear_regression_1d\": [";
+    first = true;
+    for (Real intercept : {1.0, 0.0, 2.5}) {
+        LinearRegression lr(x, y, intercept);
+        out << (first ? "\n    " : ",\n    ");
+        first = false;
+        out << "{\"intercept\": " << intercept << ", \"dim\": " << lr.dim()
+            << ", \"coefficients\": ";
+        numArray(std::vector<Real>(lr.coefficients().begin(), lr.coefficients().end()));
+        out << ", \"standard_errors\": ";
+        numArray(std::vector<Real>(lr.standardErrors().begin(), lr.standardErrors().end()));
+        out << "}";
+    }
+    out << "\n  ],\n";
+
+    // LinearRegression over vector-valued x: basis = [intercept, x_0, x_1].
+    out << "  \"linear_regression_nd\": {\n";
+    std::vector<std::vector<Real>> xs(x.size(), std::vector<Real>(2));
+    std::vector<Real> y2(x.size());
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        xs[i][0] = x[i];
+        xs[i][1] = std::cos(x[i]);
+        y2[i] = 0.4 + 1.25 * xs[i][0] - 0.6 * xs[i][1];
+    }
+    out << "    \"x\": [";
+    for (std::size_t i = 0; i < xs.size(); ++i) {
+        if (i) out << ", ";
+        numArray(xs[i]);
+    }
+    out << "],\n    \"y\": ";
+    numArray(y2);
+    out << ",\n    \"cases\": [";
+    first = true;
+    for (Real intercept : {1.0, 0.0}) {
+        LinearRegression lr(xs, y2, intercept);
+        out << (first ? "\n      " : ",\n      ");
+        first = false;
+        out << "{\"intercept\": " << intercept << ", \"dim\": " << lr.dim()
+            << ", \"coefficients\": ";
+        numArray(std::vector<Real>(lr.coefficients().begin(), lr.coefficients().end()));
+        out << ", \"residuals\": ";
+        numArray(std::vector<Real>(lr.residuals().begin(), lr.residuals().end()));
+        out << "}";
+    }
+    out << "\n    ]\n  }\n";
 }
 
 } // namespace
@@ -422,6 +526,7 @@ int main() {
     emitOde();
     emitFft();
     emitGaussianCopula();
+    emitLeastSquares();
     out << "}\n";
     return 0;
 }
