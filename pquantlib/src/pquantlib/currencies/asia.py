@@ -2,7 +2,8 @@
 
 # C++ parity: ql/currencies/asia.hpp + asia.cpp (v1.42.1).
 
-Ports only the currencies the L1-B probe references (JPY).
+Ports the currencies referenced by the Asian index families: JPY, ILS,
+THB (Bibor / THBFIX), KRW (KOFR) and CNY (Shibor).
 """
 
 from __future__ import annotations
@@ -43,6 +44,57 @@ class ILSCurrency(Currency):
             code="ILS",
             numeric_code=376,
             symbol="NIS",
+            fraction_symbol="",
+            fractions_per_unit=100,
+            rounding=Rounding(),
+        )
+
+
+class THBCurrency(Currency):
+    """Thai baht — ISO 764 — 100 stang."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="Thai baht",
+            code="THB",
+            numeric_code=764,
+            symbol="Bht",
+            fraction_symbol="",
+            fractions_per_unit=100,
+            rounding=Rounding(),
+        )
+
+
+class KRWCurrency(Currency):
+    """South-Korean won — ISO 410 — 100 chon."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="South-Korean won",
+            code="KRW",
+            numeric_code=410,
+            symbol="W",
+            fraction_symbol="",
+            fractions_per_unit=100,
+            rounding=Rounding(),
+        )
+
+
+class CNYCurrency(Currency):
+    """Chinese yuan — ISO 156 — 100 fen."""
+
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="Chinese yuan",
+            code="CNY",
+            numeric_code=156,
+            symbol="Y",
             fraction_symbol="",
             fractions_per_unit=100,
             rounding=Rounding(),
