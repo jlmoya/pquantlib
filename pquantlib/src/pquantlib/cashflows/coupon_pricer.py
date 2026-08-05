@@ -10,20 +10,23 @@ The C++ hierarchy:
       -> CmsCouponPricer (abstract)
             -> ...
 
-Python port carve-outs (deferred to L4-style modelling work):
-- ``OptionletVolatilityStructure`` (CapFloorVolTermStructure) is NOT
-  ported — the cap / floor / optionletPrice machinery in
-  BlackIborCouponPricer is consequently stubbed out (raises a
-  LibraryException if called). Plain swaplet pricing (no cap, no floor)
-  works.
-- ``CmsCouponPricer`` and the MeanRevertingPricer mix-in are NOT ported.
+Python port carve-outs:
+- The MeanRevertingPricer mix-in is NOT ported. ``CmsCouponPricer`` lives
+  in :mod:`pquantlib.cashflows.cms_coupon_pricer`.
 - ``setCouponPricer`` / ``setCouponPricers`` free functions: simple
   variant ``set_coupon_pricer`` is provided for the most common case
   (one pricer applied to every floating coupon in the leg).
 
-This keeps the public surface aligned with C++ shape while skipping the
-cap/floor pricing machinery — sufficient for L2-D's plain
-IborCoupon / OvernightIndexedCoupon use cases.
+.. note:: This docstring used to say that ``OptionletVolatilityStructure``
+   was not ported and that the cap / floor machinery in
+   ``BlackIborCouponPricer`` was therefore "stubbed out". Both halves of
+   that claim are stale. The optionlet vol structures were ported in
+   Phase 8 (:mod:`pquantlib.termstructures.volatility.optionlet`), and
+   ``BlackIborCouponPricer.caplet_rate`` / ``floorlet_rate`` /
+   ``caplet_price`` / ``floorlet_price`` below are full Black / Bachelier
+   implementations, not stubs. Only the abstract ``IborCouponPricer`` base
+   still raises from those four methods, which is correct — the C++ base
+   declares them pure virtual.
 """
 
 from __future__ import annotations
@@ -60,12 +63,14 @@ if TYPE_CHECKING:
 # -----------------------------------------------------------------------
 
 
-class CouponPricer(ABC, Observable):
+class FloatingRateCouponPricer(ABC, Observable):
     """Top-level pricer abstract base.
 
-    Not present in the C++ hierarchy as a distinct class — C++ uses
-    FloatingRateCouponPricer at the top. We expose the same name to
-    match the L2-D design spec, and alias FloatingRateCouponPricer to it.
+    C++ parity: ``FloatingRateCouponPricer``
+    (ql/cashflows/couponpricer.hpp:47-70) — that is the name C++ uses at the
+    top of the hierarchy, and it is the name this class carries. ``CouponPricer``
+    is kept as an alias below because the L2-D-era code in this port was
+    written against it.
     """
 
     @abstractmethod
@@ -94,8 +99,11 @@ class CouponPricer(ABC, Observable):
         self.notify_observers()
 
 
-# C++-name alias for downstream code that imports the more specific name.
-FloatingRateCouponPricer = CouponPricer
+# Backwards-compatible alias: this port originally named the base
+# ``CouponPricer`` (a name C++ does not have) and aliased the C++ name onto
+# it. The real class now carries the C++ name and the alias points the other
+# way, so existing imports keep working.
+CouponPricer = FloatingRateCouponPricer
 
 
 # -----------------------------------------------------------------------
@@ -103,7 +111,7 @@ FloatingRateCouponPricer = CouponPricer
 # -----------------------------------------------------------------------
 
 
-class IborCouponPricer(CouponPricer):
+class IborCouponPricer(FloatingRateCouponPricer):
     """Base pricer for plain (non-capped / non-floored) IBOR coupons.
 
     The C++ class is abstract (capletPrice / capletRate / ... are pure
@@ -211,6 +219,27 @@ class IborCouponPricer(CouponPricer):
         assert ts is not None
         return (ts.discount(fixing_value_date) / ts.discount(fixing_end_date) - 1.0) / spanning_time
 
+    def _has_fixed(self) -> bool:
+        """Has this coupon's fixing date already passed?
+
+        # C++ parity: ``IborCoupon::hasFixed`` (iborcoupon.cpp:91-105).
+
+        The C++ ``Settings::enforcesTodaysHistoricFixings`` toggle is not
+        ported; its C++ default is ``false``, which is the branch reproduced
+        here (on the fixing date itself, a coupon has fixed only if the index
+        actually carries a fixing for today).
+        """
+        qassert.require(self._coupon is not None, "coupon not set")
+        assert self._coupon is not None
+        today = ObservableSettings().evaluation_date_or_today()
+        fixing_date = self._coupon.fixing_date()
+        if fixing_date > today:
+            return False
+        if fixing_date < today:
+            return True
+        has_historical = getattr(self._coupon.index(), "has_historical_fixing", None)
+        return bool(has_historical(fixing_date)) if callable(has_historical) else False
+
     def _adjusted_fixing(self, fixing: float | None = None) -> float:
         """Par-coupon-aware fixing (no convexity adjustment in the plain pricer).
 
@@ -225,10 +254,13 @@ class IborCouponPricer(CouponPricer):
             # Local import — see ``_par_coupon_fixing`` for the cycle note.
             from pquantlib.cashflows.ibor_coupon import IborCoupon  # noqa: PLC0415
 
-            # If we have an IborCoupon and a forecast term structure, use
-            # the par-coupon span; otherwise fall back to the index's
-            # canonical fixing.
-            if isinstance(self._coupon, IborCoupon):
+            # If we have an IborCoupon that has NOT yet fixed and a forecast
+            # term structure, use the par-coupon span; otherwise fall back to
+            # the index's canonical fixing, which reads the history for a
+            # fixing date in the past.
+            # C++ parity: ``IborCoupon::indexFixing`` (iborcoupon.cpp:107-125)
+            # branches on ``hasFixed()`` before forecasting.
+            if isinstance(self._coupon, IborCoupon) and not self._has_fixed():
                 idx = self._coupon.ibor_index()
                 get_ts = getattr(idx, "forecast_term_structure", None)
                 if get_ts is not None and get_ts() is not None:
@@ -421,7 +453,7 @@ class BlackIborCouponPricer(IborCouponPricer):
 # -----------------------------------------------------------------------
 
 
-def set_coupon_pricer(leg: Iterable[CashFlow], pricer: CouponPricer) -> None:
+def set_coupon_pricer(leg: Iterable[CashFlow], pricer: FloatingRateCouponPricer) -> None:
     """Attach a single pricer to every floating coupon in ``leg``.
 
     C++ parity: ql/cashflows/couponpricer.cpp ``setCouponPricer(leg, pricer)``.
