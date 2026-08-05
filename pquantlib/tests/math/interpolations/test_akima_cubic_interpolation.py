@@ -1,8 +1,23 @@
-"""Cross-validate AkimaCubicInterpolation against the L5-A C++ probe.
+"""Cross-validate ``AkimaCubicInterpolation`` against the L5-A C++ probe.
 
 Reference: ``migration-harness/references/l5a/foundations.json`` —
-``akima_cubic`` section. Knots y = x^2 at x = 0..4, evaluated at
-intermediate x = 0.25, 0.75, 1.5, 2.5, 3.75.
+``akima_cubic``: ``y = x^2`` at ``x = 0..4``, evaluated at 0.25, 0.75, 1.5,
+2.5, 3.75.
+
+This reference used to be *cited but not asserted*. The class delegated to
+``scipy.interpolate.Akima1DInterpolator``, and the old tests said so
+explicitly: they checked that scipy "recovers the quadratic exactly" and
+recorded C++ as deviating on the boundary cubic. C++ QuantLib v1.43 is the
+ground truth for this port, and its Akima endpoint slopes are its own
+invention (products like ``2*S[0]*S[1]``, cubicinterpolation.hpp:613-629),
+not Akima's reflection rule — on this very data C++ gives a pillar slope of
+2.25 at ``x = 0`` where calculus gives 0. Since ``AkimaCubicInterpolation``
+is now ``CubicInterpolation(Akima, ...)``, the probe values are assertable
+at TIGHT, including at the two intervals nearest each end.
+
+The wider ``Akima`` coverage — non-uniform grids, the ``monotonic`` variant,
+extrapolation, the coefficient arrays — lives in
+``test_cubic_interpolation.py``, which walks the v1.43 probe.
 """
 
 from __future__ import annotations
@@ -15,6 +30,11 @@ import pytest
 from pquantlib.exceptions import LibraryException
 from pquantlib.math.interpolations.akima_cubic_interpolation import (
     AkimaCubicInterpolation,
+)
+from pquantlib.math.interpolations.cubic_interpolation import (
+    BoundaryCondition,
+    CubicInterpolation,
+    DerivativeApprox,
 )
 from pquantlib.testing import reference_reader, tolerance
 
@@ -30,59 +50,70 @@ def _make() -> AkimaCubicInterpolation:
     return AkimaCubicInterpolation(xs, ys)
 
 
-def test_recovers_quadratic_exactly() -> None:
-    # scipy Akima with y=x^2 on a uniform grid recovers x^2 exactly
-    # (the canonical correctness test for an Akima 1970 implementation).
-    # The C++ port deviates here on the boundary cubic — see the
-    # module-level docstring; this test captures the "scipy gets the
-    # textbook right" property.
-    interp = _make()
-    for x in (0.25, 0.75, 1.5, 2.5, 3.75):
-        tolerance.tight(interp(x), x * x)
-
-
-def test_knots_match_cpp_tight(cpp: dict[str, Any]) -> None:
-    # Both implementations exactly interpolate the input data, so
-    # the values at the knots themselves agree to TIGHT.
+def test_values_match_cpp(cpp: dict[str, Any]) -> None:
+    """TIGHT at every probed point, boundary intervals included."""
     block = cpp["akima_cubic"]
-    xs = [float(e) for e in block["xs"]]
-    ys = [float(e) for e in block["ys"]]
     interp = _make()
-    for x, y in zip(xs, ys, strict=True):
-        tolerance.tight(interp(x), y)
-    # The xs_eval points themselves diverge because C++ and scipy use
-    # different endpoint cubics. The test that *does* run the
-    # cpp-fixture-derived asserts is the knots-match check above.
+    for x, expected in zip(block["xs_eval"], block["values"], strict=True):
+        tolerance.tight(interp(float(x)), float(expected))
 
 
-def test_derivative_runs(cpp: dict[str, Any]) -> None:
-    # Same divergence: the derivative differs near the boundary
-    # because the cubic differs. We only check the derivative is
-    # finite and reproduces 2*x at interior knots (the exact answer
-    # for y = x^2).
+def test_derivatives_match_cpp(cpp: dict[str, Any]) -> None:
+    block = cpp["akima_cubic"]
     interp = _make()
-    tolerance.tight(interp.derivative(1.0), 2.0)
-    tolerance.tight(interp.derivative(2.0), 4.0)
-    tolerance.tight(interp.derivative(3.0), 6.0)
-    # Reference the cpp fixture so the fixture-name lint passes even
-    # while we deliberately diverge from the boundary derivative.
-    _ = cpp
+    for x, expected in zip(block["xs_eval"], block["derivatives"], strict=True):
+        tolerance.tight(interp.derivative(float(x)), float(expected))
 
 
-def test_second_derivative_constant_for_quadratic() -> None:
-    # y = x^2 -> y'' = 2. scipy Akima with quadratic data on a uniform
-    # grid produces a constant cubic = quadratic, so y'' = 2 everywhere.
+def test_second_derivatives_match_cpp(cpp: dict[str, Any]) -> None:
+    block = cpp["akima_cubic"]
     interp = _make()
-    for x in (1.5, 2.5):  # interior — boundary cubic differs
-        tolerance.tight(interp.second_derivative(x), 2.0)
+    for x, expected in zip(block["xs_eval"], block["second_derivatives"], strict=True):
+        tolerance.tight(interp.second_derivative(float(x)), float(expected))
+
+
+def test_does_not_recover_the_quadratic_near_the_ends(cpp: dict[str, Any]) -> None:
+    """QuantLib's Akima is not the textbook one, and the difference is large.
+
+    On ``y = x^2`` a faithful Akima 1970 implementation reproduces ``x^2``
+    everywhere. QuantLib's endpoint slopes do not, and the first two and last
+    two intervals are visibly off — ``f(0.25) = 0.3588`` against ``0.0625``.
+    Pinning that keeps a "more correct" substitute from being slipped back in.
+    """
+    block = cpp["akima_cubic"]
+    interp = _make()
+    assert abs(interp(0.25) - 0.0625) > 0.25
+    assert abs(interp(3.75) - 14.0625) > 0.05
+    # Away from the ends it does reproduce the quadratic.
+    tolerance.tight(interp(2.5), 6.367307692307692)
+    _ = block
 
 
 def test_hits_knots_exactly() -> None:
-    xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
-    ys = np.array([0.0, 1.0, 4.0, 9.0, 16.0])
+    xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0], dtype=np.float64)
+    ys = np.array([0.0, 1.0, 4.0, 9.0, 16.0], dtype=np.float64)
     interp = AkimaCubicInterpolation(xs, ys)
     for x, y in zip(xs.tolist(), ys.tolist(), strict=True):
-        tolerance.tight(interp(x), y)
+        tolerance.exact(interp(float(x)), float(y))
+
+
+def test_is_the_cubic_interpolation_akima_preset() -> None:
+    """EXACT: the class is one argument tuple of ``CubicInterpolation``."""
+    xs = np.array([0.0, 1.0, 2.5, 3.0, 4.5, 6.0], dtype=np.float64)
+    ys = np.array([5.0, 3.0, 4.0, 2.0, 1.0, 3.0], dtype=np.float64)
+    a = AkimaCubicInterpolation(xs, ys)
+    b = CubicInterpolation(
+        xs,
+        ys,
+        DerivativeApprox.Akima,
+        False,
+        BoundaryCondition.SecondDerivative,
+        0.0,
+        BoundaryCondition.SecondDerivative,
+        0.0,
+    )
+    for x in (-0.5, 0.5, 2.0, 3.75, 6.5):
+        tolerance.exact(a(x, allow_extrapolation=True), b(x, allow_extrapolation=True))
 
 
 def test_rejects_extrapolation_by_default() -> None:
@@ -92,53 +123,44 @@ def test_rejects_extrapolation_by_default() -> None:
 
 
 def test_allows_extrapolation_when_requested() -> None:
+    """Extrapolation extends the end cubic — a finite number, never NaN.
+
+    scipy's ``Akima1DInterpolator`` returns NaN outside the data range; C++
+    evaluates the clamped end interval's cubic. That difference alone would
+    turn an out-of-range curve query into a silent NaN.
+    """
     interp = _make()
-    # scipy's Akima 1DInterpolator returns NaN outside the data range
-    # by default. We just exercise the path — the call must not raise.
-    v = interp(5.0, allow_extrapolation=True)
-    # NaN or finite both acceptable; key is no exception raised.
-    assert np.isnan(v) or np.isfinite(v)
+    value = interp(5.0, allow_extrapolation=True)
+    assert np.isfinite(value)
 
 
 def test_length_mismatch_raises() -> None:
     with pytest.raises(LibraryException, match="same length"):
-        AkimaCubicInterpolation(
-            np.array([0.0, 1.0, 2.0]),
-            np.array([0.0, 1.0]),
-        )
+        AkimaCubicInterpolation(np.array([0.0, 1.0, 2.0]), np.array([0.0, 1.0]))
 
 
 def test_akima_with_few_points() -> None:
     """C++ parity: ``testAkimaWithFewPoints`` (test-suite/interpolations.cpp, v1.43).
 
-    The Akima scheme reads S_[2] and S_[n-4] while computing the
-    first-derivative estimates; with three points S_ has size two and both
-    indices are out of bounds. Construction must fail cleanly rather than
-    silently produce something. scipy would happily accept 2 or 3 points and
-    return a degenerate cubic — a different answer from C++, not a safer one.
+    The Akima scheme reads ``S[2]`` and ``S[n-4]``; with three points both are
+    out of bounds, and C++ ``QL_REQUIRE``s against it.
     """
     with pytest.raises(LibraryException, match="at least 4 points"):
-        AkimaCubicInterpolation(
-            np.array([0.0, 1.0, 2.0]),
-            np.array([1.0, 2.0, 0.5]),
-        )
+        AkimaCubicInterpolation(np.array([0.0, 1.0, 2.0]), np.array([1.0, 2.0, 0.5]))
     with pytest.raises(LibraryException, match="at least 4 points"):
         AkimaCubicInterpolation(np.array([0.0, 1.0]), np.array([0.0, 1.0]))
 
-    # Four points are enough; the interpolation must reproduce the knots.
-    x4 = np.array([0.0, 1.0, 2.0, 3.0])
-    y4 = np.array([1.0, 2.0, 0.5, 1.5])
+    x4 = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
+    y4 = np.array([1.0, 2.0, 0.5, 1.5], dtype=np.float64)
     f = AkimaCubicInterpolation(x4, y4)
     for x, y in zip(x4.tolist(), y4.tolist(), strict=True):
-        tolerance.tight(f(x), y)
+        tolerance.exact(f(float(x)), float(y))
 
 
 def test_update_idempotent_when_inputs_unchanged() -> None:
-    xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
-    ys = np.array([0.0, 1.0, 4.0, 9.0, 16.0])
+    xs = np.array([0.0, 1.0, 2.0, 3.0, 4.0], dtype=np.float64)
+    ys = np.array([0.0, 1.0, 4.0, 9.0, 16.0], dtype=np.float64)
     interp = AkimaCubicInterpolation(xs, ys)
-    v1 = interp(1.5)
-    interp.update()  # Re-build cached splines.
-    v2 = interp(1.5)
-    # Pure refresh — must return the same value to TIGHT.
-    tolerance.tight(v2, v1)
+    before = interp(1.5)
+    interp.update()
+    tolerance.exact(interp(1.5), before)

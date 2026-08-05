@@ -13,6 +13,8 @@ valid here (unlike ``BackwardFlat``). ``derivative`` and
 
 from __future__ import annotations
 
+from typing import final
+
 import numpy as np
 
 from pquantlib.math.array import Array
@@ -57,3 +59,26 @@ class ForwardFlatInterpolation(Interpolation):
         # Piecewise-constant — derivative is zero everywhere (C++ parity).
         del x
         return 0.0
+
+
+@final
+class ForwardFlat:
+    """Forward-flat interpolation factory and traits.
+
+    # C++ parity: ``class ForwardFlat`` (forwardflatinterpolation.hpp:57-66).
+    """
+
+    global_ = False  # C++ ``static const bool global = false``.
+    required_points = 2  # C++ ``static const Size requiredPoints = 2``.
+
+    def interpolate(
+        self, x_seq: Array, y_seq: Array, update: bool = True
+    ) -> ForwardFlatInterpolation:
+        """Build a :class:`ForwardFlatInterpolation` over ``(x, y)``."""
+        f = ForwardFlatInterpolation(x_seq, y_seq)
+        if update:
+            f.update()
+        return f
+
+
+__all__ = ["ForwardFlat", "ForwardFlatInterpolation"]

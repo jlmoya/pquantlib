@@ -1,34 +1,51 @@
 """MultiCubicSpline — n-D cubic interpolation on a rectilinear grid.
 
-# C++ parity: ql/math/interpolations/multicubicspline.hpp (v1.42.1).
+# C++ parity: ql/math/interpolations/multicubicspline.hpp (v1.43).
 
-The C++ ``MultiCubicSpline`` is 571 LOC of templated machinery that
-recursively composes 1-D natural cubic splines over each axis of a
-``MultiArray<n>``. PQuantLib delegates to
-``scipy.interpolate.RegularGridInterpolator(method='cubic')`` for the
-2-D / 3-D cases (and supports n-D in general); for the 1-D degenerate
-case it falls back to ``scipy.interpolate.CubicSpline(bc_type='natural')``
-(matching the 1-D ``CubicNaturalSpline`` already ported in Phase 9 L9-A).
+C++ ``MultiCubicSpline<N>`` is 571 lines of template recursion, but the
+algorithm underneath is small: a **tensor product of 1-D natural cubic
+splines**. ``detail::base_cubic_spline`` is the Numerical-Recipes tridiagonal
+solve with ``y2[0] = y2[dim] = 0`` — natural boundary conditions — and
+``detail::n_cubic_splint`` recursively collapses one axis at a time, splining
+the collapsed values along the next axis up. It is exactly
+:class:`~pquantlib.math.interpolations.bicubic_spline.BicubicSpline`
+generalised to n dimensions.
 
-**Documented divergence — boundary condition.** scipy's
-``RegularGridInterpolator(method='cubic')`` uses a *Hermite cubic*
-piecewise interpolation: the per-axis 1-D segments are
-``Bernstein/de-Boor`` cubics matched to numerical derivative estimates,
-not the natural-spline tridiagonal solve used by QuantLib's
-``MultiCubicSpline``. At pillar nodes both implementations roundtrip
-exactly (both interpolate, neither approximates). At off-pillar
-interior points on a coarse grid the two BCs measurably disagree
-(observed ~1e-4 magnitude on the L10-C probe's 4x4 grid). For the
-typical use-case (vol surfaces with 10+ points per axis) the
-difference is below the tier-LOOSE threshold.
+**This module used to delegate to**
+``scipy.interpolate.RegularGridInterpolator(method='cubic')``, whose per-axis
+segments are *local* cubics fitted to numerical derivative estimates rather
+than a global natural spline. The old module docstring called that a
+"documented divergence" of "~1e-4 magnitude"; measured against the v1.43
+probe on a non-uniform 5x4 grid the actual disagreement is **8 %** in 2-D and
+**9 %** in 3-D. The recursion is now transcribed and agrees with C++ to
+4e-16.
 
-**Indexing convention.** Matches the existing
-:class:`~pquantlib.math.interpolations.bicubic_spline.BicubicSpline`:
-the 2-D ``z`` matrix is indexed as ``z[y_index, x_index]`` — rows
-are y, columns are x. For n>=3 the indexing is in *grid order*:
-``values[i_0, i_1, ..., i_{n-1}]`` where ``i_k`` indexes
-``grid[k]``. This matches scipy's
-``RegularGridInterpolator(points=grid, values=values)`` contract.
+Because the natural-spline operator on each axis is linear and the operators
+act on different axes, they commute — the collapse order does not change the
+answer, only the last-bit rounding. This port collapses the last axis first,
+which lets the innermost layer of splines be built once at construction (the
+only layer that does not depend on the query point).
+
+**Point count.** C++ requires **4** points on every axis
+(``set_shared_increments`` needs ``size() - 1 > 2``). This port keeps the
+2-point minimum it already had, since the 1-D natural spline is well defined
+there; a 2- or 3-point axis simply has no C++ counterpart to cross-validate
+against.
+
+**Boundary caveat.** The C++ header carries a standing ``\bug`` note: "cannot
+interpolate at the grid points on the boundary surface of the N-dimensional
+region", and the C++ test-suite only ever checks strictly interior nodes. The
+reference probe follows that restriction. This port has no such limitation —
+it reproduces the grid values on the boundary too — so the boundary is
+deliberately *not* cross-validated.
+
+**Indexing convention.** ``values[i_0, i_1, ..., i_{n-1}]`` where ``i_k``
+indexes ``grid[k]`` — grid order, matching C++ ``y[i][j][k]``. For ``n == 2``
+that means ``values[x_index, y_index]``, which is the **transpose** of the
+``z[y, x]`` convention used by
+:class:`~pquantlib.math.interpolations.bicubic_spline.BicubicSpline` and the
+rest of the 2-D family. C++ has the same split, for the same reason: this
+class is indexed by grid axis, the 2-D family by (row, column).
 
 This class is *not* a subclass of :class:`Interpolation` /
 :class:`Interpolation2D` because it generalizes to n>2; the abstract
@@ -40,16 +57,12 @@ on each axis via :meth:`axis_range`.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
 
 import numpy as np
-from scipy.interpolate import (  # type: ignore[import-untyped]
-    CubicSpline,
-    RegularGridInterpolator,
-)
 
 from pquantlib import qassert
 from pquantlib.math.array import Array
+from pquantlib.math.interpolations.cubic_interpolation import CubicNaturalSpline
 from pquantlib.math.matrix import Matrix
 
 
@@ -66,9 +79,9 @@ class MultiCubicSpline:
         values: n-D array of values shaped ``(len(grid[0]),
             len(grid[1]), ..., len(grid[n-1]))``.
 
-    For ``len(grid) == 1`` we fall back to
-    ``scipy.interpolate.CubicSpline(bc_type='natural')`` to match the
-    1-D ``CubicNaturalSpline`` already ported in L9-A.
+    For ``len(grid) == 1`` this degenerates to a plain
+    :class:`~pquantlib.math.interpolations.cubic_interpolation.CubicNaturalSpline`,
+    which is what the tensor product collapses to.
     """
 
     def __init__(
@@ -101,30 +114,16 @@ class MultiCubicSpline:
         )
         self._axes: list[np.ndarray] = axes
         self._values: np.ndarray = vals
-        self._spline: Any
         self._n_dim: int = len(axes)
-        if self._n_dim == 1:
-            # Match L9-A CubicNaturalSpline (natural BC, scipy.CubicSpline).
-            self._spline = CubicSpline(
-                axes[0], vals, bc_type="natural", extrapolate=True
-            )
-        else:
-            # 2-D and higher — delegate to scipy's cubic RGI.
-            # ``method='cubic'`` is the Hermite cubic; available since
-            # scipy 1.9.
-            # ``fill_value=None`` is a sentinel asking scipy to extrapolate
-            # (rather than return ``nan`` or a fixed fill); the C++
-            # MultiCubicSpline supports the same via
-            # ``Extrapolator::enableExtrapolation()``. The argument type
-            # in scipy's stubs is ``float`` despite accepting ``None``;
-            # we cast through ``Any`` and pyright-ignore the assignment.
-            self._spline = RegularGridInterpolator(
-                tuple(axes),
-                vals,
-                method="cubic",
-                bounds_error=False,
-                fill_value=None,  # type: ignore[arg-type]
-            )
+        # The innermost layer of the recursion — one natural cubic spline per
+        # line along the LAST axis — does not depend on the query point, so it
+        # is built once here. C++ likewise precomputes all second derivatives
+        # (``y2_``) in the constructor.
+        last = axes[-1]
+        self._inner: list[CubicNaturalSpline] = [
+            CubicNaturalSpline(last, line) for line in vals.reshape(-1, last.shape[0])
+        ]
+        self._inner_shape: tuple[int, ...] = vals.shape[:-1]
 
     # --- inspectors -------------------------------------------------------
 
@@ -150,23 +149,42 @@ class MultiCubicSpline:
 
         For n=1, ``point`` is a scalar.
         For n>=2, ``point`` is a length-n sequence.
+
+        # C++ parity: ``MultiCubicSpline<i>::operator()`` ->
+        # ``detail::n_cubic_splint`` / ``detail::base_cubic_spline``: collapse
+        # one axis at a time with a natural cubic spline, feeding the results
+        # up to the next axis.
         """
-        if self._n_dim == 1:
-            if isinstance(point, (int, float)):
-                x = float(point)
-            else:
-                point_arr = np.ascontiguousarray(point, dtype=np.float64)
-                qassert.require(
-                    point_arr.shape == (1,),
-                    f"MultiCubicSpline 1-D call expects scalar; got shape {point_arr.shape}",
-                )
-                x = float(point_arr[0])
-            return float(self._spline(x))
-        # n>=2 — RGI expects a (1, n) array of points.
-        point_arr = np.atleast_2d(np.ascontiguousarray(point, dtype=np.float64))
-        qassert.require(
-            point_arr.shape == (1, self._n_dim),
-            f"MultiCubicSpline {self._n_dim}-D call expects an n-vector "
-            f"(n={self._n_dim}); got shape {point_arr.shape}",
-        )
-        return float(self._spline(point_arr)[0])
+        if self._n_dim == 1 and isinstance(point, (int, float)):
+            coords = [float(point)]
+        else:
+            point_arr = np.ascontiguousarray(point, dtype=np.float64).ravel()
+            qassert.require(
+                point_arr.shape == (self._n_dim,),
+                f"MultiCubicSpline {self._n_dim}-D call expects an n-vector "
+                f"(n={self._n_dim}); got shape {point_arr.shape}",
+            )
+            coords = [float(c) for c in point_arr]
+
+        # Innermost layer: the cached last-axis splines, evaluated at the last
+        # coordinate. Extrapolation is allowed at every internal layer, as in
+        # C++ where the recursion calls the raw splint with no range check.
+        current = np.array(
+            [s(coords[-1], allow_extrapolation=True) for s in self._inner],
+            dtype=np.float64,
+        ).reshape(self._inner_shape)
+
+        # Then the remaining axes, last to first. Each step splines along the
+        # trailing axis of ``current`` and drops it.
+        for k in range(self._n_dim - 2, -1, -1):
+            axis = self._axes[k]
+            flat = current.reshape(-1, axis.shape[0])
+            current = np.array(
+                [
+                    CubicNaturalSpline(axis, line)(coords[k], allow_extrapolation=True)
+                    for line in flat
+                ],
+                dtype=np.float64,
+            ).reshape(current.shape[:-1])
+
+        return float(current.item())

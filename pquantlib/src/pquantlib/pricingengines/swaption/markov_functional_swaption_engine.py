@@ -225,12 +225,20 @@ class MarkovFunctionalSwaptionEngine(GenericEngine[SwaptionArguments, SwaptionRe
         # Sum segment integrals.
         # C++ markovfunctional.cpp:1059-1064.
         price = 0.0
-        # pyright: ignore[reportPrivateUsage] — scipy CubicSpline access
-        spline_c = payoff_interp._spline.c  # type: ignore[reportPrivateUsage]
+        # C++ parity: the per-segment cubic coefficients come from
+        # ``CubicInterpolation::cCoefficients()`` / ``bCoefficients()`` /
+        # ``aCoefficients()``, where the segment is
+        #   s(z) = p[i] + a[i] (z-z_i) + b[i] (z-z_i)^2 + c[i] (z-z_i)^3
+        # so c = cubic, b = quadratic, a = linear. This used to read scipy's
+        # private ``PPoly.c`` matrix off the interpolation; ``CubicNaturalSpline``
+        # is now a transcription of the C++ class and exposes C++'s accessors.
+        cubic_coefs = payoff_interp.c_coefficients()
+        quadratic_coefs = payoff_interp.b_coefficients()
+        linear_coefs = payoff_interp.a_coefficients()
         for i in range(z.size - 1):
-            cubic = float(spline_c[0, i])
-            quadratic = float(spline_c[1, i])
-            linear = float(spline_c[2, i])
+            cubic = cubic_coefs[i]
+            quadratic = quadratic_coefs[i]
+            linear = linear_coefs[i]
             price += self._model.gaussian_shifted_polynomial_integral_helper(
                 0.0, cubic, quadratic, linear,
                 float(p[i]), float(z[i]), float(z[i]), float(z[i + 1]),
@@ -262,9 +270,9 @@ class MarkovFunctionalSwaptionEngine(GenericEngine[SwaptionArguments, SwaptionRe
                 i = z.size - 2
                 price += self._model.gaussian_shifted_polynomial_integral_helper(
                     0.0,
-                    float(spline_c[0, i]),
-                    float(spline_c[1, i]),
-                    float(spline_c[2, i]),
+                    cubic_coefs[i],
+                    quadratic_coefs[i],
+                    linear_coefs[i],
                     float(p[i]),
                     float(z[i]),
                     float(z[z.size - 1]),
@@ -273,9 +281,9 @@ class MarkovFunctionalSwaptionEngine(GenericEngine[SwaptionArguments, SwaptionRe
             else:  # Receiver / put: left tail.
                 price += self._model.gaussian_shifted_polynomial_integral_helper(
                     0.0,
-                    float(spline_c[0, 0]),
-                    float(spline_c[1, 0]),
-                    float(spline_c[2, 0]),
+                    cubic_coefs[0],
+                    quadratic_coefs[0],
+                    linear_coefs[0],
                     float(p[0]),
                     float(z[0]),
                     -100.0,

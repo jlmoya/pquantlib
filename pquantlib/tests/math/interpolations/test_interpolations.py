@@ -116,9 +116,14 @@ def test_log_linear_hits_knots_exactly() -> None:
 
 
 def test_log_linear_rejects_non_positive_y() -> None:
+    """The message is C++'s, which names the offending index.
+
+    # C++ parity: ``QL_REQUIRE(yBegin_[i] > 0.0, "invalid value (" << ...
+    #             << ") at index " << i)`` (loginterpolation.hpp:380-383).
+    """
     xs = np.array([0.0, 1.0, 2.0])
     ys = np.array([1.0, 0.0, 1.0])
-    with pytest.raises(LibraryException, match="strictly positive"):
+    with pytest.raises(LibraryException, match=r"invalid value \(0.0\) at index 1"):
         LogLinearInterpolation(xs, ys)
 
 

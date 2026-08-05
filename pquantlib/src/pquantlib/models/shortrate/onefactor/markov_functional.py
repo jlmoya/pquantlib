@@ -681,33 +681,33 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         ys: npt.NDArray[np.float64],
         j: int,
     ) -> tuple[float, float, float]:
-        """Return scipy cubic segment coefficients as ``(cubic, quadratic, linear)``.
+        """Return the cubic segment coefficients as ``(cubic, quadratic, linear)``.
 
-        # C++ parity: ``CubicInterpolation::aCoefficients()`` /
-        # ``bCoefficients()`` / ``cCoefficients()`` from
-        # cubicinterpolation.hpp.
+        # C++ parity: ``CubicInterpolation::cCoefficients()`` /
+        # ``bCoefficients()`` / ``aCoefficients()`` from
+        # cubicinterpolation.hpp:186-188.
         #
-        # QL's segment representation (cubicinterpolation.hpp):
+        # QL's segment representation (cubicinterpolation.hpp:51-54):
         #   s(y) = ys[j] + aCoef[j] (y - y_j) + bCoef[j] (y - y_j)^2
         #               + cCoef[j] (y - y_j)^3
         # so ``aCoef = linear``, ``bCoef = quadratic``, ``cCoef = cubic``.
         #
-        # scipy's CubicSpline polynomial convention (PPoly with c shape
-        # ``(4, n-1)``) is:
-        #   s(y) = c[0,j] (y - y_j)^3 + c[1,j] (y - y_j)^2
-        #        + c[2,j] (y - y_j)   + c[3,j]
-        # so ``c[0] = cubic, c[1] = quadratic, c[2] = linear,
-        #     c[3] = const (= ys[j])``.
-        #
         # The (cubic, quadratic, linear) ordering matches the order the
         # caller wants to pass to ``_gaussian_shifted_polynomial_integral``
         # (whose signature is ``(quartic, cubic, quadratic, linear, ...)``).
+        #
+        # This used to read scipy's ``PPoly.c`` matrix off the interpolation's
+        # private ``_spline``. ``CubicNaturalSpline`` is now a transcription of
+        # the C++ class and exposes C++'s own accessors, so the coefficients
+        # come straight from those — no basis conversion, and no dependence on
+        # a scipy attribute that could change under us.
         """
         _ = ys
-        # pyright: ignore[reportPrivateUsage] — scipy CubicSpline access
-        spline = interp._spline  # type: ignore[reportPrivateUsage]
-        c_arr = spline.c
-        return float(c_arr[0, j]), float(c_arr[1, j]), float(c_arr[2, j])
+        return (
+            interp.c_coefficients()[j],
+            interp.b_coefficients()[j],
+            interp.a_coefficients()[j],
+        )
 
     def _market_swap_rate(
         self,

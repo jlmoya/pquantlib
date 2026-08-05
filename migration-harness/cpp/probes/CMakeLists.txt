@@ -833,10 +833,14 @@ target_include_directories(v143_trinomial_g2process_probe PRIVATE ${NLOHMANN_JSO
 target_link_libraries(v143_trinomial_g2process_probe PRIVATE ${QUANTLIB_LIBRARY})
 
 # === v1.43 math-subsystem coverage closure =================================
-# One probe per math area. Each emits references/v143/math/<area>.json.
+# One probe per math area. Each emits references/v143/math/<area>.json — note
+# that generate-references.sh turns every underscore in the target name into a
+# slash, so the two interpolation areas land at v143/math/interp/{cubic,kernel}.
 foreach(area
         distributions
         integrals
+        interp_cubic
+        interp_kernel
         matrixutilities
         tail)
     add_executable(v143_math_${area}_probe v143_math_${area}/probe.cpp)

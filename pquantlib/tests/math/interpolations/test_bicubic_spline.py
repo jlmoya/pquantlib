@@ -57,30 +57,24 @@ def test_bicubic_pillars_match_cpp_tight(cpp: dict[str, Any]) -> None:
             tolerance.tight(interp(float(x), float(y)), float(pillars[j][i]))
 
 
-def test_bicubic_intermediates_match_cpp_custom(cpp: dict[str, Any]) -> None:
-    # Custom tolerance: C++ ``BicubicSpline`` composes row-then-column
-    # *natural-BC* cubic splines (bicubicsplineinterpolation.hpp ->
-    # CubicNaturalSpline per row/column). scipy.RectBivariateSpline uses
-    # a tensor-product B-spline with *not-a-knot* boundary conditions.
-    # On a 4x4 grid the boundary-condition difference dominates the
-    # off-pillar interior; observed rel-error up to ~10% on the probe.
-    # Both implementations remain in the same neighborhood of the
-    # smooth underlying function (sin(x) + cos(y)); we assert here that
-    # the surfaces agree within a generous 0.15 relative-error envelope.
-    # The pillar-roundtrip test above carries the TIGHT correctness
-    # contract; this test only asserts qualitative agreement off-grid.
+def test_bicubic_intermediates_match_cpp_tight(cpp: dict[str, Any]) -> None:
+    """Off-pillar values now match C++ to TIGHT.
+
+    This assertion used to be a 0.15 relative-error "qualitative agreement"
+    envelope, because the port delegated to
+    ``scipy.interpolate.RectBivariateSpline`` — a tensor-product B-spline with
+    not-a-knot end conditions — where C++ composes *natural* 1-D cubic splines
+    row-then-column. Same pillars, different function in between: the observed
+    gap on this 4x4 grid was ~10 %. The composition is now transcribed from
+    ``bicubicsplineinterpolation.hpp``, so the surfaces agree everywhere and
+    the envelope is replaced by the tier.
+    """
     block = cpp["bicubic_spline"]
     mids_xy = block["mids_xy"]
     mids_z = block["mids_z"]
     interp = _make(cpp)
     for (x, y), expected in zip(mids_xy, mids_z, strict=True):
-        v_scipy = interp(float(x), float(y))
-        rel_err = abs(v_scipy - float(expected)) / max(abs(float(expected)), 1.0)
-        assert rel_err < 0.15, (
-            f"scipy RectBivariateSpline (not-a-knot) and C++ BicubicSpline (natural BC) "
-            f"diverged by {rel_err:.4f} at (x={x}, y={y}): "
-            f"scipy={v_scipy} cpp={expected}"
-        )
+        tolerance.tight(interp(float(x), float(y)), float(expected))
 
 
 def test_bicubic_update_refreshes() -> None:

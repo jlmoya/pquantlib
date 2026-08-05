@@ -97,6 +97,49 @@ class Interpolation2D(ABC):
     def y_max(self) -> float:
         return float(self._ys[-1])
 
+    @property
+    def x_values(self) -> Array:
+        """The x abscissae, as a copy.
+
+        # C++ parity: ``Interpolation2D::xValues()`` (interpolation2d.hpp:152),
+        # which returns a ``std::vector<Real>`` by value.
+        """
+        return self._xs.copy()
+
+    @property
+    def y_values(self) -> Array:
+        """The y abscissae, as a copy.
+
+        # C++ parity: ``Interpolation2D::yValues()`` (interpolation2d.hpp:164).
+        """
+        return self._ys.copy()
+
+    @property
+    def z_data(self) -> Matrix:
+        """The grid values, as a copy, indexed ``z[y_index, x_index]``.
+
+        # C++ parity: ``Interpolation2D::zData()`` (interpolation2d.hpp:170).
+        # C++ returns a const reference; we copy, matching the 1-D base's
+        # ``x_values`` / ``y_values``.
+        """
+        return self._z.copy()
+
+    def locate_x(self, x: float) -> int:
+        """Index ``i`` with ``xs[i] <= x < xs[i+1]``, clamped to ``[0, n-2]``.
+
+        # C++ parity: ``Interpolation2D::templateImpl::locateX``
+        # (interpolation2d.hpp:111-122).
+        """
+        return _locate_1d(self._xs, x)
+
+    def locate_y(self, y: float) -> int:
+        """Index ``j`` with ``ys[j] <= y < ys[j+1]``, clamped to ``[0, m-2]``.
+
+        # C++ parity: ``Interpolation2D::templateImpl::locateY``
+        # (interpolation2d.hpp:123-134).
+        """
+        return _locate_1d(self._ys, y)
+
     def is_in_range(self, x: float, y: float) -> bool:
         x_ok = (self.x_min <= x <= self.x_max) or close(x, self.x_min) or close(x, self.x_max)
         if not x_ok:
@@ -131,3 +174,17 @@ class Interpolation2D(ABC):
             f"interpolation range is [{self.x_min}, {self.x_max}] x "
             f"[{self.y_min}, {self.y_max}]: extrapolation at ({x}, {y}) not allowed",
         )
+
+
+def _locate_1d(values: Array, x: float) -> int:
+    """C++ ``locateX`` / ``locateY`` (``Interpolation2D::templateImpl``).
+
+    ``upper_bound(begin, end-1, x) - begin - 1`` with the two boundary clamps:
+    below the first abscissa the answer is 0, above the last it is ``n-2``.
+    """
+    n = values.shape[0]
+    if x < float(values[0]):
+        return 0
+    if x > float(values[-1]):
+        return n - 2
+    return int(np.searchsorted(values[:-1], x, side="right")) - 1
