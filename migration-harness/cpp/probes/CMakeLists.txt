@@ -836,6 +836,7 @@ target_link_libraries(v143_trinomial_g2process_probe PRIVATE ${QUANTLIB_LIBRARY}
 # One probe per math area. Each emits references/v143/math/<area>.json.
 foreach(area
         distributions
+        matrixutilities
         tail)
     add_executable(v143_math_${area}_probe v143_math_${area}/probe.cpp)
     target_link_libraries(v143_math_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
