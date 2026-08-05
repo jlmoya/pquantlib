@@ -8,7 +8,7 @@ from pquantlib.termstructures.volatility.swaption.spreaded_swaption_vol import (
     SpreadedSwaptionVolatility,
 )
 from pquantlib.termstructures.volatility.swaption.swaption_constant_vol import (
-    SwaptionConstantVolatility,
+    ConstantSwaptionVolatility,
 )
 from pquantlib.testing import tolerance
 from pquantlib.time.business_day_convention import BusinessDayConvention
@@ -19,8 +19,8 @@ from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
 
 
-def _base() -> SwaptionConstantVolatility:
-    return SwaptionConstantVolatility(
+def _base() -> ConstantSwaptionVolatility:
+    return ConstantSwaptionVolatility(
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
         volatility=0.20,
         calendar=TARGET(),

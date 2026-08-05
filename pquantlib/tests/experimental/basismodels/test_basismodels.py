@@ -45,7 +45,7 @@ from pquantlib.termstructures.volatility.optionlet.constant_optionlet_vol import
     ConstantOptionletVolatility,
 )
 from pquantlib.termstructures.volatility.swaption.swaption_constant_vol import (
-    SwaptionConstantVolatility,
+    ConstantSwaptionVolatility,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -86,7 +86,7 @@ def _tenor_swaption_vts(curve: FlatForward) -> TenorSwaptionVTS:
     cal = TARGET()
     base6m = Euribor.six_months(curve)
     targ3m = Euribor.three_months(curve)
-    base_vol = SwaptionConstantVolatility(
+    base_vol = ConstantSwaptionVolatility(
         reference_date=_TODAY,
         calendar=cal,
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
