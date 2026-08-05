@@ -1,6 +1,6 @@
-"""Convertible bonds — base + fixed-coupon / zero-coupon variants.
+"""Convertible bonds — base + fixed-coupon / zero-coupon / floating variants.
 
-# C++ parity: ql/instruments/bonds/convertiblebonds.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/instruments/bonds/convertiblebonds.{hpp,cpp} (v1.43).
 
 A :class:`ConvertibleBond` is a :class:`~pquantlib.instruments.bond.Bond`
 carrying an embedded conversion right (``conversion_ratio``) plus an optional
@@ -18,6 +18,8 @@ Variants:
   100.
 * :class:`ConvertibleFixedCouponBond` — fixed-rate coupon leg, notional forced
   to 100.
+* :class:`ConvertibleFloatingRateBond` — IBOR-indexed coupon leg, notional
+  forced to 100.
 
 # C++ parity divergence — notional:
 # the C++ ctors force the notional to 100 (the conversion ratio + redemption
@@ -32,6 +34,7 @@ from typing import TYPE_CHECKING
 
 from pquantlib import qassert
 from pquantlib.cashflows.fixed_rate_leg import fixed_rate_leg
+from pquantlib.cashflows.ibor_coupon import IborLeg
 from pquantlib.cashflows.simple_cash_flow import Redemption
 from pquantlib.instruments.bond import (
     Bond,
@@ -41,6 +44,7 @@ from pquantlib.instruments.bond import (
 )
 from pquantlib.instruments.callability import CallabilityType
 from pquantlib.instruments.soft_callability import SoftCallability
+from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.compounding import Compounding
 from pquantlib.time.date import Date
 from pquantlib.time.frequency import Frequency
@@ -54,6 +58,9 @@ if TYPE_CHECKING:
         PricingEngineArguments,
         PricingEngineResults,
     )
+    from pquantlib.termstructures.protocols import IborIndexProtocol
+    from pquantlib.time.calendar import Calendar
+    from pquantlib.time.period import Period
     from pquantlib.time.schedule import Schedule
 
 _NULL_DATE: Date = Date()
@@ -300,10 +307,82 @@ class ConvertibleFixedCouponBond(ConvertibleBond):
             cf.register_with(self)
 
 
+class ConvertibleFloatingRateBond(ConvertibleBond):
+    """Convertible floating-rate (IBOR-indexed) bond.
+
+    # C++ parity: ``ConvertibleFloatingRateBond`` (convertiblebonds.hpp:120-142,
+    # convertiblebonds.cpp:112-150) @ v1.43.
+    """
+
+    def __init__(
+        self,
+        exercise: Exercise,
+        conversion_ratio: float,
+        callability: Sequence[Callability],
+        issue_date: Date | None,
+        settlement_days: int,
+        index: IborIndexProtocol,
+        fixing_days: int,
+        spreads: Sequence[float],
+        day_counter: DayCounter,
+        schedule: Schedule,
+        redemption: float = 100.0,
+        ex_coupon_period: Period | None = None,
+        ex_coupon_calendar: Calendar | None = None,
+        ex_coupon_convention: BusinessDayConvention = BusinessDayConvention.Unadjusted,
+        ex_coupon_end_of_month: bool = False,
+    ) -> None:
+        super().__init__(
+            exercise,
+            conversion_ratio,
+            callability,
+            issue_date,
+            settlement_days,
+            schedule,
+            redemption,
+        )
+
+        # !!! notional forcibly set to 100 (convertiblebonds.cpp:136-144).
+        # The chained ``IborLeg`` builder is used directly rather than the
+        # ``ibor_leg`` keyword façade, because the façade does not expose
+        # ``with_ex_coupon_period``.
+        builder = (
+            IborLeg(schedule, index)
+            .with_payment_day_counter(day_counter)
+            .with_notionals([100.0])
+            .with_payment_adjustment(schedule.business_day_convention)
+            .with_fixing_days(fixing_days)
+            .with_spreads(list(spreads))
+        )
+        if ex_coupon_period is not None:
+            # C++ passes an empty Calendar() through unconditionally; the leg
+            # builder then falls back to the schedule's calendar.
+            builder = builder.with_ex_coupon_period(
+                ex_coupon_period,
+                ex_coupon_calendar if ex_coupon_calendar is not None else schedule.calendar,
+                ex_coupon_convention,
+                ex_coupon_end_of_month,
+            )
+        self._cashflows = builder.build()
+
+        self._add_redemptions_to_cashflows([redemption])
+
+        qassert.require(len(self._redemptions) == 1, "multiple redemptions created")
+
+        # C++ ``registerWith(index)`` — the index is protocol-typed here, so
+        # probe for the Observable API the same way FloatingRateBond does.
+        reg = getattr(index, "register_with", None)
+        if callable(reg):
+            reg(self)
+        for cf in self._cashflows:
+            cf.register_with(self)
+
+
 __all__ = [
     "ConvertibleBond",
     "ConvertibleBondArguments",
     "ConvertibleBondResults",
     "ConvertibleFixedCouponBond",
+    "ConvertibleFloatingRateBond",
     "ConvertibleZeroCouponBond",
 ]
