@@ -1,6 +1,6 @@
 """Currency descriptor — ISO 4217 unit of account.
 
-# C++ parity: ql/currency.hpp + ql/currency.cpp (v1.42.1).
+# C++ parity: ql/currency.hpp + ql/currency.cpp (v1.43).
 
 The C++ class uses a ``shared_ptr<Data>`` PIMPL to allow cheap copying
 of a "default-constructed empty" currency. PQuantLib collapses that into
@@ -34,6 +34,12 @@ class Currency:
       - ``fractions_per_unit``: e.g. 100 for cents (JPY uses 100 too,
         per ISO 4217 — historical sen).
       - ``rounding``: per-currency rounding policy.
+      - ``triangulation_currency``: the currency an exchange rate is
+        routed through when no direct rate exists. Only the pre-euro
+        legacy currencies carry one (always EUR).
+      - ``minor_unit_codes``: alternative codes for the minor unit,
+        e.g. ``GBp``/``GBX`` for GBP. No v1.43 currency populates it,
+        but it is part of the ``Currency::Data`` payload.
 
     Default ctor produces an "empty" currency (parity with C++
     ``Currency() = default``).
@@ -46,6 +52,13 @@ class Currency:
     fraction_symbol: str = ""
     fractions_per_unit: int = 100
     rounding: Rounding = field(default_factory=Rounding)
+    # C++ parity: ``Currency::Data::triangulated`` is an empty Currency when
+    # there is none. Python uses ``None`` for that — an empty Currency default
+    # would recurse forever through the dataclass default factory.
+    triangulation_currency: Currency | None = None
+    # C++ parity: ``std::set<std::string>``; a frozenset keeps the dataclass
+    # hashable and the field immutable.
+    minor_unit_codes: frozenset[str] = frozenset()
 
     def empty(self) -> bool:
         """True if this currency was default-constructed."""

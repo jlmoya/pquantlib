@@ -831,3 +831,13 @@ endif()
 add_executable(v143_trinomial_g2process_probe v143_trinomial_g2process/probe.cpp)
 target_include_directories(v143_trinomial_g2process_probe PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
 target_link_libraries(v143_trinomial_g2process_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === currencies: full ISO-4217 data sweep ===
+# Every currency class in ql/currencies/{africa,america,asia,europe,oceania,
+# crypto}.hpp — 111 of them — emitted with its complete Currency::Data payload
+# (name, ISO code, numeric code, symbol, fraction symbol, fractions per unit,
+# rounding convention, triangulation currency, minor unit codes). Pure static
+# data, so this is EXACT-tier ground truth.
+# Emits references/currencies/all.json.
+add_executable(currencies_all_probe currencies_all/probe.cpp)
+target_link_libraries(currencies_all_probe PRIVATE ${QUANTLIB_LIBRARY})
