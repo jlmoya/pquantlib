@@ -73,3 +73,26 @@ class CumulativeNormalDistribution:
         """First derivative: ``gaussian((x - average)/sigma) / sigma``."""
         xn = (x - self.average) / self.sigma
         return self._gaussian(xn) / self.sigma
+
+
+@dataclass(frozen=True, slots=True)
+class MaddockCumulativeNormal:
+    """Normal CDF at full double precision, without the asymptotic fallback.
+
+    # C++ parity: ``class MaddockCumulativeNormal`` —
+    # normaldistribution.hpp:225-233, normaldistribution.cpp:202-210. C++
+    # forwards to ``boost::math::cdf(normal_distribution<Real>(mu, sigma), x)``,
+    # which is ``0.5 * erfc(-z / sqrt(2))``.
+
+    Distinct from :class:`CumulativeNormalDistribution` above, which switches
+    to an Abramowitz-Stegun asymptotic expansion once the principal result
+    drops below 1e-8 and therefore returns *different* numbers in the far left
+    tail. Keeping both is the point: C++ has both, and callers pick.
+    """
+
+    average: float = 0.0
+    sigma: float = 1.0
+
+    def __call__(self, x: float) -> float:
+        z = (x - self.average) / self.sigma
+        return 0.5 * math.erfc(-z * _M_SQRT_2)
