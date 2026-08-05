@@ -98,27 +98,32 @@ def test_xoshiro256_starstar_matches_cpp(cpp: dict[str, Any]) -> None:
         tolerance.exact(rng.next().value, float(exp))
 
 
-# --- seed-0 rejection (pquantlib-specific divergence) ------------------
+# --- seed 0 defers to SeedGenerator ------------------------------------
+#
+# All four RNGs read ``seed != 0 ? seed : SeedGenerator::instance().get()``
+# in C++ (mt19937uniformrng.cpp:88, knuthuniformrng.cpp:33,
+# lecuyeruniformrng.cpp:45, xoshiro256starstaruniformrng.cpp:55), and
+# ``SeedGenerator`` is clock-seeded. These tests used to assert that
+# pquantlib *rejected* seed 0, a documented divergence taken while
+# ``SeedGenerator`` was unported; it is ported now, so the C++ behaviour is
+# restored. Two generators seeded with 0 draw independent seeds, so the
+# probability of a false failure below is 2^-32 per generator.
 
 
-def test_mersenne_twister_rejects_seed_zero() -> None:
-    with pytest.raises(ValueError, match="nonzero seed"):
-        MersenneTwisterUniformRng(seed=0)
-
-
-def test_knuth_rejects_seed_zero() -> None:
-    with pytest.raises(ValueError, match="nonzero seed"):
-        KnuthUniformRng(seed=0)
-
-
-def test_lecuyer_rejects_seed_zero() -> None:
-    with pytest.raises(ValueError, match="nonzero seed"):
-        LecuyerUniformRng(seed=0)
-
-
-def test_xoshiro256_starstar_rejects_seed_zero() -> None:
-    with pytest.raises(ValueError, match="nonzero seed"):
-        Xoshiro256StarStarUniformRng(seed=0)
+@pytest.mark.parametrize(
+    "factory",
+    [
+        MersenneTwisterUniformRng,
+        KnuthUniformRng,
+        LecuyerUniformRng,
+        Xoshiro256StarStarUniformRng,
+    ],
+)
+def test_seed_zero_is_clock_derived(factory: Any) -> None:
+    first = factory(seed=0).next().value
+    second = factory(seed=0).next().value
+    assert 0.0 <= first < 1.0
+    assert first != second
 
 
 # --- xoshiro from_state -------------------------------------------------

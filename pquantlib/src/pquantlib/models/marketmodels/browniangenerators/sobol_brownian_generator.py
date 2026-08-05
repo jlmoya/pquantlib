@@ -14,20 +14,19 @@ a diagonal schema (see ``Ordering``).
 
 Divergences from C++:
 
-- The underlying Sobol stream is pquantlib's ``SobolRsg`` (scipy Joe-Kuo
-  direction numbers), whereas C++ defaults to the Jaeckel direction-integer
-  family. For ``factors * steps > 2`` the *stream* therefore differs; the
-  deterministic parts of this class that are stream-independent — the
-  ``ordered_indices`` schema and the ``transform`` Brownian-bridge algebra —
-  match C++ exactly and are the cross-validated surfaces. The
-  ``direction_integers`` argument is accepted for signature parity and
-  forwarded to ``SobolRsg`` (which ignores it). The Burley2020 Sobol variant
-  is deferred (a thin subclass once a downstream consumer requires it).
 - C++ bridges via ``boost::make_permutation_iterator`` over
   ``sample.value``; the Python port gathers the permuted slice into a plain
   list and calls the L5 ``BrownianBridge.transform`` (which uses unit-time
   steps, so its ``/sqrt(dt)`` normalization is the identity and the output
   matches the C++ unit-time bridge).
+
+Divergence repaired (2026-08): the underlying stream used to be a
+scipy-backed ``SobolRsg`` with Joe-Kuo direction numbers while C++ defaults to
+Jaeckel, so for ``factors * steps > 2`` the generated paths differed from C++
+and only the stream-independent parts (``ordered_indices``, ``transform``)
+were cross-validated. ``SobolRsg`` is now a transcription of sobolrsg.cpp with
+all ten direction-integer families, so the whole class is bit-exact, and
+``Burley2020SobolBrownianGenerator`` — previously carved out — is here too.
 """
 
 from __future__ import annotations
@@ -40,7 +39,8 @@ from pquantlib import qassert
 from pquantlib.math.distributions.inverse_cumulative_normal import (
     InverseCumulativeNormal,
 )
-from pquantlib.math.randomnumbers.sobol_rsg import SobolRsg
+from pquantlib.math.randomnumbers.burley_2020_sobol_rsg import Burley2020SobolRsg
+from pquantlib.math.randomnumbers.sobol_rsg import DirectionIntegers, SobolRsg
 from pquantlib.methods.montecarlo.brownian_bridge import BrownianBridge
 from pquantlib.models.marketmodels.brownian_generator import (
     BrownianGenerator,
@@ -229,7 +229,7 @@ class SobolBrownianGenerator(SobolBrownianGeneratorBase):
         steps: int,
         ordering: SobolBrownianGeneratorBase.Ordering,
         seed: int = 0,
-        direction_integers: str | None = None,
+        direction_integers: DirectionIntegers = DirectionIntegers.Jaeckel,
     ) -> None:
         super().__init__(factors, steps, ordering)
         # C++ parity: InverseCumulativeRsg<SobolRsg, InverseCumulativeNormal>
@@ -256,7 +256,7 @@ class SobolBrownianGeneratorFactory(BrownianGeneratorFactory):
         self,
         ordering: SobolBrownianGeneratorBase.Ordering,
         seed: int = 0,
-        direction_integers: str | None = None,
+        direction_integers: DirectionIntegers = DirectionIntegers.Jaeckel,
     ) -> None:
         self._ordering = ordering
         self._seed = seed
@@ -265,4 +265,66 @@ class SobolBrownianGeneratorFactory(BrownianGeneratorFactory):
     def create(self, factors: int, steps: int) -> BrownianGenerator:
         return SobolBrownianGenerator(
             factors, steps, self._ordering, self._seed, self._direction_integers
+        )
+
+
+class Burley2020SobolBrownianGenerator(SobolBrownianGeneratorBase):
+    """Brownian generator over an Owen-scrambled (Burley 2020) Sobol stream.
+
+    # C++ parity: sobolbrowniangenerator.hpp Burley2020SobolBrownianGenerator.
+    """
+
+    Ordering = SobolBrownianGeneratorBase.Ordering
+
+    def __init__(
+        self,
+        factors: int,
+        steps: int,
+        ordering: SobolBrownianGeneratorBase.Ordering,
+        seed: int = 42,
+        direction_integers: DirectionIntegers = DirectionIntegers.Jaeckel,
+        scramble_seed: int = 43,
+    ) -> None:
+        super().__init__(factors, steps, ordering)
+        # C++ parity: InverseCumulativeRsg<Burley2020SobolRsg,
+        # InverseCumulativeNormal>(Burley2020SobolRsg(factors*steps, seed,
+        # integers, scrambleSeed), InverseCumulativeNormal()).
+        self._sobol = Burley2020SobolRsg(
+            factors * steps, seed, direction_integers, scramble_seed
+        )
+        self._icn = InverseCumulativeNormal()
+
+    def _next_sequence(self) -> np.ndarray:
+        # C++ parity: Burley2020SobolBrownianGenerator::nextSequence.
+        uniforms = self._sobol.next_sequence()
+        return np.array([self._icn(float(u)) for u in uniforms], dtype=np.float64)
+
+
+class Burley2020SobolBrownianGeneratorFactory(BrownianGeneratorFactory):
+    """Factory building ``Burley2020SobolBrownianGenerator`` instances.
+
+    # C++ parity: sobolbrowniangenerator.hpp
+    # Burley2020SobolBrownianGeneratorFactory.
+    """
+
+    def __init__(
+        self,
+        ordering: SobolBrownianGeneratorBase.Ordering,
+        seed: int = 42,
+        direction_integers: DirectionIntegers = DirectionIntegers.Jaeckel,
+        scramble_seed: int = 43,
+    ) -> None:
+        self._ordering = ordering
+        self._seed = seed
+        self._direction_integers = direction_integers
+        self._scramble_seed = scramble_seed
+
+    def create(self, factors: int, steps: int) -> BrownianGenerator:
+        return Burley2020SobolBrownianGenerator(
+            factors,
+            steps,
+            self._ordering,
+            self._seed,
+            self._direction_integers,
+            self._scramble_seed,
         )

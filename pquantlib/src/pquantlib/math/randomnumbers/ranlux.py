@@ -1,36 +1,37 @@
 """M. Luescher's "luxury" subtract-with-carry RNG.
 
-# C++ parity: ql/math/randomnumbers/ranluxuniformrng.hpp (v1.42.1) —
-# template ``Ranlux64UniformRng<P, R>`` wrapping the standard
-# ``std::subtract_with_carry_engine<uint_fast64_t, 48, 10, 24>`` filtered
-# through ``std::discard_block_engine<base, P, R>``.
+# C++ parity: ql/math/randomnumbers/ranluxuniformrng.hpp (v1.43) —
+# ``template <std::size_t P, std::size_t R> class Ranlux64UniformRng``,
+# wrapping ``std::subtract_with_carry_engine<uint_fast64_t, 48, 10, 24>``
+# behind ``std::discard_block_engine<base, P, R>``.
 
-This port mirrors the libstdc++ implementation of those two C++
-standard library engine adaptors precisely:
+Reference: M. Luescher, "A portable high-quality random number generator for
+lattice field theory simulations", Comp. Phys. Comm. 79 (1994) 100.
 
-* ``subtract_with_carry_engine<UIntType, w, s, r>`` produces ``w``-bit
-  outputs by computing ``X[k] = (X[ps] - X[pr] - c) mod 2^w`` where
-  ``ps = (k - s) mod r`` and ``pr = k`` (the "short lag" is k itself
-  on libstdc++ — equivalently ``(k - r) mod r``). The carry ``c`` is
-  the borrow bit from the previous subtraction.
-* ``discard_block_engine<Engine, P, R>`` exposes only the first ``R``
-  outputs of every ``P``-long block of base outputs, discarding the
-  remaining ``P - R``.
+The two engine adaptors are specified by the C++ standard, not by a
+particular standard library, so libc++ and libstdc++ agree bit for bit and
+this port targets the specification:
 
-Seeding follows libstdc++: a ``linear_congruential_engine<uint32, 40014,
-0, 2147483563>`` is used as the bootstrap stream, and exactly
-``r * ceil(w / 32)`` 32-bit words are drawn — here ``24 * 2 = 48``
-words. Each pair of words is combined as ``(hi << 32) | lo`` and
-masked to ``w = 48`` bits to form one element of the initial state
-``X[0..r-1]``. The carry bit ``c`` is initialised to 1 iff ``X[r-1]
-== 0``, else 0.
+* ``subtract_with_carry_engine<UIntType, w, s, r>`` produces ``w``-bit outputs
+  ``X[k] = (X[k-s] - X[k-r] - c) mod 2^w``, with ``c`` the borrow from the
+  previous step.
+* ``discard_block_engine<Engine, P, R>`` exposes the first ``R`` outputs of
+  every ``P``-long block of base outputs and throws the remaining ``P - R``
+  away. ``P`` is the luxury level: 223 for Ranlux3, 389 for Ranlux4.
+* Seeding: a ``linear_congruential_engine<uint32, 40014, 0, 2147483563>``
+  bootstrap stream produces ``r * ceil(w / 32) == 48`` words; each consecutive
+  pair becomes ``(hi << 32) | lo`` masked to 48 bits. The carry starts at 1
+  iff ``X[r-1] == 0``.
 
-Ranlux3 specifically is ``Ranlux64UniformRng<223, 24>`` — 24 outputs
-used per 223 base steps, giving Luescher's "level-3" luxury parameter.
+.. rubric:: Divergence repaired
 
-This deeply-specified seeding contract is exactly what gives bit-
-identical sequences against the C++ reference; if any of those details
-diverge the sequence diverges within the first call.
+The previous implementation mapped ``seed == 0`` to 1, on the stated premise
+that this was "libstdc++'s seeder fallback". [rand.eng.sub] says otherwise:
+``e(value == 0u ? default_seed : value)``, and ``default_seed`` for
+``subtract_with_carry_engine`` is **19780503**, not 1. The C++ probe confirms
+it — ``Ranlux64UniformRng(0)`` and ``Ranlux64UniformRng(19780503)`` produce
+the same stream. The 0-maps-to-1 path produced a completely different stream
+for the one seed most likely to be passed by accident.
 """
 
 from __future__ import annotations
@@ -45,42 +46,42 @@ _S: Final[int] = 10  # short lag
 _R: Final[int] = 24  # long lag
 _W_MASK: Final[int] = (1 << _W) - 1
 _W_MOD: Final[int] = 1 << _W
+#: # C++ parity: ``nx = 1.0/(std::uint_fast64_t(1) << 48)``.
 _INV_2_POW_48: Final[float] = 1.0 / (1 << 48)
-# libstdc++ seeder: linear_congruential_engine<uint_least32_t, 40014, 0, 2147483563>.
+# Seeder: linear_congruential_engine<uint_least32_t, 40014, 0, 2147483563>.
 _SEED_A: Final[int] = 40014
 _SEED_M: Final[int] = 2147483563
-_SEED_WORDS_PER_X: Final[int] = (_W + 31) // 32  # 2 for w=48
+_SEED_WORDS_PER_X: Final[int] = (_W + 31) // 32  # 2 for w = 48
+#: ``subtract_with_carry_engine::default_seed`` ([rand.eng.sub]/5).
+_DEFAULT_SEED: Final[int] = 19780503
 
 
-class Ranlux3UniformRng:
-    """Ranlux3 (subtract-with-carry + discard-block <223, 24>) uniform RNG.
+class Ranlux64UniformRng:
+    """Luxury subtract-with-carry uniform RNG over [0, 1).
 
-    # C++ parity: ``Ranlux3UniformRng`` typedef in
-    # ql/math/randomnumbers/ranluxuniformrng.hpp (v1.42.1) — i.e.
-    # ``Ranlux64UniformRng<223, 24>``.
+    # C++ parity: ``Ranlux64UniformRng<P, R>`` (ranluxuniformrng.hpp:47-63).
 
-    Seed 0 maps to libstdc++'s seeder fallback of 1 (because the
-    LCG period demands ``s != 0``). The C++ template defaults to
-    seed 19780503; pquantlib makes the seed explicit at the constructor
-    site to avoid hidden-defaults bugs.
+    C++ makes ``P`` and ``R`` template parameters; Python takes them as
+    constructor arguments, so ``Ranlux64UniformRng(223, 24, seed)`` is the
+    C++ ``Ranlux64UniformRng<223, 24>(seed)``.
+
+    Args:
+        p: block length of the discard-block adaptor (the luxury level).
+        r: number of outputs used per block.
+        seed: 0 selects ``default_seed`` (19780503), as the standard requires.
     """
 
-    # discard_block parameters for level 3
-    _P: Final[int] = 223
-    _R_USED: Final[int] = 24
+    __slots__ = ("_carry", "_index", "_p", "_r_used", "_state", "_used")
 
-    __slots__ = ("_carry", "_index", "_state", "_used")
-
-    def __init__(self, seed: int) -> None:
-        # libstdc++ ``linear_congruential_engine::seed`` clamps zero
-        # seeds to 1 (the LCG cannot start at 0). We replicate that
-        # rather than refusing seed 0 because the C++ template's
-        # default of 19780503 is itself a nonzero constant, and tests
-        # legitimately pass seed = 0 to exercise the fallback path.
-        s = seed % _SEED_M
+    def __init__(self, p: int, r: int, seed: int = _DEFAULT_SEED) -> None:
+        self._p: int = p
+        self._r_used: int = r
+        # [rand.req.eng]: the LCG bootstrap is seeded with default_seed when
+        # the requested seed is 0, and the LCG itself clamps a zero residue
+        # to 1 (its multiplier has no additive term, so 0 is a fixed point).
+        s = (_DEFAULT_SEED if seed == 0 else seed) % _SEED_M
         if s == 0:
             s = 1
-        # Generate r * ceil(w / 32) = 48 seed words.
         words: list[int] = []
         for _ in range(_R * _SEED_WORDS_PER_X):
             s = (_SEED_A * s) % _SEED_M
@@ -92,17 +93,14 @@ class Ranlux3UniformRng:
             for j in range(_SEED_WORDS_PER_X):
                 val |= words[i * _SEED_WORDS_PER_X + j] << (32 * j)
             self._state.append(val & _W_MASK)
-        # libstdc++ initial carry: c = (X[r-1] == 0) ? 1 : 0.
+        # Initial carry: c = (X[r-1] == 0) ? 1 : 0.
         self._carry: int = 1 if self._state[_R - 1] == 0 else 0
         self._index: int = 0
-        # discard_block: ``used`` counts emissions in the current
-        # P-long block of base outputs. Once it reaches R_USED, the
-        # engine discards (P - R_USED) base outputs before resuming.
+        # ``used`` counts emissions in the current P-long block.
         self._used: int = 0
 
     def _swc_next(self) -> int:
-        """One base-engine output (48-bit), mutates state and carry."""
-        # ps = (k - s) mod r ; pr = k (libstdc++ short lag).
+        """One base-engine output (48-bit); mutates state and carry."""
         ps = (self._index + _R - _S) % _R
         pr = self._index
         val = self._state[ps] - self._state[pr] - self._carry
@@ -118,9 +116,8 @@ class Ranlux3UniformRng:
 
     def _next_int(self) -> int:
         """One discard-block-filtered base output."""
-        if self._used >= self._R_USED:
-            # Drop the unused tail of the block.
-            for _ in range(self._P - self._R_USED):
+        if self._used >= self._r_used:
+            for _ in range(self._p - self._r_used):
                 self._swc_next()
             self._used = 0
         val = self._swc_next()
@@ -128,11 +125,46 @@ class Ranlux3UniformRng:
         return val
 
     def next(self) -> Sample:
-        """One sample uniformly drawn from [0.0, 1.0) with weight 1.0."""
-        # C++ parity: ranluxuniformrng.hpp:54 — ``ranlux_() * nx`` with
-        # ``nx = 1.0 / (1ULL << 48)``.
+        """One sample uniformly drawn from [0.0, 1.0) with weight 1.0.
+
+        # C++ parity: ranluxuniformrng.hpp:54 — ``ranlux_() * nx``.
+        """
         return Sample(value=self._next_int() * _INV_2_POW_48, weight=1.0)
+
+    def next_real(self) -> float:
+        """The raw value of :meth:`next`."""
+        return self._next_int() * _INV_2_POW_48
 
     def dimension(self) -> int:
         """Scalar RNG — dimension is always 1."""
         return 1
+
+
+class Ranlux3UniformRng(Ranlux64UniformRng):
+    """Luxury level 3 — ``Ranlux64UniformRng<223, 24>``.
+
+    # C++ parity: ``typedef Ranlux64UniformRng<223, 24> Ranlux3UniformRng``
+    # (ranluxuniformrng.hpp:65). "Any theoretically possible correlations
+    # have very small chance of being observed."
+    """
+
+    __slots__ = ()
+
+    def __init__(self, seed: int = _DEFAULT_SEED) -> None:
+        super().__init__(223, 24, seed)
+
+
+class Ranlux4UniformRng(Ranlux64UniformRng):
+    """Luxury level 4 — ``Ranlux64UniformRng<389, 24>``.
+
+    # C++ parity: ``typedef Ranlux64UniformRng<389, 24> Ranlux4UniformRng``
+    # (ranluxuniformrng.hpp:66). Highest possible luxury.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, seed: int = _DEFAULT_SEED) -> None:
+        super().__init__(389, 24, seed)
+
+
+__all__ = ["Ranlux3UniformRng", "Ranlux4UniformRng", "Ranlux64UniformRng"]

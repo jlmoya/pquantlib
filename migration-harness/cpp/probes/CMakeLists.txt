@@ -842,6 +842,7 @@ foreach(area
         interp_cubic
         interp_kernel
         matrixutilities
+        randomnumbers
         statistics
         tail)
     add_executable(v143_math_${area}_probe v143_math_${area}/probe.cpp)

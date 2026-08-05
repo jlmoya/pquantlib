@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Final
 
 from pquantlib.math.randomnumbers.random_number_generator import Sample
+from pquantlib.math.randomnumbers.seed_generator import SeedGenerator
 
 _KK: Final[int] = 100
 _LL: Final[int] = 37
@@ -42,9 +43,8 @@ class KnuthUniformRng:
     # ql/math/randomnumbers/knuthuniformrng.{hpp,cpp} (v1.42.1).
 
     The buffer is filled lazily on first ``next()`` call (matching C++
-    ``ranf_arr_ptr == ranf_arr_sentinel`` initial state). Seed 0 is
-    rejected (the C++ version falls back to ``SeedGenerator``, which is
-    deferred to a later cluster — pquantlib refuses seed 0 explicitly).
+    ``ranf_arr_ptr == ranf_arr_sentinel`` initial state). Seed 0 defers to
+    the clock-seeded ``SeedGenerator``, as in C++.
     """
 
     __slots__ = (
@@ -56,9 +56,9 @@ class KnuthUniformRng:
 
     def __init__(self, seed: int) -> None:
         if seed == 0:
-            raise ValueError(
-                "KnuthUniformRng requires nonzero seed (C++ SeedGenerator clock fallback not yet ported)"
-            )
+            # C++ parity: knuthuniformrng.cpp:33 — seed 0 defers to the
+            # clock-seeded SeedGenerator singleton.
+            seed = SeedGenerator.instance().get()
         # Mutable state. C++ marks all as ``mutable``; Python plain attrs.
         self._ran_u: list[float] = [0.0] * _KK
         self._ranf_arr_buf: list[float] = [0.0] * _QUALITY

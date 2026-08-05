@@ -101,12 +101,21 @@ def test_mt_factory() -> None:
     assert gen.number_of_steps() == 2
 
 
-def test_mt_seed_zero_rejected() -> None:
-    # pquantlib's MersenneTwisterUniformRng rejects seed 0 (the C++
-    # SeedGenerator clock fallback is not ported); the generator surfaces
-    # that error rather than silently picking a clock-derived seed.
-    with pytest.raises(ValueError, match="nonzero seed"):
-        MTBrownianGenerator(2, 2, 0)
+def test_mt_seed_zero_is_clock_derived() -> None:
+    # Seed 0 defers to SeedGenerator (mt19937uniformrng.cpp:88), which is
+    # clock-seeded. This test previously asserted rejection, a divergence
+    # taken while SeedGenerator was unported; it is ported now, so the C++
+    # behaviour is restored. Two generators disagree with probability
+    # 1 - 2^-32.
+    a = MTBrownianGenerator(2, 2, 0)
+    b = MTBrownianGenerator(2, 2, 0)
+    out_a: list[float] = [0.0, 0.0]
+    out_b: list[float] = [0.0, 0.0]
+    a.next_path()
+    b.next_path()
+    a.next_step(out_a)
+    b.next_step(out_b)
+    assert out_a != out_b
 
 
 # --- SobolBrownianGenerator: ordering schema (EXACT, stream-independent) ------
