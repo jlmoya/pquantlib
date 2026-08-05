@@ -2,18 +2,19 @@
 
 # C++ parity: ql/indexes/ibor/euribor.{hpp,cpp} (v1.42.1)
 
-C++ exposes one ``Euribor`` parent + one subclass per tenor
-(``Euribor1W``, ``Euribor3M``, ``Euribor6M``, ``Euribor1Y``, etc.).
-PQuantLib ports as a single ``Euribor(tenor)`` class with classmethod
-shortcuts for the common market tenors — Python idiomatic, same C++
-public surface.
+C++ exposes one ``Euribor`` parent + one subclass per market tenor
+(``Euribor1W``, ``Euribor1M``, ``Euribor3M``, ``Euribor6M``, ``Euribor1Y``),
+all of which are ported below, plus ``Euribor365`` — the same index quoted on
+an Actual/365 (Fixed) basis rather than Actual/360. The classmethod shortcuts
+on ``Euribor`` are an additive Python convenience covering the tenors C++
+leaves to the general constructor.
 
 Conventions:
 - Family: ``"Euribor"``.
 - Settlement days: 2.
 - Currency: EUR.
 - Calendar: TARGET.
-- Day counter: Actual/360.
+- Day counter: Actual/360 (Actual/365 (Fixed) for ``Euribor365``).
 - Convention/EOM: Following + EOM=False for Days/Weeks tenors;
   ModifiedFollowing + EOM=True for Months/Years tenors.
 """
@@ -23,6 +24,7 @@ from __future__ import annotations
 from pquantlib import qassert
 from pquantlib.currencies.europe import EURCurrency
 from pquantlib.daycounters.actual_360 import Actual360
+from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.indexes.ibor_index import IborIndex
 from pquantlib.termstructures.protocols import YieldTermStructureProtocol
 from pquantlib.time.business_day_convention import BusinessDayConvention
@@ -104,3 +106,68 @@ class Euribor(IborIndex):
     @classmethod
     def one_year(cls, h: YieldTermStructureProtocol | None = None) -> Euribor:
         return cls(Period(1, TimeUnit.Years), h)
+
+
+class Euribor365(IborIndex):
+    """Euribor quoted on an Actual/365 (Fixed) basis.
+
+    # C++ parity: ``Euribor365`` in ql/indexes/ibor/euribor.{hpp,cpp}. Same
+    # wiring as ``Euribor`` other than the day counter — and note the family
+    # name is ``"Euribor365"``, so the index name differs too.
+    """
+
+    def __init__(
+        self,
+        tenor: Period,
+        forecast_term_structure: YieldTermStructureProtocol | None = None,
+    ) -> None:
+        qassert.require(
+            tenor.units != TimeUnit.Days,
+            f"for daily tenors ({tenor}) dedicated DailyTenor constructor must be used",
+        )
+        super().__init__(
+            "Euribor365",
+            tenor,
+            2,
+            EURCurrency(),
+            TARGET(),
+            _euribor_convention(tenor),
+            _euribor_eom(tenor),
+            Actual365Fixed(),
+            forecast_term_structure,
+        )
+
+
+class Euribor1W(Euribor):
+    """1-week Euribor."""
+
+    def __init__(self, h: YieldTermStructureProtocol | None = None) -> None:
+        super().__init__(Period(1, TimeUnit.Weeks), h)
+
+
+class Euribor1M(Euribor):
+    """1-month Euribor."""
+
+    def __init__(self, h: YieldTermStructureProtocol | None = None) -> None:
+        super().__init__(Period(1, TimeUnit.Months), h)
+
+
+class Euribor3M(Euribor):
+    """3-month Euribor."""
+
+    def __init__(self, h: YieldTermStructureProtocol | None = None) -> None:
+        super().__init__(Period(3, TimeUnit.Months), h)
+
+
+class Euribor6M(Euribor):
+    """6-month Euribor."""
+
+    def __init__(self, h: YieldTermStructureProtocol | None = None) -> None:
+        super().__init__(Period(6, TimeUnit.Months), h)
+
+
+class Euribor1Y(Euribor):
+    """1-year Euribor."""
+
+    def __init__(self, h: YieldTermStructureProtocol | None = None) -> None:
+        super().__init__(Period(1, TimeUnit.Years), h)

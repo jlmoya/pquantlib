@@ -831,3 +831,12 @@ endif()
 add_executable(v143_trinomial_g2process_probe v143_trinomial_g2process/probe.cpp)
 target_include_directories(v143_trinomial_g2process_probe PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
 target_link_libraries(v143_trinomial_g2process_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# v1.43 index coverage: the ql/indexes/ibor/* families PQuantLib was missing.
+# Pins wiring (name / fixing days / currency / calendar / day counter /
+# convention / EOM) plus the fixing→value→maturity roll for every tenor C++
+# exposes as its own subclass, and the two behavioural outliers in the batch
+# (Cdi's compounded forecastFixing, CustomIborIndex's three-calendar roll).
+# Emits references/v143/indexes/ibor.json.
+add_executable(v143_indexes_ibor_probe v143_indexes_ibor/probe.cpp)
+target_link_libraries(v143_indexes_ibor_probe PRIVATE ${QUANTLIB_LIBRARY})
