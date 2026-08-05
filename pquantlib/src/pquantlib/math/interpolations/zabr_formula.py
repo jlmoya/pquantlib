@@ -32,17 +32,22 @@ has a closed form (cf. ``zabr.cpp:316-339`` and the standard SABR
 ``x(z)`` formula); for ``gamma != 1`` C++ uses an Adaptive
 Runge-Kutta to integrate the ``F(y, u)`` ODE (``zabr.cpp:340-358``).
 
-**Documented divergence — gamma != 1 ODE integration.** The C++
-implementation uses an ``AdaptiveRungeKutta<Real>(1e-8, 1e-5, 0.0)``
-integrator stepping in ``y`` from 0 to ``y(strike)`` (with
-``y(strike) = (forward^(1-beta) - strike^(1-beta)) / (1-beta)
-* alpha^(gamma - 2)``). The Python port reproduces this via
-``scipy.integrate.solve_ivp`` with the same RK45 method and
-default tolerances ``rtol=1e-5``, ``atol=1e-8`` (matching the C++
-``AdaptiveRungeKutta`` semantics: the second argument is *relative*,
-the first is *absolute*). Cross-validation against the L10-C C++
-probe is at TIGHT tier for ``gamma = 1`` (closed-form match against
-SABR) and at TIGHT tier for ``gamma != 1`` (RK45 reproducibility).
+**gamma != 1 ODE integration.** The C++ implementation uses an
+``AdaptiveRungeKutta<Real>(1e-8, 1e-5, 0.0)`` integrator stepping in ``y``
+from 0 to ``y(strike)`` (with ``y(strike) = (forward^(1-beta) -
+strike^(1-beta)) / (1-beta) * alpha^(gamma - 2)``), and so does the port,
+using :class:`~pquantlib.math.ode.adaptive_runge_kutta.AdaptiveRungeKutta`.
+
+This used to delegate to ``scipy.integrate.solve_ivp(method="RK45",
+rtol=1e-5, atol=1e-8)``, described as "the same RK45 method and default
+tolerances ... matching the C++ AdaptiveRungeKutta semantics: the second
+argument is relative, the first is absolute". Both halves of that were
+wrong. The C++ constructor is ``(eps, h1, hmin)`` — the 1e-5 is the
+*initial step size*, not a relative tolerance — and scipy's "RK45" is
+Dormand-Prince while QuantLib's is Cash-Karp, with a different embedded
+error estimate and a different step controller. Measured against the
+L10-C probe the delegation was 8.1e-8 relative out at the 4% strike, not
+the TIGHT the docstring claimed.
 
 **Carve-out — Local / FullFd / ProjectedHedge.** The C++
 ``ZabrModel`` also provides three FD-based evaluation modes
@@ -62,10 +67,6 @@ from __future__ import annotations
 
 import math
 from enum import IntEnum
-from typing import Any
-
-import numpy as np
-from scipy.integrate import solve_ivp  # type: ignore[import-untyped]
 
 from pquantlib import qassert
 from pquantlib.exceptions import LibraryException
@@ -73,6 +74,7 @@ from pquantlib.math.interpolations.sabr_formula import (
     sabr_volatility,
     validate_sabr_parameters,
 )
+from pquantlib.math.ode.adaptive_runge_kutta import AdaptiveRungeKutta
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 
 
@@ -102,12 +104,8 @@ def _validate_zabr_parameters(
 ) -> None:
     """Validate ZABR inputs per C++ ``ZabrModel`` constructor (zabr.cpp:43-56)."""
     validate_sabr_parameters(alpha, beta, nu, rho)
-    qassert.require(
-        gamma >= 0.0, f"gamma must be non-negative: {gamma} not allowed"
-    )
-    qassert.require(
-        forward >= 0.0, f"forward must be non-negative: {forward} not allowed"
-    )
+    qassert.require(gamma >= 0.0, f"gamma must be non-negative: {gamma} not allowed")
+    qassert.require(forward >= 0.0, f"forward must be non-negative: {forward} not allowed")
     qassert.require(
         expiry_time > 0.0,
         f"expiry time must be positive: {expiry_time} not allowed",
@@ -135,9 +133,7 @@ def _zabr_y(
     return sign_term * (alpha ** (gamma - 2.0)) / (1.0 - beta)
 
 
-def _zabr_f_ode(
-    y: float, u: float, nu: float, rho: float, gamma: float
-) -> float:
+def _zabr_f_ode(y: float, u: float, nu: float, rho: float, gamma: float) -> float:
     """The ODE right-hand side ``du/dy = F(y, u)`` for gamma != 1.
 
     # C++ parity: ``ZabrModel::F`` (zabr.cpp:377-385).
@@ -192,43 +188,25 @@ def _zabr_x_general(
         # construction; guard log()/division.
         if math.isclose(y_strike, 0.0, abs_tol=1e-15, rel_tol=1e-13):
             return 0.0
-        j = math.sqrt(1.0 + nu_use * nu_use * y_strike * y_strike
-                      - 2.0 * rho * nu_use * y_strike)
+        j = math.sqrt(1.0 + nu_use * nu_use * y_strike * y_strike - 2.0 * rho * nu_use * y_strike)
         return math.log((j + nu_use * y_strike - rho) / (1.0 - rho)) / nu_use
     # gamma != 1 — RK45 from u(0)=0 to u(y_strike).
     if math.isclose(y_strike, 0.0, abs_tol=1e-15, rel_tol=1e-13):
         return 0.0
     nu_use = nu_transformed
 
-    def rhs(_y: float, u: np.ndarray | float) -> list[float]:
-        u_scalar = float(u if not isinstance(u, np.ndarray) else u[0])
-        return [_zabr_f_ode(float(_y), u_scalar, nu_use, rho, gamma)]
+    def rhs(y: float, u: float) -> float:
+        return _zabr_f_ode(y, u, nu_use, rho, gamma)
 
-    t0 = 0.0
-    t1 = y_strike
-    sol: Any = solve_ivp(  # pyright: ignore[reportUnknownVariableType]
-        rhs,
-        (t0, t1),
-        [0.0],
-        method="RK45",
-        rtol=1.0e-5,
-        atol=1.0e-8,
-        dense_output=False,
-    )
-    qassert.require(
-        bool(sol.success),  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-        "ZABR x(K) ODE integration failed",
-    )
-    u_final = float(
-        sol.y[0, -1]  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-    )
-    # C++ scales by alpha^(1 - gamma) (zabr.cpp:353).
+    # C++ parity: zabr.cpp:329 — AdaptiveRungeKutta<Real> rk(1.0E-8, 1.0E-5, 0.0),
+    # i.e. eps = 1e-8, initial step h1 = 1e-5, hmin = 0. Integrated from
+    # (y0, u0) = (0, 0) to y = y(strike); zabr.cpp:356-357.
+    u_final = AdaptiveRungeKutta(1.0e-8, 1.0e-5, 0.0).solve_1d(rhs, 0.0, 0.0, y_strike)
+    # C++ scales by alpha^(1 - gamma) (zabr.cpp:358).
     return u_final * (alpha ** (1.0 - gamma))
 
 
-def _zabr_lognormal_helper(
-    strike: float, forward: float, alpha: float, beta: float, x: float
-) -> float:
+def _zabr_lognormal_helper(strike: float, forward: float, alpha: float, beta: float, x: float) -> float:
     """ZABR lognormal vol helper, given precomputed ``x = x(strike)``.
 
     # C++ parity: ``ZabrModel::lognormalVolatilityHelper``
@@ -239,9 +217,7 @@ def _zabr_lognormal_helper(
     return math.log(forward / strike) / x
 
 
-def _zabr_normal_helper(
-    strike: float, forward: float, alpha: float, beta: float, x: float
-) -> float:
+def _zabr_normal_helper(strike: float, forward: float, alpha: float, beta: float, x: float) -> float:
     """ZABR normal (Bachelier) vol helper.
 
     # C++ parity: ``ZabrModel::normalVolatilityHelper`` (zabr.cpp:78-83).
