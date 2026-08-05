@@ -1,6 +1,6 @@
 """FR HICP zero-inflation index + YoY sibling.
 
-# C++ parity: ql/indexes/inflation/frhicp.hpp (v1.42.1).
+# C++ parity: ql/indexes/inflation/frhicp.hpp (v1.43).
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from pquantlib.indexes.inflation.inflation_index import (
     YoYInflationIndex,
     ZeroInflationIndex,
 )
-from pquantlib.indexes.inflation.region import Region
+from pquantlib.indexes.inflation.region import FranceRegion
 from pquantlib.time.frequency import Frequency
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
@@ -22,7 +22,7 @@ class FRHICP(ZeroInflationIndex):
     def __init__(self, ts: object | None = None) -> None:
         super().__init__(
             family_name="HICP",
-            region=Region.France,
+            region=FranceRegion(),
             revised=False,
             frequency=Frequency.Monthly,
             availability_lag=Period(1, TimeUnit.Months),
@@ -31,13 +31,13 @@ class FRHICP(ZeroInflationIndex):
         )
 
 
-class YoYFRHICP(YoYInflationIndex):
+class YYFRHICP(YoYInflationIndex):
     """Quoted year-on-year FR HICP. # C++ parity: ``YYFRHICP`` in frhicp.hpp."""
 
     def __init__(self, interpolated: bool = False, ts: object | None = None) -> None:
         super().__init__(
             family_name="YY_HICP",
-            region=Region.France,
+            region=FranceRegion(),
             revised=False,
             interpolated=interpolated,
             frequency=Frequency.Monthly,

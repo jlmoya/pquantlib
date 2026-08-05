@@ -10,7 +10,7 @@ import pytest
 from pquantlib.currencies.currency import Currency
 from pquantlib.currencies.europe import EURCurrency
 from pquantlib.experimental.inflation.generic_indexes import GenericCPI, YYGenericCPI
-from pquantlib.indexes.inflation.region import Region
+from pquantlib.indexes.inflation.region import GenericRegion
 from pquantlib.time.frequency import Frequency
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
@@ -18,8 +18,8 @@ from pquantlib.time.time_unit import TimeUnit
 
 def test_generic_region_payload() -> None:
     # C++ GenericRegion Data("Generic","GENERIC").
-    assert Region.Generic.region_name() == "Generic"
-    assert Region.Generic.region_code() == "GENERIC"
+    assert GenericRegion().name() == "Generic"
+    assert GenericRegion().code() == "GENERIC"
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
@@ -31,7 +31,7 @@ def test_generic_cpi_identity() -> None:
     assert idx.name() == "Generic CPI"
     assert idx.frequency() == Frequency.Monthly
     assert idx.availability_lag() == Period(2, TimeUnit.Months)
-    assert idx.region() == Region.Generic
+    assert idx.region() == GenericRegion()
     assert not idx.revised()
     # ZeroInflationIndex is always non-interpolated.
     assert not idx.interpolated()  # pyright: ignore[reportDeprecated]

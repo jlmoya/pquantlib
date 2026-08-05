@@ -12,16 +12,21 @@ from typing import Any
 
 import pytest
 
-from pquantlib.indexes.inflation.eu_hicp import EUHICP, YoYEUHICP
-from pquantlib.indexes.inflation.fr_hicp import FRHICP, YoYFRHICP
+from pquantlib.indexes.inflation.eu_hicp import EUHICP, YYEUHICP
+from pquantlib.indexes.inflation.fr_hicp import FRHICP, YYFRHICP
 from pquantlib.indexes.inflation.inflation_index import (
     YoYInflationIndex,
     ZeroInflationIndex,
 )
-from pquantlib.indexes.inflation.region import Region
+from pquantlib.indexes.inflation.region import (
+    EURegion,
+    FranceRegion,
+    UKRegion,
+    USRegion,
+)
 from pquantlib.indexes.inflation.uk_hicp import UKHICP
-from pquantlib.indexes.inflation.uk_rpi import UKRPI, YoYUKRPI
-from pquantlib.indexes.inflation.us_cpi import USCPI, YoYUSCPI
+from pquantlib.indexes.inflation.uk_rpi import UKRPI, YYUKRPI
+from pquantlib.indexes.inflation.us_cpi import USCPI, YYUSCPI
 from pquantlib.testing.reference_reader import load as load_reference
 from pquantlib.time.date import Date
 from pquantlib.time.frequency import Frequency
@@ -37,8 +42,8 @@ def _check_zero(idx: ZeroInflationIndex, probe: dict[str, Any]) -> None:
     """Assert a ZeroInflationIndex matches a probe entry."""
     assert idx.name() == probe["name"]
     assert idx.family_name() == probe["family_name"]
-    assert idx.region().region_name() == probe["region_name"]
-    assert idx.region().region_code() == probe["region_code"]
+    assert idx.region().name() == probe["region_name"]
+    assert idx.region().code() == probe["region_code"]
     assert idx.revised() is probe["revised"]
     assert int(idx.frequency()) == probe["frequency"]
     assert idx.availability_lag().length == probe["availability_lag_months"]
@@ -51,8 +56,8 @@ def _check_yoy(idx: YoYInflationIndex, probe: dict[str, Any]) -> None:
     """Assert a YoYInflationIndex matches a probe entry."""
     assert idx.name() == probe["name"]
     assert idx.family_name() == probe["family_name"]
-    assert idx.region().region_name() == probe["region_name"]
-    assert idx.region().region_code() == probe["region_code"]
+    assert idx.region().name() == probe["region_name"]
+    assert idx.region().code() == probe["region_code"]
     assert idx.revised() is probe["revised"]
     assert int(idx.frequency()) == probe["frequency"]
     assert idx.availability_lag().length == probe["availability_lag_months"]
@@ -67,31 +72,31 @@ def _check_yoy(idx: YoYInflationIndex, probe: dict[str, Any]) -> None:
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_euhicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(EUHICP(), reference["zero_indexes"]["EUHICP"])
-    assert EUHICP().region() == Region.Europe
+    assert EUHICP().region() == EURegion()
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_frhicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(FRHICP(), reference["zero_indexes"]["FRHICP"])
-    assert FRHICP().region() == Region.France
+    assert FRHICP().region() == FranceRegion()
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_ukrpi_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(UKRPI(), reference["zero_indexes"]["UKRPI"])
-    assert UKRPI().region() == Region.UnitedKingdom
+    assert UKRPI().region() == UKRegion()
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_ukhicp_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(UKHICP(), reference["zero_indexes"]["UKHICP"])
-    assert UKHICP().region() == Region.UnitedKingdom
+    assert UKHICP().region() == UKRegion()
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_uscpi_default_matches_cpp(reference: dict[str, Any]) -> None:
     _check_zero(USCPI(), reference["zero_indexes"]["USCPI"])
-    assert USCPI().region() == Region.UnitedStates
+    assert USCPI().region() == USRegion()
 
 
 # ---- YoY siblings (no YYUKHICP — does not exist upstream) -----------
@@ -99,22 +104,22 @@ def test_uscpi_default_matches_cpp(reference: dict[str, Any]) -> None:
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyeu_hicp_default_matches_cpp(reference: dict[str, Any]) -> None:
-    _check_yoy(YoYEUHICP(), reference["yoy_indexes"]["YYEUHICP"])
+    _check_yoy(YYEUHICP(), reference["yoy_indexes"]["YYEUHICP"])
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyfr_hicp_default_matches_cpp(reference: dict[str, Any]) -> None:
-    _check_yoy(YoYFRHICP(), reference["yoy_indexes"]["YYFRHICP"])
+    _check_yoy(YYFRHICP(), reference["yoy_indexes"]["YYFRHICP"])
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyuk_rpi_default_matches_cpp(reference: dict[str, Any]) -> None:
-    _check_yoy(YoYUKRPI(), reference["yoy_indexes"]["YYUKRPI"])
+    _check_yoy(YYUKRPI(), reference["yoy_indexes"]["YYUKRPI"])
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoyus_cpi_default_matches_cpp(reference: dict[str, Any]) -> None:
-    _check_yoy(YoYUSCPI(), reference["yoy_indexes"]["YYUSCPI"])
+    _check_yoy(YYUSCPI(), reference["yoy_indexes"]["YYUSCPI"])
 
 
 # ---- interpolated kwarg threads through -----------------------------
@@ -123,7 +128,7 @@ def test_yoyus_cpi_default_matches_cpp(reference: dict[str, Any]) -> None:
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")  # pins the v1.43-deprecated interpolated()
 def test_yoy_index_interpolated_kwarg_is_respected() -> None:
     """Passing interpolated=True on the YoY concrete reaches the abstract."""
-    yoy = YoYEUHICP(interpolated=True)
+    yoy = YYEUHICP(interpolated=True)
     assert yoy.interpolated() is True  # pyright: ignore[reportDeprecated]
     assert yoy.ratio() is False  # quoted mode regardless of interpolation
 

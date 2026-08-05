@@ -11,15 +11,15 @@ from __future__ import annotations
 import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
-from pquantlib.indexes.inflation.eu_hicp import EUHICP, YoYEUHICP
-from pquantlib.indexes.inflation.fr_hicp import FRHICP, YoYFRHICP
+from pquantlib.indexes.inflation.eu_hicp import EUHICP, YYEUHICP
+from pquantlib.indexes.inflation.fr_hicp import FRHICP, YYFRHICP
 from pquantlib.indexes.inflation.protocols import (
     InflationIndexProtocol,
     InflationTermStructureProtocol,
 )
 from pquantlib.indexes.inflation.uk_hicp import UKHICP
-from pquantlib.indexes.inflation.uk_rpi import UKRPI, YoYUKRPI
-from pquantlib.indexes.inflation.us_cpi import USCPI, YoYUSCPI
+from pquantlib.indexes.inflation.uk_rpi import UKRPI, YYUKRPI
+from pquantlib.indexes.inflation.us_cpi import USCPI, YYUSCPI
 from pquantlib.termstructures.inflation.yoy_inflation_term_structure import (
     YoYInflationTermStructure,
 )
@@ -41,7 +41,7 @@ def test_all_zero_concretes_satisfy_inflation_index_protocol() -> None:
 
 def test_all_yoy_concretes_satisfy_inflation_index_protocol() -> None:
     """Every L7-A YoY concrete duck-types InflationIndexProtocol."""
-    for ctor in (YoYEUHICP, YoYFRHICP, YoYUKRPI, YoYUSCPI):
+    for ctor in (YYEUHICP, YYFRHICP, YYUKRPI, YYUSCPI):
         assert isinstance(ctor(), InflationIndexProtocol)
 
 

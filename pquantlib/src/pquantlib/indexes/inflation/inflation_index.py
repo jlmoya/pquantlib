@@ -167,7 +167,7 @@ class InflationIndex(Index):
         self._currency: Currency = currency
         # C++ parity: InflationIndex constructor builds
         # ``name_ = region_.name() + " " + familyName_``.
-        self._name: str = f"{region.region_name()} {family_name}"
+        self._name: str = f"{region.name()} {family_name}"
 
     # ---- Index interface ----------------------------------------------
 

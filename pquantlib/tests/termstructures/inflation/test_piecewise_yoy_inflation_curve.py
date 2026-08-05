@@ -22,7 +22,7 @@ import pytest
 from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.daycounters.thirty_360 import Convention as Thirty360Convention
 from pquantlib.daycounters.thirty_360 import Thirty360
-from pquantlib.indexes.inflation.eu_hicp import YoYEUHICP
+from pquantlib.indexes.inflation.eu_hicp import YYEUHICP
 from pquantlib.termstructures.inflation.inflation_helpers import (
     YearOnYearInflationSwapHelper,
 )
@@ -39,9 +39,9 @@ from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
 
 
-def _build_yyii() -> YoYEUHICP:
+def _build_yyii() -> YYEUHICP:
     """EUHICP YoY index — no past fixings needed for the YoY helper path."""
-    return YoYEUHICP()
+    return YYEUHICP()
 
 
 def test_piecewise_yoy_roundtrip_matches_input_quotes() -> None:

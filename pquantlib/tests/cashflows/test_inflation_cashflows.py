@@ -46,7 +46,7 @@ from pquantlib.indexes.inflation.cpi import (
     lagged_fixing,
     lagged_yoy_rate,
 )
-from pquantlib.indexes.inflation.eu_hicp import EUHICP, YoYEUHICP
+from pquantlib.indexes.inflation.eu_hicp import EUHICP, YYEUHICP
 from pquantlib.testing import reference_reader, tolerance
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
@@ -85,13 +85,13 @@ def seeded_eu_hicp() -> Iterator[EUHICP]:
 
 
 @pytest.fixture
-def seeded_yoy_eu_hicp() -> Iterator[YoYEUHICP]:
+def seeded_yoy_eu_hicp() -> Iterator[YYEUHICP]:
     """YYEUHICP with a deterministic 2-year history.
 
     Each (year, month) gets ``0.020 + 0.005 * (m - 1)`` to mirror the probe.
     Teardown clears the IndexManager to avoid cross-test pollution.
     """
-    idx = YoYEUHICP(interpolated=False)
+    idx = YYEUHICP(interpolated=False)
     idx.clear_fixings()
     for y in range(2021, 2023):
         for m in range(1, 13):
@@ -184,7 +184,7 @@ def test_lagged_fixing_invalid_interpolation_raises(seeded_eu_hicp: EUHICP) -> N
 
 
 def test_lagged_yoy_rate_flat_quoted(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """Flat YoY rate = period-start YoY fixing of the lag-adjusted date.
 
@@ -199,7 +199,7 @@ def test_lagged_yoy_rate_flat_quoted(
 
 
 def test_lagged_yoy_rate_invalid_interpolation_raises(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """Unknown ``InterpolationType`` raises ``LibraryException`` on YoY too."""
     d = Date.from_ymd(1, Month.June, 2022)
@@ -483,7 +483,7 @@ def test_cpi_coupon_adjusted_index_growth(
 
 
 def test_cpi_coupon_wrong_pricer_type_raises(
-    seeded_eu_hicp: EUHICP, seeded_yoy_eu_hicp: YoYEUHICP
+    seeded_eu_hicp: EUHICP, seeded_yoy_eu_hicp: YYEUHICP
 ) -> None:
     """Attaching a YoY pricer to a CPICoupon raises."""
     cpn = CPICoupon(
@@ -507,7 +507,7 @@ def test_cpi_coupon_wrong_pricer_type_raises(
 
 
 def test_yoy_inflation_coupon_amount(
-    seeded_yoy_eu_hicp: YoYEUHICP, reference: dict[str, Any]
+    seeded_yoy_eu_hicp: YYEUHICP, reference: dict[str, Any]
 ) -> None:
     """Closed-form YoY coupon amount.
 
@@ -540,7 +540,7 @@ def test_yoy_inflation_coupon_amount(
 
 
 def test_yoy_inflation_coupon_adjusted_fixing(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """``adjusted_fixing`` == ``(rate - spread) / gearing`` — identity in the
     plain pricer.
@@ -566,7 +566,7 @@ def test_yoy_inflation_coupon_adjusted_fixing(
 
 
 def test_yoy_inflation_coupon_wrong_pricer_type_raises(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """A CPI pricer on a YoY coupon raises."""
     cpn = YoYInflationCoupon(
@@ -597,7 +597,7 @@ def test_capped_floored_aliases() -> None:
 
 
 def test_capped_floored_unbounded_rate_matches_base(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """No cap, no floor — rate == base swaplet rate.
 
@@ -636,7 +636,7 @@ def test_capped_floored_unbounded_rate_matches_base(
 
 
 def test_capped_floored_cap_floor_sign_aware(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """Positive gearing: ``cap()`` returns the user cap; ``floor()`` the floor.
 
@@ -666,7 +666,7 @@ def test_capped_floored_cap_floor_sign_aware(
 
 
 def test_capped_floored_cap_below_floor_raises(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """Cap < floor in a collar configuration raises."""
     with pytest.raises(LibraryException):
@@ -686,7 +686,7 @@ def test_capped_floored_cap_below_floor_raises(
 
 
 def test_capped_floored_underlying_rate_propagates(
-    seeded_yoy_eu_hicp: YoYEUHICP,
+    seeded_yoy_eu_hicp: YYEUHICP,
 ) -> None:
     """``from_underlying`` wraps an existing YoY coupon; setting a pricer
     propagates to both wrapper and underlying.

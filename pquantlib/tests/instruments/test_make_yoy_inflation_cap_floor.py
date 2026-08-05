@@ -11,7 +11,7 @@ import pytest
 
 from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.indexes.inflation.cpi import InterpolationType
-from pquantlib.indexes.inflation.eu_hicp import YoYEUHICP
+from pquantlib.indexes.inflation.eu_hicp import YYEUHICP
 from pquantlib.instruments.make_yoy_inflation_cap_floor import (
     make_yoy_inflation_cap_floor,
     yoy_inflation_leg,
@@ -40,7 +40,7 @@ def _pin_eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
 
 
 def test_build_cap_topology() -> None:
-    idx = YoYEUHICP()
+    idx = YYEUHICP()
     cf = make_yoy_inflation_cap_floor(
         YoYInflationCapFloorType.Cap,
         idx,
@@ -62,7 +62,7 @@ def test_build_cap_topology() -> None:
 
 
 def test_build_floor_and_optionlet() -> None:
-    idx = YoYEUHICP()
+    idx = YYEUHICP()
     floor = make_yoy_inflation_cap_floor(
         YoYInflationCapFloorType.Floor,
         idx,
@@ -90,7 +90,7 @@ def test_build_floor_and_optionlet() -> None:
 
 
 def test_first_caplet_excluded() -> None:
-    idx = YoYEUHICP()
+    idx = YYEUHICP()
     cf = make_yoy_inflation_cap_floor(
         YoYInflationCapFloorType.Cap,
         idx,
@@ -115,7 +115,7 @@ def test_yoy_inflation_leg_direct() -> None:
         DateGeneration.Forward, False,
     )
     leg = yoy_inflation_leg(
-        schedule, cal, YoYEUHICP(), Period(3, TimeUnit.Months),
+        schedule, cal, YYEUHICP(), Period(3, TimeUnit.Months),
         InterpolationType.AsIndex, notional=1000.0,
         payment_day_counter=Actual360(),
     )
