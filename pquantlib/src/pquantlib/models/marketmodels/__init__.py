@@ -57,7 +57,9 @@ W9-C additions (Brownian generators + accounting/greek engines):
 - ``accounting_engine.AccountingEngine`` — the core BGM Monte-Carlo cash-flow
   accounting loop.
 - ``pathwise_accounting_engine.PathwiseAccountingEngine`` — pathwise (Delta)
-  Giles-Glasserman smoking-adjoints accounting engine.
+  Giles-Glasserman smoking-adjoints accounting engine; the sibling
+  ``PathwiseVegasAccountingEngine`` / ``PathwiseVegasOuterAccountingEngine``
+  add Vegas (early vs late contraction of the pseudo-root bumps).
 - ``proxy_greek_engine.ProxyGreekEngine`` — Fries-Joshi proxy-simulation Greek
   engine.
 - ``constrained_evolver.ConstrainedEvolver`` — abstract constrained-evolver

@@ -1,7 +1,9 @@
-"""HistoricalForwardRatesAnalysis — statistical analysis of historical forward rates.
+"""Statistical analysis of historical forward rates.
 
 # C++ parity: ql/models/marketmodels/historicalforwardratesanalysis.hpp
-# (v1.42.1).
+# (v1.43) — the free ``historicalForwardRatesAnalysis<Traits, Interpolator>``
+# template, the abstract ``HistoricalForwardRatesAnalysis`` interface and the
+# concrete ``HistoricalForwardRatesAnalysisImpl<Traits, Interpolator>``.
 
 Walks a historical date range, and on each date bootstraps a yield curve from
 the supplied ibor + swap index fixings, then reads the time-to-go forward
@@ -21,13 +23,24 @@ Divergences from C++:
   stored historic fixing for a past date.
 - C++ re-drives one relinkable-quote-backed ``PiecewiseYieldCurve`` per
   iteration via ``SimpleQuote::setValue``. PQuantLib rebuilds a fresh
-  ``PiecewiseYieldCurve`` (reference date = current date) each iteration,
-  which produces identical forward rates without depending on observable
-  re-bootstrap.
+  ``PiecewiseYieldCurve`` (reference date = current date) each iteration.
+  This is NOT cosmetic: ``termstructures/yield_/piecewise_yield_curve.py``
+  documents that the port bootstraps once on first access and silently
+  ignores later ``SimpleQuote`` mutations, so re-driving would read a stale
+  curve. Rebuilding at ``reference_date = current_date`` reproduces the C++
+  curve, whose ``settlementDays = 0`` reference date is
+  ``cal.advance(currentDate, 0*Days)`` — and ``currentDate`` is always a
+  business day, having been produced by a ``Following`` advance.
+- C++ takes ``Traits`` and ``Interpolator`` as template parameters; Python is
+  duck-typed, so both are ordinary arguments (``traits`` defaulting to
+  ``Discount``, ``interpolator`` to the curve default). They are NOT
+  cosmetic either — the bootstrap state variable and the interpolation
+  together determine the between-pillar forward rates this analysis reads.
 """
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from pquantlib.exceptions import LibraryException
@@ -71,6 +84,7 @@ def historical_forward_rates_analysis(  # noqa: PLR0915
     yield_curve_day_counter: DayCounter,
     yield_curve_accuracy: float = 1.0e-12,
     interpolator: Any = None,
+    traits: Any = Discount,
 ) -> None:
     """Accumulate relative day-over-day forward-rate moves into ``statistics``.
 
@@ -80,9 +94,9 @@ def historical_forward_rates_analysis(  # noqa: PLR0915
     Mutates ``statistics`` and appends to the skipped/failed out-lists +
     ``fixing_periods``, mirroring the C++ out-parameter contract.
     ``interpolator`` selects the curve interpolation (C++ template param
-    ``Interpolator``); ``None`` uses the curve default. The discount-curve
-    traits are fixed to ``Discount`` (the analysis is trait-agnostic for the
-    forward rates it reads).
+    ``Interpolator``); ``None`` uses the curve default. ``traits`` selects the
+    bootstrap state variable (C++ template param ``Traits``:
+    ``Discount`` / ``ZeroYield`` / ``ForwardRate``).
     """
     skipped_dates.clear()
     skipped_dates_error_message.clear()
@@ -141,7 +155,7 @@ def historical_forward_rates_analysis(  # noqa: PLR0915
                     ibor_indexes, swap_indexes, ibor_quotes, swap_quotes, current_date
                 )
                 yc = PiecewiseYieldCurve(
-                    Discount,
+                    traits,
                     current_date,
                     rate_helpers,
                     yield_curve_day_counter,
@@ -223,16 +237,50 @@ def _build_rate_helpers(
     return rate_helpers
 
 
-class HistoricalForwardRatesAnalysis:
+class HistoricalForwardRatesAnalysis(ABC):
+    """Read-only interface onto a completed historical forward-rate analysis.
+
+    # C++ parity: historicalforwardratesanalysis.hpp
+    HistoricalForwardRatesAnalysis (the pure-virtual base).
+
+    The concrete driver is :class:`HistoricalForwardRatesAnalysisImpl`.
+    """
+
+    @abstractmethod
+    def skipped_dates(self) -> list[Date]:
+        """Dates whose index fixings could not be read."""
+
+    @abstractmethod
+    def skipped_dates_error_message(self) -> list[str]:
+        """Error message for each skipped date."""
+
+    @abstractmethod
+    def failed_dates(self) -> list[Date]:
+        """Dates whose curve bootstrap / forward read failed."""
+
+    @abstractmethod
+    def failed_dates_error_message(self) -> list[str]:
+        """Error message for each failed date."""
+
+    @abstractmethod
+    def fixing_periods(self) -> list[Period]:
+        """The forward-rate fixing-period grid."""
+
+
+class HistoricalForwardRatesAnalysisImpl(HistoricalForwardRatesAnalysis):
     """Historical forward-rate analysis driver.
 
     # C++ parity: historicalforwardratesanalysis.hpp
-    HistoricalForwardRatesAnalysisImpl (the concrete impl of the
-    HistoricalForwardRatesAnalysis interface).
+    HistoricalForwardRatesAnalysisImpl<Traits, Interpolator>.
 
     Runs :func:`historical_forward_rates_analysis` at construction and exposes
     the populated statistics + skipped/failed-date diagnostics + the fixing
     periods grid.
+
+    The C++ class template parameters ``Traits`` and ``Interpolator`` become
+    the trailing ``traits`` / ``interpolator`` constructor arguments (the
+    convention the free function above already established: the type is passed
+    as a value, class or instance, because Python is duck-typed).
     """
 
     def __init__(
@@ -249,6 +297,7 @@ class HistoricalForwardRatesAnalysis:
         yield_curve_day_counter: DayCounter,
         yield_curve_accuracy: float = 1.0e-12,
         interpolator: Any = None,
+        traits: Any = Discount,
     ) -> None:
         self._stats = stats
         self._skipped_dates: list[Date] = []
@@ -274,6 +323,7 @@ class HistoricalForwardRatesAnalysis:
             yield_curve_day_counter,
             yield_curve_accuracy,
             interpolator,
+            traits,
         )
 
     def skipped_dates(self) -> list[Date]:
