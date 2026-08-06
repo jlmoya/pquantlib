@@ -9,21 +9,24 @@ enum) with two parameters: ``theta`` (the implicit weight, e.g.
 Craig-Sneyd / Hundsdorfer variants — not used by the schemes ported
 in L5-D).
 
-Defaults exposed (each via a classmethod factory):
+All ten C++ static factories are exposed as classmethods, with C++'s exact
+constants:
 
-* ``CrankNicolson`` — ``theta = 0.5``, ``mu = 0.0``.
-* ``Douglas`` — same as CrankNicolson in 1 dimension.
-* ``ImplicitEuler`` — ``theta = 0.0``, ``mu = 0.0``.
-* ``ExplicitEuler`` — ``theta = 0.0``, ``mu = 0.0``.
-
-Multi-direction descriptors (``CraigSneyd``, ``Hundsdorfer``,
-``ModifiedCraigSneyd``, ``MethodOfLines``, ``TrBDF2``) are listed
-in the enum but not yet implemented; calling
-``FdmBackwardSolver.rollback`` with one of them raises.
+* ``douglas`` — (0.5, 0.0); same as Crank-Nicolson in one dimension.
+* ``crank_nicolson`` — (0.5, 0.0).
+* ``implicit_euler`` / ``explicit_euler`` — (0.0, 0.0).
+* ``craig_sneyd`` — (0.5, 0.5).
+* ``modified_craig_sneyd`` — (1/3, 1/3).
+* ``hundsdorfer`` — (0.5 + sqrt(3)/6, 0.5).
+* ``modified_hundsdorfer`` — (1 - sqrt(2)/2, 0.5), tagged ``HundsdorferType``.
+* ``method_of_lines(eps=0.001, rel_init_step_size=0.01)`` — the two arguments
+  ride in the ``theta`` / ``mu`` slots.
+* ``tr_bdf2`` — (2 - sqrt(2), 1e-8).
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -71,6 +74,41 @@ class FdmSchemeDesc:
     @classmethod
     def explicit_euler(cls) -> FdmSchemeDesc:
         return cls(FdmSchemeType.ExplicitEulerType, 0.0, 0.0)
+
+    @classmethod
+    def craig_sneyd(cls) -> FdmSchemeDesc:
+        """# C++ parity: ``FdmSchemeDesc::CraigSneyd`` — (0.5, 0.5)."""
+        return cls(FdmSchemeType.CraigSneydType, 0.5, 0.5)
+
+    @classmethod
+    def modified_craig_sneyd(cls) -> FdmSchemeDesc:
+        """# C++ parity: ``FdmSchemeDesc::ModifiedCraigSneyd`` — (1/3, 1/3)."""
+        return cls(FdmSchemeType.ModifiedCraigSneydType, 1.0 / 3.0, 1.0 / 3.0)
+
+    @classmethod
+    def hundsdorfer(cls) -> FdmSchemeDesc:
+        """# C++ parity: ``FdmSchemeDesc::Hundsdorfer`` — (0.5 + sqrt(3)/6, 0.5)."""
+        return cls(FdmSchemeType.HundsdorferType, 0.5 + math.sqrt(3.0) / 6.0, 0.5)
+
+    @classmethod
+    def modified_hundsdorfer(cls) -> FdmSchemeDesc:
+        """# C++ parity: ``FdmSchemeDesc::ModifiedHundsdorfer`` — (1 - sqrt(2)/2, 0.5).
+
+        Note C++ tags this ``HundsdorferType``, not a type of its own.
+        """
+        return cls(FdmSchemeType.HundsdorferType, 1.0 - math.sqrt(2.0) / 2.0, 0.5)
+
+    @classmethod
+    def method_of_lines(
+        cls, eps: float = 0.001, rel_init_step_size: float = 0.01
+    ) -> FdmSchemeDesc:
+        """# C++ parity: ``FdmSchemeDesc::MethodOfLines(eps, relInitStepSize)``."""
+        return cls(FdmSchemeType.MethodOfLinesType, eps, rel_init_step_size)
+
+    @classmethod
+    def tr_bdf2(cls) -> FdmSchemeDesc:
+        """# C++ parity: ``FdmSchemeDesc::TrBDF2`` — (2 - sqrt(2), 1e-8)."""
+        return cls(FdmSchemeType.TrBDF2Type, 2.0 - math.sqrt(2.0), 1e-8)
 
 
 __all__ = ["FdmSchemeDesc", "FdmSchemeType"]
