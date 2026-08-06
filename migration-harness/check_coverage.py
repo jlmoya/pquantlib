@@ -88,7 +88,7 @@ ALLOWLIST: dict[str, str] = {
     # --- C++ template / language idioms with no Python expression -------------
     "CuriouslyRecurringTemplate":
         "`template <class Impl> class CuriouslyRecurringTemplate` "
-        "(ql/patterns/curiouslyrecurring.hpp:106) — a CRTP static-dispatch helper whose "
+        "(ql/patterns/curiouslyrecurring.hpp:39) — a CRTP static-dispatch helper whose "
         "entire body is `static_cast<Impl&>(*this)`; Python resolves self.method() on the "
         "runtime class, so the idiom has no expression",
     "Foo":
@@ -102,7 +102,7 @@ ALLOWLIST: dict[str, str] = {
         "Protocol and Event.accept isinstance-checks it (pquantlib/event.py), which is the "
         "same check without the tag base",
     "Proxy":
-        "private nested `Observer::Proxy` (ql/patterns/observable.hpp:336) holding a mutex "
+        "private nested `Observer::Proxy` (ql/patterns/observable.hpp:330) holding a mutex "
         "plus an `active_` flag so a dying Observer can be detached mid-notification; "
         "pquantlib.patterns.observer.Observable stores observers in a weakref.WeakSet "
         "(observer.py:27), which gives the same lifetime guarantee without the proxy",
