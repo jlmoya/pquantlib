@@ -1,48 +1,44 @@
-"""BinomialTree concrete trees — CRR, JarrowRudd, Tian, LeisenReimer.
+"""Binomial trees — the full ql/methods/lattices/binomialtree family.
 
-# C++ parity: ql/methods/lattices/binomialtree.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/methods/lattices/binomialtree.{hpp,cpp} (v1.43).
 
-The C++ class hierarchy is
+The C++ class hierarchy, reproduced here one-for-one:
 
     Tree<Impl> (CRTP) <- BinomialTree<Impl>
                           <- EqualProbabilitiesBinomialTree<Impl>
                              <- JarrowRudd
-                             <- AdditiveEQPBinomialTree   (deferred — L5+ carry-over)
+                             <- AdditiveEQPBinomialTree
                           <- EqualJumpsBinomialTree<Impl>
                              <- CoxRossRubinstein
-                             <- Trigeorgis                 (deferred — L5+ carry-over)
+                             <- Trigeorgis
                           <- Tian
                           <- LeisenReimer
-                          <- Joshi4                        (deferred — L5+ carry-over)
+                          <- Joshi4
 
-The Python port collapses the CRTP indirection (Python's dynamic
-dispatch handles it natively). All concrete trees inherit from
-:class:`~pquantlib.methods.lattices.tree.Tree` with ``T = float`` and
-provide ``size`` / ``underlying`` / ``descendant`` / ``probability``.
+Only the CRTP indirection is dropped (Python's method lookup is already
+dynamic); the layering is the C++ one, so the two intermediate bases own
+their ``underlying`` / ``probability`` formulas exactly as in C++:
 
-We deliberately keep the four most-used concretes (CRR, JarrowRudd,
-Tian, LeisenReimer). The L3-D ``BinomialVanillaEngine`` continues to
-use its own inline coefficient-builder (it pre-computes only the
-terminal slice + rolls back with a tight numpy loop, faster than
-going through the Tree API for vanilla options).  These concrete
-trees exist for the more general lattice path (L5-B ShortRateTree /
-TreeLattice1D consumers, future basket/American multi-asset trees).
+* ``EqualProbabilitiesBinomialTree`` — ``p == 0.5`` on both branches and
+  a *drift-centred* underlying ``x0 * exp(i*driftPerStep + j*up)``;
+* ``EqualJumpsBinomialTree`` — asymmetric ``(pu, pd)`` and an
+  *x0-centred* underlying ``x0 * exp(j*dx)``;
+
+with ``j = 2*index - i`` in both. ``Tian`` / ``LeisenReimer`` / ``Joshi4``
+derive straight from ``BinomialTree`` and use the multiplicative layout
+``x0 * down^(i-index) * up^index``, which is *not* centred on x0.
 
 # C++ parity notes:
 #
 # * The C++ ``BinomialTree`` ctor takes ``steps`` and stores
 #   ``columns = steps + 1``. Our ``columns()`` (inherited from
 #   :class:`Tree`) matches.
-# * Underlying-value formulas follow the C++ exactly — the
-#   ``EqualProbabilitiesBinomialTree`` and ``EqualJumpsBinomialTree``
-#   sub-bases use slightly different parameterisations (drift-centred
-#   vs jump-centred); we inline those formulas in the concrete classes
-#   for readability rather than introducing two intermediate Python
-#   bases (the saving is one helper class, the cost is two extra
-#   docstrings).
 # * ``descendant(i, index, branch) = index + branch`` for every
 #   binomial tree (branch 0 = down, branch 1 = up — same orientation
 #   as the L3-D BinomialVanillaEngine).
+# * ``LeisenReimer`` and ``Joshi4`` round an even ``steps`` up to the
+#   next odd number *before* calling the base ctor, so ``dt`` and
+#   ``driftPerStep`` are computed against the rounded count.
 """
 
 from __future__ import annotations
@@ -61,7 +57,7 @@ if TYPE_CHECKING:
 
 
 class BinomialTree(Tree[float]):
-    """Base binomial tree (abstract — concretes set ``_up`` and ``_down``).
+    """Base binomial tree (abstract — concretes supply the coefficients).
 
     # C++ parity: ``BinomialTree<T>`` (binomialtree.hpp:38-57).
 
@@ -103,7 +99,7 @@ class BinomialTree(Tree[float]):
         # C++ parity: ``BinomialTree<T>::descendant`` (binomialtree.hpp:51-53).
 
         ``branch == 0`` = down; ``branch == 1`` = up. The arity is
-        not checked here — callers (``Lattice.stepback``) are expected
+        not checked here — callers (``TreeLattice.stepback``) are expected
         to obey the [0, branches) convention.
         """
         del i
@@ -136,22 +132,140 @@ class BinomialTree(Tree[float]):
         return self._drift_per_step
 
 
-class CoxRossRubinstein(BinomialTree):
+class EqualProbabilitiesBinomialTree(BinomialTree):
+    """Base for equal-probabilities (``p = 0.5``) binomial trees.
+
+    # C++ parity: ``EqualProbabilitiesBinomialTree<T>``
+    # (binomialtree.hpp:62-78).
+
+    The tree is centred on the *forward* value: with ``j = 2*index - i``
+    the underlying is ``x0 * exp(i*driftPerStep + j*up)``. Concrete
+    subclasses set ``_up``.
+    """
+
+    def __init__(
+        self,
+        process: StochasticProcess1D,
+        end: float,
+        steps: int,
+    ) -> None:
+        # C++ parity: binomialtree.hpp:65-69 — forwards to BinomialTree;
+        # ``up_`` is left for the concrete ctor (protected member,
+        # binomialtree.hpp:77).
+        super().__init__(process, end, steps)
+        self._up: float = 0.0
+
+    def underlying(self, i: int, index: int) -> float:
+        # C++ parity: ``EqualProbabilitiesBinomialTree<T>::underlying``
+        # (binomialtree.hpp:70-74) — exploits the forward-value centring.
+        j = 2 * index - i
+        return self._x0 * math.exp(i * self._drift_per_step + j * self._up)
+
+    def probability(self, i: int, index: int, branch: int) -> float:
+        # C++ parity: ``EqualProbabilitiesBinomialTree<T>::probability``
+        # (binomialtree.hpp:75) — always 0.5.
+        del i, index, branch
+        return 0.5
+
+
+class EqualJumpsBinomialTree(BinomialTree):
+    """Base for equal-jumps binomial trees (constant log-step ``dx``).
+
+    # C++ parity: ``EqualJumpsBinomialTree<T>`` (binomialtree.hpp:83-101).
+
+    The tree is centred on ``x0``: with ``j = 2*index - i`` the underlying
+    is ``x0 * exp(j*dx)``, and the asymmetry of the process is carried by
+    ``(pu, pd)`` instead. Concrete subclasses set ``_dx`` / ``_pu`` / ``_pd``.
+    """
+
+    def __init__(
+        self,
+        process: StochasticProcess1D,
+        end: float,
+        steps: int,
+    ) -> None:
+        # C++ parity: binomialtree.hpp:86-90 — forwards to BinomialTree;
+        # ``dx_`` / ``pu_`` / ``pd_`` are left for the concrete ctor
+        # (protected members, binomialtree.hpp:100).
+        super().__init__(process, end, steps)
+        self._dx: float = 0.0
+        self._pu: float = 0.0
+        self._pd: float = 0.0
+
+    def underlying(self, i: int, index: int) -> float:
+        # C++ parity: ``EqualJumpsBinomialTree<T>::underlying``
+        # (binomialtree.hpp:91-95) — equal jump, x0 centring.
+        j = 2 * index - i
+        return self._x0 * math.exp(j * self._dx)
+
+    def probability(self, i: int, index: int, branch: int) -> float:
+        # C++ parity: ``EqualJumpsBinomialTree<T>::probability``
+        # (binomialtree.hpp:96-98).
+        del i, index
+        return self._pu if branch == 1 else self._pd
+
+
+class JarrowRudd(EqualProbabilitiesBinomialTree):
+    """Jarrow-Rudd equal-probabilities multiplicative binomial tree.
+
+    # C++ parity: ``class JarrowRudd`` (binomialtree.hpp:106-112 +
+    # binomialtree.cpp:28-34).
+
+    The drift is removed by the forward centring, so the only coefficient
+    is ``up = stdDeviation(0, x0, dt)``.
+    """
+
+    def __init__(
+        self,
+        process: StochasticProcess1D,
+        end: float,
+        steps: int,
+        strike: float,  # kept for C++ signature parity (unused in this builder)
+    ) -> None:
+        # C++ parity: binomialtree.cpp:28-34. ``strike`` is ignored, exactly
+        # as in C++ (the parameter is unnamed there).
+        del strike
+        super().__init__(process, end, steps)
+        # C++: ``up_ = process->stdDeviation(0.0, x0_, dt_)`` — "drift removed".
+        self._up = process.std_deviation_1d(0.0, self._x0, self._dt)
+
+
+class AdditiveEQPBinomialTree(EqualProbabilitiesBinomialTree):
+    """Additive equal-probabilities binomial tree.
+
+    # C++ parity: ``class AdditiveEQPBinomialTree`` (binomialtree.hpp:129-137 +
+    # binomialtree.cpp:51-59).
+
+    Third-order-accurate up step::
+
+        up = -0.5*drift + 0.5*sqrt(4*variance - 3*drift^2)
+    """
+
+    def __init__(
+        self,
+        process: StochasticProcess1D,
+        end: float,
+        steps: int,
+        strike: float,  # kept for C++ signature parity (unused in this builder)
+    ) -> None:
+        # C++ parity: binomialtree.cpp:51-59.
+        del strike
+        super().__init__(process, end, steps)
+        self._up = -0.5 * self._drift_per_step + 0.5 * math.sqrt(
+            4.0 * process.variance_1d(0.0, self._x0, self._dt)
+            - 3.0 * self._drift_per_step * self._drift_per_step
+        )
+
+
+class CoxRossRubinstein(EqualJumpsBinomialTree):
     """CRR multiplicative equal-jumps binomial tree.
 
     # C++ parity: ``class CoxRossRubinstein`` (binomialtree.hpp:117-124 +
-    # binomialtree.cpp:37-48).
+    # binomialtree.cpp:37-48)::
 
-    Equal-jump (constant log-multiplier per step) parameterisation:
-
-        dx = sigma * sqrt(dt)
-        up   = exp(+dx)
-        down = exp(-dx)
-        pu   = 0.5 + 0.5 * (drift / dx)
-        pd   = 1 - pu
-
-    The underlying-formula relies on the jump-centred layout
-    (``x = x0 * exp(j * dx)`` where ``j = 2*index - i``).
+        dx = stdDeviation(0, x0, dt)
+        pu = 0.5 + 0.5 * (drift / dx)
+        pd = 1 - pu
     """
 
     def __init__(
@@ -163,38 +277,27 @@ class CoxRossRubinstein(BinomialTree):
     ) -> None:
         # C++ parity: binomialtree.cpp:37-48. ``strike`` is ignored —
         # the CRR coefficients do not depend on it (matches C++).
+        del strike
         super().__init__(process, end, steps)
-        # C++: ``dx_ = process.stdDeviation(0, x0, dt)``.
-        self._dx: float = process.std_deviation_1d(0.0, self._x0, self._dt)
-        self._pu: float = 0.5 + 0.5 * self._drift_per_step / self._dx
-        self._pd: float = 1.0 - self._pu
-        qassert.require(0.0 <= self._pu <= 1.0, "negative probability")
-
-    def underlying(self, i: int, index: int) -> float:
-        # C++ parity: ``EqualJumpsBinomialTree<T>::underlying``
-        # (binomialtree.hpp:91-95) — jump-centred formula.
-        j = 2 * index - i
-        return self._x0 * math.exp(j * self._dx)
-
-    def probability(self, i: int, index: int, branch: int) -> float:
-        # C++ parity: ``EqualJumpsBinomialTree<T>::probability``
-        # (binomialtree.hpp:96-98).
-        del i, index
-        return self._pu if branch == 1 else self._pd
+        self._dx = process.std_deviation_1d(0.0, self._x0, self._dt)
+        self._pu = 0.5 + 0.5 * self._drift_per_step / self._dx
+        self._pd = 1.0 - self._pu
+        qassert.require(self._pu <= 1.0, "negative probability")
+        qassert.require(self._pu >= 0.0, "negative probability")
 
 
-class JarrowRudd(BinomialTree):
-    """Jarrow-Rudd equal-probabilities multiplicative binomial tree.
+class Trigeorgis(EqualJumpsBinomialTree):
+    """Trigeorgis additive-equal-jumps binomial tree.
 
-    # C++ parity: ``class JarrowRudd`` (binomialtree.hpp:106-112 +
-    # binomialtree.cpp:28-34).
+    # C++ parity: ``class Trigeorgis`` (binomialtree.hpp:142-148 +
+    # binomialtree.cpp:62-74)::
 
-    Equal-probabilities (pu = pd = 0.5), drift-centred up factor:
+        dx = sqrt(variance + drift^2)
+        pu = 0.5 + 0.5 * (drift / dx)
+        pd = 1 - pu
 
-        up   = sigma * sqrt(dt)        (as an additive log-shift)
-        underlying = x0 * exp(i * drift + j * up)
-
-    where ``j = 2*index - i`` is the standard up/down offset.
+    Same probability form as CRR; the difference is the jump size, which
+    folds the drift into the second moment instead of leaving it out.
     """
 
     def __init__(
@@ -204,30 +307,26 @@ class JarrowRudd(BinomialTree):
         steps: int,
         strike: float,  # kept for C++ signature parity (unused in this builder)
     ) -> None:
-        # C++ parity: binomialtree.cpp:28-34.
+        # C++ parity: binomialtree.cpp:62-74.
+        del strike
         super().__init__(process, end, steps)
-        self._up: float = process.std_deviation_1d(0.0, self._x0, self._dt)
-
-    def underlying(self, i: int, index: int) -> float:
-        # C++ parity: ``EqualProbabilitiesBinomialTree<T>::underlying``
-        # (binomialtree.hpp:70-74).
-        j = 2 * index - i
-        return self._x0 * math.exp(i * self._drift_per_step + j * self._up)
-
-    def probability(self, i: int, index: int, branch: int) -> float:
-        # C++ parity: ``EqualProbabilitiesBinomialTree<T>::probability``
-        # (binomialtree.hpp:75) — always 0.5.
-        del i, index, branch
-        return 0.5
+        self._dx = math.sqrt(
+            process.variance_1d(0.0, self._x0, self._dt)
+            + self._drift_per_step * self._drift_per_step
+        )
+        self._pu = 0.5 + 0.5 * self._drift_per_step / self._dx
+        self._pd = 1.0 - self._pu
+        qassert.require(self._pu <= 1.0, "negative probability")
+        qassert.require(self._pu >= 0.0, "negative probability")
 
 
 class Tian(BinomialTree):
     """Tian third-moment-matching multiplicative binomial tree.
 
-    # C++ parity: ``class Tian`` (binomialtree.hpp:151-168 +
+    # C++ parity: ``class Tian`` (binomialtree.hpp:153-168 +
     # binomialtree.cpp:77-96).
 
-    Multiplicative up/down with explicit ``pu/pd``:
+    Multiplicative up/down with explicit ``pu/pd``::
 
         q  = exp(variance_per_step)
         rr = exp(drift_per_step) * sqrt(q)
@@ -248,20 +347,18 @@ class Tian(BinomialTree):
         strike: float,  # kept for C++ signature parity (unused in this builder)
     ) -> None:
         # C++ parity: binomialtree.cpp:77-96.
+        del strike
         super().__init__(process, end, steps)
-        # C++ variance per step = process.variance(0, x0, dt).
-        variance_per_step = (
-            process.std_deviation_1d(0.0, self._x0, self._dt) ** 2
-        )
         # C++ parity: q = exp(variance), r = exp(drift) * sqrt(q).
-        q = math.exp(variance_per_step)
+        q = math.exp(process.variance_1d(0.0, self._x0, self._dt))
         rr = math.exp(self._drift_per_step) * math.sqrt(q)
         disc = math.sqrt(q * q + 2.0 * q - 3.0)
         self._up: float = 0.5 * rr * q * (q + 1.0 + disc)
         self._down: float = 0.5 * rr * q * (q + 1.0 - disc)
         self._pu: float = (rr - self._down) / (self._up - self._down)
         self._pd: float = 1.0 - self._pu
-        qassert.require(0.0 <= self._pu <= 1.0, "negative probability")
+        qassert.require(self._pu <= 1.0, "negative probability")
+        qassert.require(self._pu >= 0.0, "negative probability")
 
     def underlying(self, i: int, index: int) -> float:
         # C++ parity: binomialtree.hpp:159-162 — ``x0 * down^(i - index) * up^index``.
@@ -276,7 +373,7 @@ class Tian(BinomialTree):
 class LeisenReimer(BinomialTree):
     """Leisen-Reimer Peizer-Pratt method-2 inversion binomial tree.
 
-    # C++ parity: ``class LeisenReimer`` (binomialtree.hpp:170-187 +
+    # C++ parity: ``class LeisenReimer`` (binomialtree.hpp:172-187 +
     # binomialtree.cpp:99-117).
 
     Forces an odd number of steps (so ``log(K/S0) / d2`` evaluates
@@ -294,18 +391,17 @@ class LeisenReimer(BinomialTree):
         steps: int,
         strike: float,
     ) -> None:
-        qassert.require(strike > 0.0, "strike must be positive")
-        # # C++ parity: binomialtree.cpp:99-103 — round steps up to odd
+        # C++ parity: binomialtree.cpp:99-106 — round steps up to odd
         # when even (the PP inversion has its centre at d2=0; with even
-        # steps the centre falls between nodes).
+        # steps the centre falls between nodes). C++ does the rounding in
+        # the base-class initialiser, so ``dt`` uses the rounded count.
         odd_steps = steps if steps % 2 == 1 else steps + 1
         super().__init__(process, end, odd_steps)
+        qassert.require(strike > 0.0, "strike must be positive")
         # Variance over the full period (not per step) — C++ uses
-        # process.variance(0, x0, end).
-        variance = process.std_deviation_1d(0.0, self._x0, end) ** 2
-        ermqdt = math.exp(
-            self._drift_per_step + 0.5 * variance / odd_steps
-        )
+        # process->variance(0, x0, end).
+        variance = process.variance_1d(0.0, self._x0, end)
+        ermqdt = math.exp(self._drift_per_step + 0.5 * variance / odd_steps)
         d2 = (
             math.log(self._x0 / strike) + self._drift_per_step * odd_steps
         ) / math.sqrt(variance)
@@ -325,10 +421,86 @@ class LeisenReimer(BinomialTree):
         return self._pu if branch == 1 else self._pd
 
 
+class Joshi4(BinomialTree):
+    """Joshi fourth-order binomial tree.
+
+    # C++ parity: ``class Joshi4`` (binomialtree.hpp:190-206 +
+    # binomialtree.cpp:119-157).
+
+    Same shape as :class:`LeisenReimer` — odd steps forced, up/down
+    recovered from an up-probability and its shifted counterpart — but
+    the up-probability comes from Joshi's fourth-order asymptotic
+    expansion in ``1/sqrt(k)`` rather than from the Peizer-Pratt
+    inversion of the cumulative binomial.
+    """
+
+    def __init__(
+        self,
+        process: StochasticProcess1D,
+        end: float,
+        steps: int,
+        strike: float,
+    ) -> None:
+        # C++ parity: binomialtree.cpp:140-157.
+        odd_steps = steps if steps % 2 == 1 else steps + 1
+        super().__init__(process, end, odd_steps)
+        qassert.require(strike > 0.0, "strike must be positive")
+        variance = process.variance_1d(0.0, self._x0, end)
+        ermqdt = math.exp(self._drift_per_step + 0.5 * variance / odd_steps)
+        d2 = (
+            math.log(self._x0 / strike) + self._drift_per_step * odd_steps
+        ) / math.sqrt(variance)
+        k = (odd_steps - 1.0) / 2.0
+        self._pu: float = self._compute_up_prob(k, d2)
+        self._pd: float = 1.0 - self._pu
+        pdash = self._compute_up_prob(k, d2 + math.sqrt(variance))
+        self._up: float = ermqdt * pdash / self._pu
+        self._down: float = (ermqdt - self._pu * self._up) / (1.0 - self._pu)
+
+    @staticmethod
+    def _compute_up_prob(k: float, dj: float) -> float:
+        """Joshi's fourth-order up-probability expansion.
+
+        # C++ parity: ``Joshi4::computeUpProb`` (binomialtree.cpp:119-138) —
+        # a protected const member there. The four ``p +=`` terms are kept
+        # in the C++ order (they are not associative in floating point).
+        """
+        alpha = dj / math.sqrt(8.0)
+        alpha2 = alpha * alpha
+        alpha3 = alpha * alpha2
+        alpha5 = alpha3 * alpha2
+        alpha7 = alpha5 * alpha2
+        beta = -0.375 * alpha - alpha3
+        gamma = (5.0 / 6.0) * alpha5 + (13.0 / 12.0) * alpha3 + (25.0 / 128.0) * alpha
+        delta = -0.1025 * alpha - 0.9285 * alpha3 - 1.43 * alpha5 - 0.5 * alpha7
+        p = 0.5
+        rootk = math.sqrt(k)
+        p += alpha / rootk
+        p += beta / (k * rootk)
+        p += gamma / (k * k * rootk)
+        # C++ note: "delete next line to get results for j three tree".
+        p += delta / (k * k * k * rootk)
+        return p
+
+    def underlying(self, i: int, index: int) -> float:
+        # C++ parity: binomialtree.hpp:196-199 — ``x0 * down^(i - index) * up^index``.
+        return self._x0 * (self._down ** (i - index)) * (self._up**index)
+
+    def probability(self, i: int, index: int, branch: int) -> float:
+        # C++ parity: binomialtree.hpp:200-202.
+        del i, index
+        return self._pu if branch == 1 else self._pd
+
+
 __all__ = [
+    "AdditiveEQPBinomialTree",
     "BinomialTree",
     "CoxRossRubinstein",
+    "EqualJumpsBinomialTree",
+    "EqualProbabilitiesBinomialTree",
     "JarrowRudd",
+    "Joshi4",
     "LeisenReimer",
     "Tian",
+    "Trigeorgis",
 ]
