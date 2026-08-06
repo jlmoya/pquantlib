@@ -35,7 +35,7 @@ from pquantlib.pricingengines.conundrum_pricer import (
 )
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.volatility.swaption.swaption_constant_vol import (
-    SwaptionConstantVolatility,
+    ConstantSwaptionVolatility,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -81,8 +81,8 @@ def _swap_index(tenor: Period, curve: FlatForward) -> SwapIndex:
     )
 
 
-def _const_log_vol(v: float = 0.16) -> SwaptionConstantVolatility:
-    return SwaptionConstantVolatility(
+def _const_log_vol(v: float = 0.16) -> ConstantSwaptionVolatility:
+    return ConstantSwaptionVolatility(
         reference_date=_TODAY,
         calendar=TARGET(),
         business_day_convention=BusinessDayConvention.Following,
@@ -156,7 +156,7 @@ def test_conundrum_integrand_value(reference_data: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _hagan_coupon(curve: FlatForward) -> tuple[CmsCoupon, SwaptionConstantVolatility]:
+def _hagan_coupon(curve: FlatForward) -> tuple[CmsCoupon, ConstantSwaptionVolatility]:
     swap_index = _swap_index(Period(10, TimeUnit.Years), curve)
     start = curve.reference_date() + Period(20, TimeUnit.Years)
     payment = start + Period(1, TimeUnit.Years)

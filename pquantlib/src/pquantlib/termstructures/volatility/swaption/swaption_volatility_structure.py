@@ -211,7 +211,7 @@ class SwaptionVolatilityStructure(VolatilityTermStructure):
         # C++ parity: ``SwaptionVolatilityStructure::smileSection``
         # (swaptionvolstructure.cpp). The base wraps the
         # vol-as-of-strike call in a ``FlatSmileSection`` for structures
-        # that don't have a smile (e.g. ``SwaptionConstantVolatility``
+        # that don't have a smile (e.g. ``ConstantSwaptionVolatility``
         # or the matrix interpolators). Subclasses may override (e.g.
         # ``SwaptionVolatilityCube.smile_section_impl``).
         """
@@ -234,7 +234,7 @@ class SwaptionVolatilityStructure(VolatilityTermStructure):
         )
         # Flat smile evaluates ``_volatility_impl(t, length, atm)`` once
         # and treats it as strike-independent. This is correct for
-        # ``SwaptionConstantVolatility`` and surface-level matrix
+        # ``ConstantSwaptionVolatility`` and surface-level matrix
         # interpolators that lack a true smile.
         # We need an atm to pick a vol; use the ATM forward = 0.0 query
         # point (constant-vol surfaces don't depend on strike so the

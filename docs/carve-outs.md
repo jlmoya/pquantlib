@@ -276,7 +276,7 @@ If you need a carved-out feature:
 
 The audit script matches by `class Name`. The ~1000 raw "missing" names split into four buckets, only the first of which is a real gap (and Phase 11 W12 closed the bulk of it):
 
-1. **Real gaps — now CLOSED by W12** (core `cashflows`): CmsCoupon + CmsCouponPricer + CmsLeg + GFunction family + HaganPricer/AnalyticHaganPricer/NumericHaganPricer + ConundrumIntegrand + CappedFlooredCoupon/Ibor/Cms/Overnight + DigitalCoupon/Ibor/Cms + DigitalReplication + StrippedCappedFlooredCoupon + Dividend/FixedDividend/FractionalDividend + AverageBMACoupon/Leg + overnight-indexed coupon pricers + LognormalCmsSpreadPricer (also closed the W8-A CMS-spread deferral) + upgraded the L2-D BlackIborCouponPricer stub to a real optionlet pricer. **Remaining real gaps:** EquityCashFlow + EquityIndex + QuantoTermStructure (a small self-contained equity-return-cashflow batch deferred during W12 — see Category 2); CMS/overnight cap-floor *pricing* (needs a Hagan-replication / Black-overnight caplet pricer).
+1. **Real gaps — now CLOSED by W12** (core `cashflows`): CmsCoupon + CmsCouponPricer + CmsLeg + GFunction family + HaganPricer/AnalyticHaganPricer/NumericHaganPricer + ConundrumIntegrand + CappedFlooredCoupon/Ibor/Cms/Overnight + DigitalCoupon/Ibor/Cms + DigitalReplication + StrippedCappedFlooredCoupon + Dividend/FixedDividend/FractionalDividend + AverageBMACoupon/Leg + overnight-indexed coupon pricers + LognormalCmsSpreadPricer (also closed the W8-A CMS-spread deferral) + upgraded the L2-D BlackIborCouponPricer stub to a real optionlet pricer. **Remaining real gaps:** EquityCashFlow + EquityIndex (a small self-contained equity-return-cashflow batch deferred during W12 — see Category 2); CMS/overnight cap-floor *pricing* (needs a Hagan-replication / Black-overnight caplet pricer). ~~QuantoTermStructure~~ **CLOSED by the v1.43 termstructures/yield sweep** (`termstructures/yield_/quanto_term_structure.py`, cross-validated against the `v143/ts/yieldadapters` probe).
 
 2. **Representation mismatches — NOT gaps** (the bulk of the raw "missing"). The name-match audit cannot see these:
    - ~~`currencies` (5/111): every per-currency class (`USDCurrency`, `EURCurrency`, …, 100+ of them) is ported as a `Currency` *instance / registry entry*, not a `class X` subclass. Functionally complete.~~ **This was wrong, and the v1.43 sweep CLOSED it.** There was no registry: only the 8 currencies some probe happened to reference existed at all, and the other 103 were a real gap, not a representation mismatch. All 111 v1.43 currency classes are now ported and cross-validated against the `currencies/all` probe, together with `ExchangeRate` + `ExchangeRateManager`; the `currencies` subsystem audits at 113/113.
@@ -306,13 +306,18 @@ re-inspection); their modules exist with a `run()` that raises
 `NotImplementedError`, and they sit in `all_samples.PENDING` (skipped by the
 smoke suite):
 
-- **`bonds`** — QuantLib `Examples/Bonds`. Bootstraps a depo-bond discounting
+- ~~**`bonds`** — QuantLib `Examples/Bonds`. Bootstraps a depo-bond discounting
   curve from fixed-rate bond helpers. Blocked: pquantlib ships `BondHelper` but
   its `implied_quote()` is an explicit deferred stub (`"requires L3 Bond +
   DiscountingBondEngine (deferred to L3)"`, never closed) and there is no
   functional `FixedRateBondHelper`. The deposit/swap helper legs bootstrap, but
   the depo-bond curve — the spine of the sample — does not. (Java AllSamples also
-  kept Bonds in its `pending` bucket.)
+  kept Bonds in its `pending` bucket.)~~ **UNBLOCKED by the v1.43
+  termstructures/yield sweep.** The stub's premise had expired: `Bond` and
+  `DiscountingBondEngine` were both already present, so `BondHelper.implied_quote`
+  is now implemented against v1.43 and `FixedRateBondHelper` exists. The sample
+  itself has not been rewritten — that is a `pquantlib-samples` follow-up, no
+  longer a core gap.
 - **`replication`** — QuantLib `Examples/Replication` (static replication of a
   down-and-out barrier via `CompositeInstrument`). Blocked: `CompositeInstrument`
   is not ported to pquantlib (no class of that name in any module). The Java

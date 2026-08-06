@@ -16,14 +16,18 @@ Defaults exposed (each via a classmethod factory):
 * ``ImplicitEuler`` — ``theta = 0.0``, ``mu = 0.0``.
 * ``ExplicitEuler`` — ``theta = 0.0``, ``mu = 0.0``.
 
-Multi-direction descriptors (``CraigSneyd``, ``Hundsdorfer``,
-``ModifiedCraigSneyd``, ``MethodOfLines``, ``TrBDF2``) are listed
-in the enum but not yet implemented; calling
-``FdmBackwardSolver.rollback`` with one of them raises.
+* ``Hundsdorfer`` — ``theta = 0.5 + sqrt(3)/6``, ``mu = 0.5``.
+* ``ModifiedHundsdorfer`` — ``theta = 1 - sqrt(2)/2``, ``mu = 0.5``.
+
+The remaining multi-direction descriptors (``CraigSneyd``,
+``ModifiedCraigSneyd``, ``MethodOfLines``, ``TrBDF2``) are listed in the
+enum but not yet implemented; calling ``FdmBackwardSolver.rollback``
+with one of them raises.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -71,6 +75,14 @@ class FdmSchemeDesc:
     @classmethod
     def explicit_euler(cls) -> FdmSchemeDesc:
         return cls(FdmSchemeType.ExplicitEulerType, 0.0, 0.0)
+
+    @classmethod
+    def hundsdorfer(cls) -> FdmSchemeDesc:
+        return cls(FdmSchemeType.HundsdorferType, 0.5 + math.sqrt(3.0) / 6, 0.5)
+
+    @classmethod
+    def modified_hundsdorfer(cls) -> FdmSchemeDesc:
+        return cls(FdmSchemeType.HundsdorferType, 1.0 - math.sqrt(2.0) / 2, 0.5)
 
 
 __all__ = ["FdmSchemeDesc", "FdmSchemeType"]

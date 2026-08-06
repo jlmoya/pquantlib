@@ -11,9 +11,15 @@ from __future__ import annotations
 
 
 class Extrapolator:
-    """Base for objects that may extrapolate past their nominal max date/time."""
+    """Base for objects that may extrapolate past their nominal max date/time.
 
-    __slots__ = ("_extrapolate",)
+    No ``__slots__``: it would buy nothing (every concrete subclass goes
+    through ``TermStructure``, which carries a ``__dict__`` regardless) and it
+    would give this class a distinct instance layout, which makes it
+    impossible to inherit from both a ``TermStructure`` and a
+    ``CalibratedModel`` — the shape ``GridModelLocalVolSurface`` needs, and
+    the shape C++ gives it.
+    """
 
     def __init__(self) -> None:
         self._extrapolate: bool = False

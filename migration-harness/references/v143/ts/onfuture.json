@@ -1,0 +1,138 @@
+{
+  "compounded_before_start": {
+    "evaluation_date": 45293,
+    "value_date": 45371,
+    "maturity_date": 45462,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.787881403736563
+  },
+  "averaged_before_start": {
+    "evaluation_date": 45293,
+    "value_date": 45371,
+    "maturity_date": 45462,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.821172921778924
+  },
+  "compounded_with_convexity": {
+    "evaluation_date": 45293,
+    "value_date": 45371,
+    "maturity_date": 45462,
+    "convexity_adjustment": 0.0011999999999999999,
+    "is_expired": false,
+    "npv": 94.667881403736558
+  },
+  "monthly_averaged_before_start": {
+    "evaluation_date": 45293,
+    "value_date": 45383,
+    "maturity_date": 45413,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.821247419842791
+  },
+  "monthly_compounded_before_start": {
+    "evaluation_date": 45293,
+    "value_date": 45383,
+    "maturity_date": 45413,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.810729832052502
+  },
+  "weekend_maturity_averaged": {
+    "evaluation_date": 45293,
+    "value_date": 45383,
+    "maturity_date": 45416,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.821251934603154
+  },
+  "weekend_maturity_compounded": {
+    "evaluation_date": 45293,
+    "value_date": 45383,
+    "maturity_date": 45416,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.809609262818995
+  },
+  "compounded_inside_fixing_published": {
+    "evaluation_date": 45387,
+    "value_date": 45371,
+    "maturity_date": 45462,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.760506774519854
+  },
+  "averaged_inside_fixing_published": {
+    "evaluation_date": 45387,
+    "value_date": 45371,
+    "maturity_date": 45462,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.794146294894176
+  },
+  "compounded_inside_fixing_missing": {
+    "evaluation_date": 45390,
+    "value_date": 45371,
+    "maturity_date": 45462,
+    "convexity_adjustment": 0,
+    "is_expired": false,
+    "npv": 94.760506774519854
+  },
+  "helper_quarterly": {
+    "evaluation_date": 45293,
+    "earliest_date": 45371,
+    "latest_date": 45462,
+    "pillar_date": 45462,
+    "convexity_adjustment": 0,
+    "implied_quote": 94.787881403736563
+  },
+  "helper_quarterly_convexity": {
+    "evaluation_date": 45293,
+    "earliest_date": 45371,
+    "latest_date": 45462,
+    "pillar_date": 45462,
+    "convexity_adjustment": 0.0011999999999999999,
+    "implied_quote": 94.667881403736558
+  },
+  "helper_monthly": {
+    "evaluation_date": 45293,
+    "earliest_date": 45383,
+    "latest_date": 45413,
+    "pillar_date": 45413,
+    "convexity_adjustment": 0,
+    "implied_quote": 94.821247419842791
+  },
+  "helper_september_quarterly": {
+    "evaluation_date": 45293,
+    "earliest_date": 45553,
+    "latest_date": 45644,
+    "pillar_date": 45644,
+    "convexity_adjustment": 0,
+    "implied_quote": 94.787881403736563
+  },
+  "helper_december_monthly": {
+    "evaluation_date": 45293,
+    "earliest_date": 45627,
+    "latest_date": 45658,
+    "pillar_date": 45658,
+    "convexity_adjustment": 0,
+    "implied_quote": 94.821196958199025
+  },
+  "helper_generic_compound": {
+    "evaluation_date": 45293,
+    "earliest_date": 45383,
+    "latest_date": 45474,
+    "pillar_date": 45474,
+    "convexity_adjustment": 0,
+    "implied_quote": 94.787881403736563
+  },
+  "helper_generic_custom_pillar": {
+    "evaluation_date": 45293,
+    "earliest_date": 45383,
+    "latest_date": 45474,
+    "pillar_date": 45446,
+    "convexity_adjustment": 0,
+    "implied_quote": 94.821193389591073
+  }
+}

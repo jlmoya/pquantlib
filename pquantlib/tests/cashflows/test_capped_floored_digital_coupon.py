@@ -51,7 +51,7 @@ from pquantlib.termstructures.volatility.optionlet.constant_optionlet_vol import
     ConstantOptionletVolatility,
 )
 from pquantlib.termstructures.volatility.swaption.swaption_constant_vol import (
-    SwaptionConstantVolatility,
+    ConstantSwaptionVolatility,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -458,8 +458,8 @@ def _swap_index() -> SwapIndex:
     )
 
 
-def _swaption_vol(v: float = 0.16) -> SwaptionConstantVolatility:
-    return SwaptionConstantVolatility(
+def _swaption_vol(v: float = 0.16) -> ConstantSwaptionVolatility:
+    return ConstantSwaptionVolatility(
         reference_date=_today(),
         calendar=TARGET(),
         business_day_convention=BusinessDayConvention.Following,

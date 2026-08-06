@@ -82,7 +82,15 @@ class VanillaSwap(FixedVsFloatingSwap):
         # ``amount()`` works without an explicit setup call. Override via
         # ``set_coupon_pricer`` on ``floating_leg()`` if you want Black-vol
         # or any other pricer.
-        set_coupon_pricer(self._legs[1], IborCouponPricer())
+        #
+        # ``use_indexed_coupons`` has to reach the pricer, because that is
+        # where C++ keeps the flag (``IborLeg::operator Leg()`` hands it to
+        # the BlackIborCouponPricer it attaches, iborcoupon.cpp:288-294).
+        # ``None`` means "leave the default", i.e. par coupons.
+        set_coupon_pricer(
+            self._legs[1],
+            IborCouponPricer(use_indexed_coupons=bool(use_indexed_coupons)),
+        )
         for cf in self._legs[1]:
             cf.register_with(self)
 

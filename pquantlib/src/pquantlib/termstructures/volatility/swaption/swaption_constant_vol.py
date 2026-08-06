@@ -22,7 +22,7 @@ from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
 
 
-class SwaptionConstantVolatility(SwaptionVolatilityStructure):
+class ConstantSwaptionVolatility(SwaptionVolatilityStructure):
     """Constant swaption volatility (no expiry / tenor / strike dependence)."""
 
     def __init__(
@@ -77,3 +77,10 @@ class SwaptionConstantVolatility(SwaptionVolatilityStructure):
     def _shift_impl(self, option_time: float, swap_length: float) -> float:
         _ = option_time, swap_length
         return self._shift
+
+
+# Backwards-compatible alias: this class shipped as ``SwaptionConstantVolatility``
+# before the v1.43 sweep restored the C++ name.
+SwaptionConstantVolatility = ConstantSwaptionVolatility
+
+__all__ = ["ConstantSwaptionVolatility", "SwaptionConstantVolatility"]

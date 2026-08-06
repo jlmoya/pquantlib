@@ -42,8 +42,6 @@ from pquantlib.pricingengines.black_formula import (
     black_formula,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
-from pquantlib.time.period import Period
-from pquantlib.time.time_unit import TimeUnit
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -145,94 +143,27 @@ class IborCouponPricer(CouponPricer):
         self._spread = coupon.spread()
         self._accrual_period = coupon.accrual_period()
 
-    def _par_coupon_fixing(self) -> float:
-        """Par-coupon adjusted forecast.
+    def uses_indexed_coupons(self) -> bool:
+        """Whether this pricer forecasts over the index's natural period.
 
-        # C++ parity: ``IborCouponPricer::initializeCachedData`` +
-        # ``IborIndex::forecastFixing(d1, d2, t)`` in couponpricer.cpp:56-94
-        # and iborindex.hpp:140-148.
-
-        Computes the forward rate spanning
-        ``(fixing_value_date, fixing_end_date)`` where
-        ``fixing_end_date ≈ accrual_end_date`` adjusted by ±fixingDays.
+        C++ parity: ``IborCouponPricer::useIndexedCoupon()``
+        (couponpricer.hpp). ``IborCoupon``'s cached-data accessors read the
+        flag from here, exactly as C++ does.
         """
-        # Local import — coupon_pricer ↔ ibor_coupon don't form a runtime cycle
-        # (ibor_coupon doesn't import coupon_pricer at module-load time) but we
-        # keep this lazy to avoid spelling out the cycle in TYPE_CHECKING.
-        from pquantlib.cashflows.ibor_coupon import IborCoupon  # noqa: PLC0415
-
-        qassert.require(self._coupon is not None, "coupon not set")
-        coupon = self._coupon
-        assert coupon is not None
-        qassert.require(
-            isinstance(coupon, IborCoupon),
-            "IborCouponPricer requires an IborCoupon",
-        )
-        assert isinstance(coupon, IborCoupon)
-        idx = coupon.ibor_index()
-        cal = idx.fixing_calendar()
-        idx_fixing_days = idx.fixing_days()
-        coupon_fixing_days = coupon.fixing_days()
-        fixing_value_date = cal.advance(
-            coupon.fixing_date(), idx_fixing_days, TimeUnit.Days
-        )
-        if coupon.is_in_arrears() or self._use_indexed_coupons:
-            fixing_end_date = idx.maturity_date(fixing_value_date)
-        else:
-            # par-coupon approximation: fixing_end_date ≈ accrual_end_date
-            # rounded to the index's fixing-day grid. C++ parity
-            # (couponpricer.cpp:71-77): back-step uses the **coupon's**
-            # fixing-days; forward-step uses the **index's** fixing-days.
-            # The asymmetry matters when the user overrode the coupon's
-            # fixing_days via withFixingDays(0) but the index still
-            # exposes its natural fixingDays (e.g. 2 for Euribor).
-            next_fix = cal.advance(
-                coupon.accrual_end_date(), -coupon_fixing_days, TimeUnit.Days
-            )
-            fixing_end_date = cal.advance(
-                next_fix, idx_fixing_days, TimeUnit.Days
-            )
-            # Ensure the estimation period contains at least one day.
-            min_end = fixing_value_date + Period(1, TimeUnit.Days)
-            fixing_end_date = max(fixing_end_date, min_end)
-        spanning_time = idx.day_counter().year_fraction(
-            fixing_value_date, fixing_end_date
-        )
-        qassert.require(
-            spanning_time > 0.0,
-            "non positive time in IborCouponPricer par-coupon forecast",
-        )
-        get_ts = getattr(idx, "forecast_term_structure", None)
-        ts = get_ts() if get_ts is not None else None
-        qassert.require(
-            ts is not None,
-            f"null term structure set to this instance of {idx.name()}",
-        )
-        assert ts is not None
-        return (ts.discount(fixing_value_date) / ts.discount(fixing_end_date) - 1.0) / spanning_time
+        return self._use_indexed_coupons
 
     def _adjusted_fixing(self, fixing: float | None = None) -> float:
         """Par-coupon-aware fixing (no convexity adjustment in the plain pricer).
 
         C++ parity: ``BlackIborCouponPricer::adjustedFixing``
-        (couponpricer.cpp). Here simplified — no Black-vol adjustment;
-        but we DO apply the par-coupon span correction so that swap
-        valuations match C++ default behaviour bit-for-bit.
+        (couponpricer.cpp) — when no fixing is supplied it asks the coupon,
+        and ``IborCoupon::indexFixing`` is where the recorded-fixing /
+        par-span-forecast split lives. Here simplified: no Black-vol
+        adjustment.
         """
         if fixing is None:
             qassert.require(self._coupon is not None, "coupon not set")
             assert self._coupon is not None
-            # Local import — see ``_par_coupon_fixing`` for the cycle note.
-            from pquantlib.cashflows.ibor_coupon import IborCoupon  # noqa: PLC0415
-
-            # If we have an IborCoupon and a forecast term structure, use
-            # the par-coupon span; otherwise fall back to the index's
-            # canonical fixing.
-            if isinstance(self._coupon, IborCoupon):
-                idx = self._coupon.ibor_index()
-                get_ts = getattr(idx, "forecast_term_structure", None)
-                if get_ts is not None and get_ts() is not None:
-                    return self._par_coupon_fixing()
             fixing = self._coupon.index_fixing()
         return fixing
 

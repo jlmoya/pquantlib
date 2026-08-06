@@ -1,4 +1,4 @@
-"""Tests for SwaptionConstantVolatility.
+"""Tests for ConstantSwaptionVolatility.
 
 Cross-validated against L8-C C++ probe (cluster/l8c.json).
 """
@@ -13,7 +13,7 @@ from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.exceptions import LibraryException
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.volatility.swaption.swaption_constant_vol import (
-    SwaptionConstantVolatility,
+    ConstantSwaptionVolatility,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.testing import reference_reader, tolerance
@@ -32,8 +32,8 @@ def _eval_date() -> Date:
     return Date(_REF["setup"]["eval_date_serial"])
 
 
-def _new_csv(vol: float = 0.20) -> SwaptionConstantVolatility:
-    return SwaptionConstantVolatility(
+def _new_csv(vol: float = 0.20) -> ConstantSwaptionVolatility:
+    return ConstantSwaptionVolatility(
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
         volatility=vol,
         calendar=TARGET(),
@@ -90,7 +90,7 @@ def test_min_max_strike_infinite() -> None:
 
 def test_quote_constructor_round_trip_and_update() -> None:
     q = SimpleQuote(0.20)
-    cv = SwaptionConstantVolatility(
+    cv = ConstantSwaptionVolatility(
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
         volatility=q,
         calendar=TARGET(),
@@ -104,7 +104,7 @@ def test_quote_constructor_round_trip_and_update() -> None:
 
 
 def test_shift_returns_constructor_shift() -> None:
-    cv = SwaptionConstantVolatility(
+    cv = ConstantSwaptionVolatility(
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
         volatility=0.20,
         calendar=TARGET(),
@@ -119,7 +119,7 @@ def test_shift_returns_constructor_shift() -> None:
 def test_volatility_type_default_and_normal() -> None:
     cv = _new_csv()
     assert cv.volatility_type() == VolatilityType.ShiftedLognormal
-    cv2 = SwaptionConstantVolatility(
+    cv2 = ConstantSwaptionVolatility(
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
         volatility=0.01,
         calendar=TARGET(),

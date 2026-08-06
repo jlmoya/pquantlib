@@ -40,7 +40,7 @@ from pquantlib.pricingengines.swaption.hagan_irregular_swaption_engine import (
     HaganIrregularSwaptionEngine,
 )
 from pquantlib.termstructures.volatility.swaption.swaption_constant_vol import (
-    SwaptionConstantVolatility,
+    ConstantSwaptionVolatility,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -184,7 +184,7 @@ def _hagan_setup() -> tuple[FlatForward, IrregularSwaption, HaganIrregularSwapti
     maturity = _d(15, Month.January, 2028)
     swap = _build_irregular_swap(curve, start, maturity)
 
-    vol = SwaptionConstantVolatility(
+    vol = ConstantSwaptionVolatility(
         reference_date=_TODAY,
         calendar=cal,
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
@@ -222,7 +222,7 @@ def test_hagan_rejects_non_european() -> None:
     start = _d(15, Month.January, 2025)
     maturity = _d(15, Month.January, 2028)
     swap = _build_irregular_swap(curve, start, maturity)
-    vol = SwaptionConstantVolatility(
+    vol = ConstantSwaptionVolatility(
         reference_date=_TODAY, calendar=cal,
         business_day_convention=BusinessDayConvention.ModifiedFollowing,
         volatility=0.0080, day_counter=Actual365Fixed(),

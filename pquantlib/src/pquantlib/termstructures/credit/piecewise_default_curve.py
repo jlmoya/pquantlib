@@ -52,9 +52,9 @@ from pquantlib.termstructures.credit.interpolated_survival_probability_curve imp
     InterpolatedSurvivalProbabilityCurve,
 )
 from pquantlib.termstructures.credit.probability_traits import (
-    DefaultDensityTrait,
-    HazardRateTrait,
-    SurvivalProbabilityTrait,
+    DefaultDensity,
+    HazardRate,
+    SurvivalProbability,
 )
 from pquantlib.time.calendar import Calendar
 from pquantlib.time.date import Date
@@ -73,8 +73,8 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
     """Piecewise-bootstrapped default-probability term structure.
 
     Inputs:
-    - ``traits``: ``SurvivalProbabilityTrait`` / ``HazardRateTrait`` /
-      ``DefaultDensityTrait`` (class or instance).
+    - ``traits``: ``SurvivalProbability`` / ``HazardRate`` /
+      ``DefaultDensity`` (class or instance).
     - ``reference_date``: curve reference date.
     - ``instruments``: list of :class:`CdsHelper` instances (spread or
       upfront CDS helpers).
@@ -161,11 +161,11 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
     # ---- traits → underlying class plumbing -------------------------------
 
     def _underlying_class(self) -> type:
-        if self._traits_class is SurvivalProbabilityTrait:
+        if self._traits_class is SurvivalProbability:
             return InterpolatedSurvivalProbabilityCurve
-        if self._traits_class is HazardRateTrait:
+        if self._traits_class is HazardRate:
             return InterpolatedHazardRateCurve
-        if self._traits_class is DefaultDensityTrait:
+        if self._traits_class is DefaultDensity:
             return InterpolatedDefaultDensityCurve
         qassert.fail(
             f"PiecewiseDefaultCurve: unsupported traits {self._traits_class}",
@@ -173,11 +173,11 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
         return InterpolatedSurvivalProbabilityCurve  # unreachable
 
     def _underlying_data_kwarg(self) -> str:
-        if self._traits_class is SurvivalProbabilityTrait:
+        if self._traits_class is SurvivalProbability:
             return "probabilities"
-        if self._traits_class is HazardRateTrait:
+        if self._traits_class is HazardRate:
             return "hazard_rates"
-        if self._traits_class is DefaultDensityTrait:
+        if self._traits_class is DefaultDensity:
             return "densities"
         qassert.fail(
             f"PiecewiseDefaultCurve: unsupported traits {self._traits_class}",
@@ -186,16 +186,16 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
 
     def _seed_data(self, n: int) -> list[float]:
         """Seed values that pass the underlying curve's constructor checks."""
-        if self._traits_class is SurvivalProbabilityTrait:
+        if self._traits_class is SurvivalProbability:
             # Probabilities must be monotonically non-increasing in (0, 1].
             return [1.0] + [1.0 / (1.0 + 0.01 * i) for i in range(1, n)]
         # Hazard / density: non-negative.
         return [0.01] * n
 
     def _default_interpolator(self) -> InterpolationFactory:
-        if self._traits_class is SurvivalProbabilityTrait:
+        if self._traits_class is SurvivalProbability:
             return LogLinearInterpolation
-        if self._traits_class is HazardRateTrait:
+        if self._traits_class is HazardRate:
             return BackwardFlatInterpolation
         return LinearInterpolation  # DefaultDensity
 

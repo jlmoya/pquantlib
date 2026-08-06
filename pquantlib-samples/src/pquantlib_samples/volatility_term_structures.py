@@ -14,8 +14,9 @@ ships:
 For each it prints a representative ``blackVol`` / ``blackForwardVol`` /
 ``blackVariance`` (Black structures) or ``localVol`` (local structures).
 
-Divergence: the Java original also touched ``ImpliedVolTermStructure``, which
-pquantlib does not port; that section is omitted (documented inline).
+Divergence: the Java original also touched ``ImpliedVolTermStructure``; this
+sample does not exercise it (the class itself is ported — see
+``pquantlib.termstructures.volatility.equity_fx.implied_vol_term_structure``).
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ from pquantlib.termstructures.volatility.equity_fx.local_vol_curve import LocalV
 from pquantlib.termstructures.volatility.equity_fx.local_vol_surface import (
     LocalVolSurface,
 )
+from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.time.calendars.null_calendar import NullCalendar
 from pquantlib.time.calendars.united_states import UnitedStates
 from pquantlib.time.date import Date
@@ -123,7 +125,16 @@ def compute() -> VolResult:
     lvc_vol = lvc.local_vol(d25, 30.0, True)
 
     # --- LocalVolSurface (implied from a Black-vol surface) --------------
-    lvs = LocalVolSurface(black_ts=bvs, underlying=SimpleQuote(30.0))
+    # Flat zero rate and zero dividend yield, so forward == spot.
+    flat_zero = FlatForward.from_rate(
+        reference_date=today, forward_rate=0.0, day_counter=dc
+    )
+    lvs = LocalVolSurface(
+        black_ts=bvs,
+        risk_free_ts=flat_zero,
+        dividend_ts=flat_zero,
+        underlying=SimpleQuote(30.0),
+    )
     lvs_vol = lvs.local_vol(d20, 30.0, True)
 
     return VolResult(

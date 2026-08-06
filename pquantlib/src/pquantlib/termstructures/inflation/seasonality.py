@@ -5,9 +5,10 @@
 C++ exposes an abstract ``Seasonality`` interface with
 ``correctZeroRate``/``correctYoYRate``/``isConsistent`` and the concrete
 ``MultiplicativePriceSeasonality`` (stationary or multi-year cycle,
-factor-based correction to a CPI/RPI/HICP price curve). ``KerkhofSeasonality``
-is a tail subclass with a different correction kernel and is deferred to
-Phase 8+ (zero current callers among the L7-A/B/C/D scope).
+factor-based correction to a CPI/RPI/HICP price curve) plus
+``KerkhofSeasonality``, a subclass with a different factor kernel (a running
+product of monthly factors between the base month and the target month rather
+than a single cyclic lookup) that is only defined on zero rates.
 
 Math, C++ verbatim (MultiplicativePriceSeasonality::seasonalityCorrection):
 
@@ -253,3 +254,85 @@ class MultiplicativePriceSeasonality(Seasonality):
             factor_1y_before = self.seasonality_factor(at_date - _ONE_YEAR)
             f = factor_at / factor_1y_before
         return (rate + 1.0) * f - 1.0
+
+
+class KerkhofSeasonality(MultiplicativePriceSeasonality):
+    """Kerkhof seasonality: a running product of monthly factors.
+
+    # C++ parity: ``class KerkhofSeasonality`` in seasonality.{hpp,cpp} (v1.43).
+
+    Requires exactly 12 monthly factors. The factor between the seasonality
+    base date and a target date is the product of the factors for the months
+    strictly between them, inverted when the target month precedes the base
+    month. Unlike ``MultiplicativePriceSeasonality`` it is NOT defined on
+    year-on-year rates and raises there, exactly as C++ does.
+    """
+
+    def __init__(
+        self,
+        seasonality_base_date: Date,
+        seasonality_factors: list[float],
+    ) -> None:
+        super().__init__(seasonality_base_date, Frequency.Monthly, seasonality_factors)
+
+    def seasonality_factor(self, to: Date) -> float:
+        """Product of the monthly factors spanning base month -> target month.
+
+        # C++ parity: ``KerkhofSeasonality::seasonalityFactor`` (seasonality.cpp:220-255).
+        #
+        # The loop runs over ``[fromMonth, toMonth)`` with QuantLib's 1-based
+        # Month values used directly as indices, so factor[0] is never read and
+        # factor[11] only when December is the later month. That is C++'s
+        # indexing, kept verbatim rather than "corrected".
+        """
+        from_month = int(self._seasonality_base_date.month())
+        to_month = int(to.month())
+        inverse = False
+        if to_month < from_month:
+            from_month, to_month = to_month, from_month
+            inverse = True
+
+        factors = self._seasonality_factors
+        qassert.require(
+            len(factors) == 12,
+            "12 monthly seasonal factors needed for Kerkhof Seasonality: "
+            f"got {len(factors)}",
+        )
+
+        correction = 1.0
+        for i in range(from_month, to_month):
+            correction *= factors[i]
+        return 1.0 / correction if inverse else correction
+
+    def _seasonality_correction(
+        self,
+        rate: float,
+        at_date: Date,
+        ts: InflationTermStructure,
+        curve_base_date: Date,
+        *,
+        is_zero_rate: bool,
+    ) -> float:
+        """C++ parity: ``KerkhofSeasonality::seasonalityCorrection`` (seasonality.cpp:257-277).
+
+        Note the differences from the base class, all deliberate: the factor is
+        used raw (not divided by the factor at the curve base date), the time
+        runs from the START of the curve base date's MONTHLY inflation period
+        to ``at_date`` itself (not to the start of ``at_date``'s period), and
+        the year-on-year branch is an error rather than a ratio.
+        """
+        qassert.require(
+            is_zero_rate, "Seasonal Kerkhof model is not defined on YoY rates"
+        )
+        index_factor = self.seasonality_factor(at_date)
+        period_start, _ = inflation_period(curve_base_date, Frequency.Monthly)
+        time_from_curve_base = ts.day_counter().year_fraction(period_start, at_date)
+        f = index_factor ** (1.0 / time_from_curve_base)
+        return (rate + 1.0) * f - 1.0
+
+
+__all__ = [
+    "KerkhofSeasonality",
+    "MultiplicativePriceSeasonality",
+    "Seasonality",
+]

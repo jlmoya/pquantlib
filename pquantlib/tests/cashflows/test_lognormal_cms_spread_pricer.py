@@ -26,7 +26,7 @@ from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.conundrum_pricer import AnalyticHaganPricer, YieldCurveModel
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.volatility.swaption.swaption_constant_vol import (
-    SwaptionConstantVolatility,
+    ConstantSwaptionVolatility,
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -73,8 +73,8 @@ def _swap_index(tenor: Period, curve: FlatForward) -> SwapIndex:
     )
 
 
-def _const_log_vol(v: float = 0.16) -> SwaptionConstantVolatility:
-    return SwaptionConstantVolatility(
+def _const_log_vol(v: float = 0.16) -> ConstantSwaptionVolatility:
+    return ConstantSwaptionVolatility(
         reference_date=_TODAY,
         calendar=TARGET(),
         business_day_convention=BusinessDayConvention.Following,

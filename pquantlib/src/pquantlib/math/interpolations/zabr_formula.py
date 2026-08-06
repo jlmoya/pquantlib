@@ -269,14 +269,24 @@ def zabr_volatility(
         :func:`sabr_volatility` directly.
     """
     _validate_zabr_parameters(alpha, beta, nu, rho, gamma, forward, expiry_time)
-    if mode in (
-        ZabrEvaluation.LocalVolatility,
-        ZabrEvaluation.FullFd,
-        ZabrEvaluation.ProjectedHedge,
-    ):
+    if mode in (ZabrEvaluation.LocalVolatility, ZabrEvaluation.FullFd):
+        # C++ declares all four evaluation tags in zabrsmilesection.hpp:42-45,
+        # not in the interpolation: LocalVolatility and FullFd price a strike
+        # grid off a PDE and interpolate, so they are properties of a whole
+        # smile *section*, not of a pointwise volatility formula. They are
+        # implemented — on ZabrSmileSection, which is where C++ puts them.
         raise LibraryException(
-            f"ZABR mode {mode.name} not implemented — requires the ZABR "
-            "FD engine. Use ShortMaturityLognormal or ShortMaturityNormal."
+            f"ZABR mode {mode.name} is a smile-section mode, not a pointwise "
+            "formula — use ZabrSmileSection. This function supports "
+            "ShortMaturityLognormal and ShortMaturityNormal."
+        )
+    if mode is ZabrEvaluation.ProjectedHedge:
+        # Verified against v1.43: `ProjectedHedge` appears nowhere in ql/ or
+        # test-suite/. C++ has exactly four tags and this is not one of them.
+        raise LibraryException(
+            "ZABR mode ProjectedHedge has no counterpart in C++ v1.43 — the "
+            "four evaluation tags are ShortMaturityLognormal, "
+            "ShortMaturityNormal, LocalVolatility and FullFd."
         )
     # ATM short-circuit: at strike == forward both helpers return a
     # closed-form value independent of x(K). This avoids a degenerate

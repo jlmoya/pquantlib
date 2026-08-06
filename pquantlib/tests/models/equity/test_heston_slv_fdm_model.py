@@ -63,7 +63,9 @@ def fdm_model() -> HestonSlvFdmModel:
         volatility=0.20,
         day_counter=dc,
     )
-    local_vol = LocalVolSurface(black_ts=bvol, underlying=spot)
+    local_vol = LocalVolSurface(
+        black_ts=bvol, risk_free_ts=rf, dividend_ts=div, underlying=spot
+    )
     return HestonSlvFdmModel(
         local_vol=local_vol,
         heston_model=heston_model,
