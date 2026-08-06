@@ -64,11 +64,58 @@ from pquantlib.models.parameter import (
 )
 from pquantlib.models.shortrate.gaussian1d_model import Gaussian1dModel
 from pquantlib.processes.gsr_process import GsrProcess
+from pquantlib.quotes.quote import Quote
+from pquantlib.quotes.simple_quote import SimpleQuote
 
 if TYPE_CHECKING:
     from pquantlib.termstructures.protocols import YieldTermStructureProtocol
     from pquantlib.termstructures.yield_term_structure import YieldTermStructure
     from pquantlib.time.date import Date
+
+
+def _as_quote(x: float | Quote) -> Quote:
+    """Wrap a plain number in a SimpleQuote, as C++'s Real-taking ctors do.
+
+    # C++ parity: gsr.cpp:36-40 and :57-62 — ``volatilities_[i] =
+    # Handle<Quote>(ext::make_shared<SimpleQuote>(volatilities[i]))``.
+    """
+    return x if isinstance(x, Quote) else SimpleQuote(float(x))
+
+
+class VolatilityObserver:
+    """Routes a volatility quote's notification to ``Gsr.update_volatility``.
+
+    # C++ parity: private nested ``Gsr::VolatilityObserver : public Observer``
+    # (gsr.hpp:176-180). C++ needs a separate Observer object per target method
+    # because one class cannot implement ``Observer::update()`` twice.
+    """
+
+    # Observable stores observers in a weakref.WeakSet (observer.py:27), so a
+    # __slots__ class must opt back in to weak referenceability. The model holds
+    # the only strong reference, which is what keeps it alive.
+    __slots__ = ("__weakref__", "_model")
+
+    def __init__(self, model: Gsr) -> None:
+        self._model = model
+
+    def update(self) -> None:
+        self._model.update_volatility()
+
+
+class ReversionObserver:
+    """Routes a reversion quote's notification to ``Gsr.update_reversion``.
+
+    # C++ parity: private nested ``Gsr::ReversionObserver : public Observer``
+    # (gsr.hpp:181-185).
+    """
+
+    __slots__ = ("__weakref__", "_model")
+
+    def __init__(self, model: Gsr) -> None:
+        self._model = model
+
+    def update(self) -> None:
+        self._model.update_reversion()
 
 
 class Gsr(Gaussian1dModel, CalibratedModel):
@@ -95,8 +142,8 @@ class Gsr(Gaussian1dModel, CalibratedModel):
         self,
         term_structure: YieldTermStructure,
         volstepdates: list[Date],
-        volatilities: list[float],
-        reversion: float | list[float],
+        volatilities: list[float] | list[Quote],
+        reversion: float | Quote | list[float] | list[Quote],
         T: float = 60.0,  # noqa: N803 — math symbol
     ) -> None:
         # C++ parity: gsr.cpp:26-90 — four ctors collapsed; we keep just
@@ -111,11 +158,19 @@ class Gsr(Gaussian1dModel, CalibratedModel):
         # Materialize observed volatility / reversion lists. We don't
         # need the Handle<Quote> indirection (carve-out: floating
         # variants deferred), so just store the raw vectors.
-        self._volatilities: list[float] = list(volatilities)
-        if isinstance(reversion, (int, float)):
-            self._reversions: list[float] = [float(reversion)]
+        # C++ parity: gsr.cpp:26-90 — ALL FOUR constructors store
+        # ``std::vector<Handle<Quote>>``; the plain-Real overloads simply wrap
+        # each number in a SimpleQuote. Observability is therefore not a
+        # property of "the Handle<Quote> ctors" (an earlier note in this module
+        # called those a deferred carve-out) — it is unconditional, and this
+        # port now matches.
+        self._volatility_quotes: list[Quote] = [_as_quote(v) for v in volatilities]
+        if isinstance(reversion, (int, float, Quote)):
+            self._reversion_quotes: list[Quote] = [_as_quote(reversion)]
         else:
-            self._reversions = [float(r) for r in reversion]
+            self._reversion_quotes = [_as_quote(r) for r in reversion]
+        self._volatilities: list[float] = [q.value() for q in self._volatility_quotes]
+        self._reversions: list[float] = [q.value() for q in self._reversion_quotes]
 
         # Will be populated by _update_times().
         self._volsteptimes: list[float] = []
@@ -129,6 +184,61 @@ class Gsr(Gaussian1dModel, CalibratedModel):
         # Register with the term structure so its discount changes
         # propagate to the model.
         term_structure.register_with(self)
+
+        # C++ parity: gsr.cpp:175-183. C++ needs two separate Observer objects
+        # because one class cannot implement Observer::update() twice; each
+        # routes to a different method. Python could use bound methods, but the
+        # two classes are kept so the C++ structure — and its names — survive.
+        #
+        # NB: C++ deliberately does NOT register the model with stateProcess_,
+        # "in fact would lead to an infinite notification loop" (gsr.cpp:171-173).
+        self._volatility_observer: VolatilityObserver = VolatilityObserver(self)
+        self._reversion_observer: ReversionObserver = ReversionObserver(self)
+        for q in self._reversion_quotes:
+            q.register_with(self._reversion_observer)
+        for q in self._volatility_quotes:
+            q.register_with(self._volatility_observer)
+
+    def volatility_observer(self) -> VolatilityObserver:
+        """The adapter registered with every volatility quote.
+
+        # C++ parity: ``Gsr::volatilityObserver_`` (gsr.hpp:188). C++ keeps it
+        # private with no accessor; exposed here because it is the only way to
+        # assert the two adapters are distinct objects.
+        """
+        return self._volatility_observer
+
+    def reversion_observer(self) -> ReversionObserver:
+        """The adapter registered with every reversion quote (gsr.hpp:189)."""
+        return self._reversion_observer
+
+    # --- quote-driven refresh -------------------------------------------
+
+    def update_volatility(self) -> None:
+        """Re-read the volatility quotes into sigma and the state process.
+
+        # C++ parity: ``Gsr::updateVolatility`` (gsr.cpp:121-127).
+        """
+        sigma = self._arguments[1]
+        for i, q in enumerate(self._volatility_quotes):
+            self._volatilities[i] = q.value()
+            sigma.set_param(i, self._volatilities[i])
+        assert isinstance(self._state_process, GsrProcess)
+        self._state_process.set_vols(sigma.params)
+        self.update()
+
+    def update_reversion(self) -> None:
+        """Re-read the reversion quotes into the reversion parameter and process.
+
+        # C++ parity: ``Gsr::updateReversion`` (gsr.cpp:129-135).
+        """
+        reversion = self._arguments[0]
+        for i, q in enumerate(self._reversion_quotes):
+            self._reversions[i] = q.value()
+            reversion.set_param(i, self._reversions[i])
+        assert isinstance(self._state_process, GsrProcess)
+        self._state_process.set_reversions(reversion.params)
+        self.update()
 
     # --- helpers --------------------------------------------------------
 

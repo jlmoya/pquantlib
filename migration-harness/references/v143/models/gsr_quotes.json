@@ -1,0 +1,13 @@
+{
+  "today_serial": 46156,
+  "volstepdate_serials": [46521, 46888],
+  "single_reversion": {
+    "before": {"volatility": [0.01, 0.012, 0.014], "reversion": [0.01], "zerobond_5_1_0p5": 0.88429260199124038, "numeraire_1_0p5": 0.15055884826965496},
+    "after_vol1_bump": {"volatility": [0.01, 0.029999999999999999, 0.014], "reversion": [0.01], "zerobond_5_1_0p5": 0.88429260199124038, "numeraire_1_0p5": 0.15055884826965496},
+    "after_reversion_bump": {"volatility": [0.01, 0.029999999999999999, 0.014], "reversion": [0.050000000000000003], "zerobond_5_1_0p5": 0.8765429636949974, "numeraire_1_0p5": 0.1579695223037893}
+  },
+  "piecewise_reversion": {
+    "before": {"volatility": [0.01, 0.012, 0.014], "reversion": [0.01, 0.02, 0.029999999999999999], "zerobond_5_1_0p5": 0.87886991454972652, "numeraire_1_0p5": 0.1540715973763076},
+    "after_reversion2_bump": {"volatility": [0.01, 0.012, 0.014], "reversion": [0.01, 0.02, 0.074999999999999997], "zerobond_5_1_0p5": 0.87485685826273185, "numeraire_1_0p5": 0.16048257275520636}
+  }
+}
