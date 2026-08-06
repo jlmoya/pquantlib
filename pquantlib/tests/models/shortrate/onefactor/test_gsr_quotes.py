@@ -56,12 +56,14 @@ def _curve() -> FlatForward:
 
 
 def _assert_state(model: Gsr, expected: dict[str, Any], label: str) -> None:
-    assert list(model.volatility()) == pytest.approx(expected["volatility"], abs=0.0, rel=1e-12), (
-        label
-    )
-    assert list(model.reversion()) == pytest.approx(expected["reversion"], abs=0.0, rel=1e-12), (
-        label
-    )
+    got_vol = list(model.volatility())
+    assert len(got_vol) == len(expected["volatility"]), label
+    for i, want in enumerate(expected["volatility"]):
+        tight(got_vol[i], want, reason=f"{label} volatility[{i}]")
+    got_rev = list(model.reversion())
+    assert len(got_rev) == len(expected["reversion"]), label
+    for i, want in enumerate(expected["reversion"]):
+        tight(got_rev[i], want, reason=f"{label} reversion[{i}]")
     tight(model.zerobond(5.0, 1.0, 0.5), expected["zerobond_5_1_0p5"], reason=label)
     tight(model.numeraire(1.0, 0.5), expected["numeraire_1_0p5"], reason=label)
 

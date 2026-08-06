@@ -50,6 +50,7 @@ horizon T_fwd (at t=0, this reduces to the curve discount).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -142,8 +143,8 @@ class Gsr(Gaussian1dModel, CalibratedModel):
         self,
         term_structure: YieldTermStructure,
         volstepdates: list[Date],
-        volatilities: list[float] | list[Quote],
-        reversion: float | Quote | list[float] | list[Quote],
+        volatilities: Sequence[float] | Sequence[Quote],
+        reversion: float | Quote | Sequence[float] | Sequence[Quote],
         T: float = 60.0,  # noqa: N803 — math symbol
     ) -> None:
         # C++ parity: gsr.cpp:26-90 — four ctors collapsed; we keep just
