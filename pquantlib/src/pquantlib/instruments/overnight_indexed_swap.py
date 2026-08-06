@@ -7,13 +7,22 @@ Sonia, etc.). Mirrors ``FixedVsFloatingSwap`` design but builds the
 floating leg from ``OvernightLeg`` instead of ``IborLeg``.
 
 The C++ class accepts a ``RateAveraging::Type`` (Compound or Simple) +
-lookback / lockout / observation-shift modifiers. PQuantLib L3-C ports
-the compound-default flavour only; the modifiers are propagated to the
-underlying OvernightLeg but the L2-D ``overnight_leg`` builder is itself
-the compound-default flavour (lookback/lockout/observation_shift are
-deferred per L2-D carve-out). The ``averagingMethod`` / lookback /
-lockout parameters are accepted at the constructor level for parity but
-are not yet plumbed through.
+lookback / lockout / observation-shift modifiers. This port takes none of
+them: they are NOT constructor parameters here, so there is nothing to
+plumb through and nothing that can be silently dropped.
+(An earlier version of this docstring claimed they were "accepted at the
+constructor level for parity" and "propagated to the underlying
+OvernightLeg" — neither was true. ``MakeOIS`` exposes the corresponding
+C++ setters and rejects any non-default value with an explicit message
+rather than accepting and ignoring it.)
+
+``telescopic_value_dates`` IS accepted here and is likewise not carried to
+the leg: ``overnight_leg`` has no such setter. In C++ it is a pure
+optimisation that leaves the result unchanged whenever every fixing is
+forecast off the curve — pinned as such in
+``v143/inst/makeswaps['ois_telescopic_value_dates']``, which is bit-identical
+to ``ois_base``. It would diverge only once historical fixings enter the
+first accrual period.
 """
 
 from __future__ import annotations
