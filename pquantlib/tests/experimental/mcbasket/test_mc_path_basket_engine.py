@@ -11,9 +11,17 @@ MCPathBasketEngine (European). We validate the engine by:
     diversified value below the single-asset ATM call;
   * the AdaptedPathPayoff "looking into the future" guard.
 
-We deliberately do NOT cross-validate a fixed-seed C++ MC value: the
-C++ and Python pseudo-random sequences differ, so seed-for-seed match
-is not meaningful. Convergence-to-analytic is the robust reference.
+These are convergence-to-analytic checks, which is what they were written
+for. They are NOT evidence that the port reproduces C++ — the fixed-seed
+cross-validation lives in ``test_mc_path_engines_v143.py``, which pins the
+exact C++ v1.43 NPV for a given seed and sample count.
+
+(An earlier version of this docstring claimed a seed-for-seed match was "not
+meaningful" because the C++ and Python pseudo-random sequences differ. That
+premise is false: ``MersenneTwisterUniformRng`` is pure integer state and this
+port reproduces it, so an identity-correlated basket agrees with C++ v1.43 to
+3.5e-15 relative or better path-for-path. See
+``test_mc_path_engines_v143.py`` for the pinned values.)
 """
 
 from __future__ import annotations

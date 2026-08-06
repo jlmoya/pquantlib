@@ -1,6 +1,6 @@
 """MCHimalayaEngine — Monte Carlo pricing engine for Himalaya options.
 
-# C++ parity: ql/experimental/exoticoptions/mchimalayaengine.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/experimental/exoticoptions/mchimalayaengine.{hpp,cpp} (v1.43).
 
 Drives a multi-asset MC simulation with the basket processes packed
 into a :class:`pquantlib.processes.stochastic_process_array.StochasticProcessArray`,
@@ -22,22 +22,26 @@ dates (one node per fixing).  The Python port mirrors that:
 
 from __future__ import annotations
 
+from typing import cast
+
 from pquantlib import qassert
 from pquantlib.experimental.exoticoptions.himalaya_option import (
     HimalayaOptionArguments,
 )
 from pquantlib.instruments.multi_asset_option import MultiAssetOptionResults
-from pquantlib.methods.montecarlo.gaussian_sequence_generator import (
-    make_pseudo_random_rsg,
-)
+from pquantlib.math.randomnumbers.rng_traits import PseudoRandom
 from pquantlib.methods.montecarlo.monte_carlo_model import (
     PathGeneratorTypeProtocol,
 )
 from pquantlib.methods.montecarlo.multi_path import MultiPath
 from pquantlib.methods.montecarlo.multi_path_generator import MultiPathGenerator
+from pquantlib.methods.montecarlo.path_generator import (
+    GaussianSequenceGeneratorProtocol,
+)
 from pquantlib.methods.montecarlo.path_pricer import PathPricer
 from pquantlib.payoffs import Payoff
 from pquantlib.pricingengines.generic_engine import GenericEngine
+from pquantlib.pricingengines.mc_rng_traits import RngTraits
 from pquantlib.pricingengines.mc_simulation import McSimulation
 from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
@@ -123,6 +127,7 @@ class MCHimalayaEngine(
         required_tolerance: float | None = None,
         max_samples: int | None = None,
         seed: int = 0,
+        rng_traits: RngTraits = PseudoRandom,
     ) -> None:
         GenericEngine.__init__(  # pyright: ignore[reportUnknownMemberType]
             self, HimalayaOptionArguments(), MultiAssetOptionResults()
@@ -138,6 +143,7 @@ class MCHimalayaEngine(
         self._required_tolerance: float | None = required_tolerance
         self._max_samples: int | None = max_samples
         self._seed: int = seed
+        self._rng_traits: RngTraits = rng_traits
         processes.register_with(self)
 
     # --- engine entry-point ----------------------------------------------
@@ -154,7 +160,12 @@ class MCHimalayaEngine(
         )
         assert self._mc_model is not None
         self._results.value = self._mc_model.sample_accumulator().mean()
-        if self._mc_model.sample_accumulator().samples() > 1:
+        # C++ parity: ``if constexpr (RNG::allowsErrorEstimate)`` — a
+        # low-discrepancy point set is not i.i.d., so no error is published.
+        # There is deliberately no ``samples() > 1`` guard: with a single
+        # pseudo-random sample C++ raises "sample number <=1, unsufficient"
+        # out of GeneralStatistics::variance, and so must this.
+        if self._rng_traits.allows_error_estimate:
             self._results.error_estimate = self._mc_model.sample_accumulator().error_estimate()
 
     # --- McSimulation hooks ----------------------------------------------
@@ -183,8 +194,19 @@ class MCHimalayaEngine(
         n_assets = self._processes.size()
         grid = self.time_grid()
         total_dim = n_assets * (len(grid) - 1)
-        seed = self._seed if self._seed != 0 else 1
-        gsg = make_pseudo_random_rsg(total_dim, seed)
+        # C++ parity: ``RNG::make_sequence_generator(numAssets * (grid.size() - 1),
+        # seed_)`` — seed 0 goes through SeedGenerator (clock-derived), exactly
+        # as in C++.
+        # ``RngTraits.make_sequence_generator`` is annotated with the
+        # ``SequenceSample`` of ``math.randomnumbers.random_number_generator``;
+        # ``MultiPathGenerator`` asks for the structurally identical one from
+        # ``methods.montecarlo.gaussian_sequence_generator`` (same two fields,
+        # ``value: NDArray[float64]`` and ``weight: float``). The cast is
+        # nominal only — nothing about the object changes.
+        gsg = cast(
+            "GaussianSequenceGeneratorProtocol",
+            self._rng_traits.make_sequence_generator(total_dim, self._seed),
+        )
         return MultiPathGenerator(
             self._processes, grid, gsg, brownian_bridge=self._brownian_bridge
         )
@@ -210,4 +232,99 @@ class MCHimalayaEngine(
         return HimalayaMultiPathPricer(self._arguments.payoff, discount)
 
 
-__all__ = ["HimalayaMultiPathPricer", "MCHimalayaEngine"]
+class MakeMCHimalayaEngine:
+    """Fluent factory for :class:`MCHimalayaEngine`.
+
+    # C++ parity: ``MakeMCHimalayaEngine<RNG, S>``
+    # (mchimalayaengine.hpp:93-112, 176-243).
+
+    # C++ parity note: this builder has no ``with_steps``/``with_steps_per_year``
+    # — the Himalaya grid is exactly the option's fixing dates — so converting
+    # with nothing but a sample count is legal, unlike the Everest builder.
+
+    Args:
+        process: the basket process.
+        rng_traits: the random-number policy (C++ ``RNG`` template argument).
+    """
+
+    __slots__ = (
+        "_antithetic",
+        "_brownian_bridge",
+        "_max_samples",
+        "_process",
+        "_rng_traits",
+        "_samples",
+        "_seed",
+        "_tolerance",
+    )
+
+    def __init__(
+        self, process: StochasticProcessArray, rng_traits: RngTraits = PseudoRandom
+    ) -> None:
+        # C++ parity: mchimalayaengine.hpp:176-180.
+        self._process: StochasticProcessArray = process
+        self._rng_traits: RngTraits = rng_traits
+        self._brownian_bridge: bool = False
+        self._antithetic: bool = False
+        self._samples: int | None = None
+        self._max_samples: int | None = None
+        self._tolerance: float | None = None
+        self._seed: int = 0
+
+    # ---- named parameters --------------------------------------------------
+
+    def with_brownian_bridge(self, brownian_bridge: bool = True) -> MakeMCHimalayaEngine:
+        self._brownian_bridge = brownian_bridge
+        return self
+
+    def with_antithetic_variate(self, b: bool = True) -> MakeMCHimalayaEngine:
+        self._antithetic = b
+        return self
+
+    def with_samples(self, samples: int) -> MakeMCHimalayaEngine:
+        qassert.require(self._tolerance is None, "tolerance already set")
+        self._samples = samples
+        return self
+
+    def with_absolute_tolerance(self, tolerance: float) -> MakeMCHimalayaEngine:
+        qassert.require(self._samples is None, "number of samples already set")
+        qassert.require(
+            bool(self._rng_traits.allows_error_estimate),
+            "chosen random generator policy does not allow an error estimate",
+        )
+        self._tolerance = tolerance
+        return self
+
+    def with_max_samples(self, samples: int) -> MakeMCHimalayaEngine:
+        self._max_samples = samples
+        return self
+
+    def with_seed(self, seed: int) -> MakeMCHimalayaEngine:
+        self._seed = seed
+        return self
+
+    # ---- terminal ----------------------------------------------------------
+
+    def build(self) -> MCHimalayaEngine:
+        """Construct the engine.
+
+        # C++ parity: ``operator ext::shared_ptr<PricingEngine>()``
+        # (mchimalayaengine.hpp:231-243).
+        """
+        return MCHimalayaEngine(
+            self._process,
+            brownian_bridge=self._brownian_bridge,
+            antithetic_variate=self._antithetic,
+            required_samples=self._samples,
+            required_tolerance=self._tolerance,
+            max_samples=self._max_samples,
+            seed=self._seed,
+            rng_traits=self._rng_traits,
+        )
+
+    def __call__(self) -> MCHimalayaEngine:
+        """Mirror the C++ conversion operator to ``shared_ptr<PricingEngine>``."""
+        return self.build()
+
+
+__all__ = ["HimalayaMultiPathPricer", "MCHimalayaEngine", "MakeMCHimalayaEngine"]

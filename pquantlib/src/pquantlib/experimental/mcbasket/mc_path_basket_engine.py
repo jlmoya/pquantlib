@@ -1,7 +1,7 @@
 """MCPathBasketEngine — European path-dependent basket MC engine.
 
 # C++ parity: ql/experimental/mcbasket/mcpathbasketengine.{hpp,cpp}
-#             (v1.42.1).
+#             (v1.43).
 
 Monte Carlo engine for a :class:`~pquantlib.experimental.mcbasket.path_multi_asset_option.PathMultiAssetOption`
 whose payoff is a :class:`~pquantlib.experimental.mcbasket.path_payoff.PathPayoff`.
@@ -18,6 +18,7 @@ the ``path_generator`` / ``path_pricer`` / ``time_grid`` hooks.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 import numpy.typing as npt
@@ -29,14 +30,16 @@ from pquantlib.experimental.mcbasket.path_multi_asset_option import (
 )
 from pquantlib.experimental.mcbasket.path_payoff import PathPayoff
 from pquantlib.instruments.instrument import InstrumentResults
-from pquantlib.methods.montecarlo.gaussian_sequence_generator import (
-    make_pseudo_random_rsg,
-)
+from pquantlib.math.randomnumbers.rng_traits import PseudoRandom
 from pquantlib.methods.montecarlo.monte_carlo_model import PathGeneratorTypeProtocol
 from pquantlib.methods.montecarlo.multi_path import MultiPath
 from pquantlib.methods.montecarlo.multi_path_generator import MultiPathGenerator
+from pquantlib.methods.montecarlo.path_generator import (
+    GaussianSequenceGeneratorProtocol,
+)
 from pquantlib.methods.montecarlo.path_pricer import PathPricer
 from pquantlib.pricingengines.generic_engine import GenericEngine
+from pquantlib.pricingengines.mc_rng_traits import RngTraits
 from pquantlib.pricingengines.mc_simulation import McSimulation
 from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
@@ -114,6 +117,7 @@ class MCPathBasketEngine(
         required_tolerance: target absolute tolerance.
         max_samples: cap on samples.
         seed: RNG seed.
+        rng_traits: the random-number policy (C++ ``RNG`` template argument).
     """
 
     def __init__(
@@ -128,6 +132,7 @@ class MCPathBasketEngine(
         required_tolerance: float | None,
         max_samples: int | None,
         seed: int,
+        rng_traits: RngTraits = PseudoRandom,
     ) -> None:
         GenericEngine.__init__(  # pyright: ignore[reportUnknownMemberType]
             self, PathMultiAssetOptionArguments(), InstrumentResults()
@@ -156,6 +161,7 @@ class MCPathBasketEngine(
         self._required_tolerance: float | None = required_tolerance
         self._brownian_bridge: bool = brownian_bridge
         self._seed: int = seed
+        self._rng_traits: RngTraits = rng_traits
         process.register_with(self)
 
     # --- McSimulation hooks ---------------------------------------------
@@ -178,8 +184,19 @@ class MCPathBasketEngine(
         num_assets = self._process.size()
         grid = self.time_grid()
         total_dim = num_assets * (len(grid) - 1)
-        seed = self._seed if self._seed != 0 else 1
-        gen = make_pseudo_random_rsg(total_dim, seed)
+        # C++ parity: ``RNG::make_sequence_generator(numAssets * (grid.size() - 1),
+        # seed_)`` — seed 0 goes through SeedGenerator (clock-derived), exactly
+        # as in C++.
+        # ``RngTraits.make_sequence_generator`` is annotated with the
+        # ``SequenceSample`` of ``math.randomnumbers.random_number_generator``;
+        # ``MultiPathGenerator`` asks for the structurally identical one from
+        # ``methods.montecarlo.gaussian_sequence_generator`` (same two fields,
+        # ``value: NDArray[float64]`` and ``weight: float``). The cast is
+        # nominal only — nothing about the object changes.
+        gen = cast(
+            "GaussianSequenceGeneratorProtocol",
+            self._rng_traits.make_sequence_generator(total_dim, self._seed),
+        )
         return MultiPathGenerator(
             self._process, grid, gen, brownian_bridge=self._brownian_bridge
         )
@@ -218,12 +235,136 @@ class MCPathBasketEngine(
     # --- engine ----------------------------------------------------------
 
     def calculate(self) -> None:
-        # C++ parity: ``MCPathBasketEngine::calculate``.
+        # C++ parity: ``MCPathBasketEngine::calculate`` (mcpathbasketengine.hpp:62-70).
         self.run_mc(self._required_tolerance, self._required_samples, self._max_samples)
         if self._mc_model is None:
             raise LibraryException("MC model not initialized")
         self._results.value = self._mc_model.sample_accumulator().mean()
-        self._results.error_estimate = self._mc_model.sample_accumulator().error_estimate()
+        # C++ parity: ``if constexpr (RNG::allowsErrorEstimate)`` — a
+        # low-discrepancy point set is not i.i.d., so no error is published.
+        if self._rng_traits.allows_error_estimate:
+            self._results.error_estimate = self._mc_model.sample_accumulator().error_estimate()
 
 
-__all__ = ["EuropeanPathMultiPathPricer", "MCPathBasketEngine"]
+class MakeMCPathBasketEngine:
+    """Fluent factory for :class:`MCPathBasketEngine`.
+
+    # C++ parity: ``MakeMCPathBasketEngine<RNG, S>``
+    # (mcpathbasketengine.hpp:222-245, 247-338).
+
+    # C++ parity note: unlike ``MakeMCEverestEngine`` and
+    # ``MakeMCAmericanPathEngine``, this builder does *not* guard the step
+    # count in its conversion operator. Converting without a step count
+    # reaches the engine constructor, which raises "no time steps provided".
+
+    Args:
+        process: the basket process.
+        rng_traits: the random-number policy (C++ ``RNG`` template argument).
+    """
+
+    __slots__ = (
+        "_antithetic",
+        "_brownian_bridge",
+        "_control_variate",
+        "_max_samples",
+        "_process",
+        "_rng_traits",
+        "_samples",
+        "_seed",
+        "_steps",
+        "_steps_per_year",
+        "_tolerance",
+    )
+
+    def __init__(
+        self, process: StochasticProcessArray, rng_traits: RngTraits = PseudoRandom
+    ) -> None:
+        # C++ parity: mcpathbasketengine.hpp:247-251.
+        self._process: StochasticProcessArray = process
+        self._rng_traits: RngTraits = rng_traits
+        self._antithetic: bool = False
+        self._control_variate: bool = False
+        self._steps: int | None = None
+        self._steps_per_year: int | None = None
+        self._samples: int | None = None
+        self._max_samples: int | None = None
+        self._tolerance: float | None = None
+        self._brownian_bridge: bool = False
+        self._seed: int = 0
+
+    # ---- named parameters --------------------------------------------------
+
+    def with_steps(self, steps: int) -> MakeMCPathBasketEngine:
+        self._steps = steps
+        return self
+
+    def with_steps_per_year(self, steps: int) -> MakeMCPathBasketEngine:
+        self._steps_per_year = steps
+        return self
+
+    def with_brownian_bridge(self, brownian_bridge: bool = True) -> MakeMCPathBasketEngine:
+        self._brownian_bridge = brownian_bridge
+        return self
+
+    def with_samples(self, samples: int) -> MakeMCPathBasketEngine:
+        qassert.require(self._tolerance is None, "tolerance already set")
+        self._samples = samples
+        return self
+
+    def with_absolute_tolerance(self, tolerance: float) -> MakeMCPathBasketEngine:
+        qassert.require(self._samples is None, "number of samples already set")
+        qassert.require(
+            bool(self._rng_traits.allows_error_estimate),
+            "chosen random generator policy does not allow an error estimate",
+        )
+        self._tolerance = tolerance
+        return self
+
+    def with_max_samples(self, samples: int) -> MakeMCPathBasketEngine:
+        self._max_samples = samples
+        return self
+
+    def with_seed(self, seed: int) -> MakeMCPathBasketEngine:
+        self._seed = seed
+        return self
+
+    def with_antithetic_variate(self, b: bool = True) -> MakeMCPathBasketEngine:
+        self._antithetic = b
+        return self
+
+    def with_control_variate(self, b: bool = True) -> MakeMCPathBasketEngine:
+        self._control_variate = b
+        return self
+
+    # ---- terminal ----------------------------------------------------------
+
+    def build(self) -> MCPathBasketEngine:
+        """Construct the engine.
+
+        # C++ parity: ``operator ext::shared_ptr<PricingEngine>()``
+        # (mcpathbasketengine.hpp:323-338).
+        """
+        return MCPathBasketEngine(
+            self._process,
+            self._steps,
+            self._steps_per_year,
+            self._brownian_bridge,
+            self._antithetic,
+            self._control_variate,
+            self._samples,
+            self._tolerance,
+            self._max_samples,
+            self._seed,
+            self._rng_traits,
+        )
+
+    def __call__(self) -> MCPathBasketEngine:
+        """Mirror the C++ conversion operator to ``shared_ptr<PricingEngine>``."""
+        return self.build()
+
+
+__all__ = [
+    "EuropeanPathMultiPathPricer",
+    "MCPathBasketEngine",
+    "MakeMCPathBasketEngine",
+]
