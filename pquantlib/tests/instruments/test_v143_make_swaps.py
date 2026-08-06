@@ -46,10 +46,12 @@ from pquantlib.instruments.credit_default_swap import (
 from pquantlib.instruments.fixed_vs_floating_swap import FixedVsFloatingSwap
 from pquantlib.instruments.make_cds import MakeCDS, MakeCreditDefaultSwap
 from pquantlib.instruments.make_multiple_resets_swap import MakeMultipleResetsSwap
-from pquantlib.instruments.make_ois import MakeOIS
-from pquantlib.instruments.make_vanilla_swap import MakeVanillaSwap
+from pquantlib.instruments.make_ois import MakeOIS, make_ois
+from pquantlib.instruments.make_vanilla_swap import MakeVanillaSwap, make_vanilla_swap
 from pquantlib.instruments.multiple_resets_swap import MultipleResetsSwap
+from pquantlib.instruments.overnight_indexed_swap import OvernightIndexedSwap
 from pquantlib.instruments.swap import SwapType
+from pquantlib.instruments.vanilla_swap import VanillaSwap
 from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.credit.midpoint_cds_engine import MidPointCdsEngine
 from pquantlib.pricingengines.pricing_engine import PricingEngine
@@ -538,7 +540,7 @@ OIS_UNSUPPORTED: list[tuple[str, Callable[[MakeOIS], MakeOIS], str]] = [
     (
         "ois_averaging_simple",
         lambda b: b.with_averaging_method(RateAveraging.Simple),
-        "only RateAveraging.Compound is supported",
+        r"only RateAveraging\.Compound is supported",
     ),
     ("ois_lookback_days", lambda b: b.with_lookback_days(2), "lookback days"),
     ("ois_lockout_days", lambda b: b.with_lockout_days(2), "lockout days"),
@@ -896,3 +898,170 @@ def test_multiple_resets_swap_raises_not_a_multiple(cpp: dict[str, Any]) -> None
         MultipleResetsSwap(
             SwapType.Payer, 1.0e6, fixed, 0.02, Actual360(), resets, euribor3m(), 3
         )
+
+
+# ===========================================================================
+# The keyword-argument façades and the PQuantLib-only setters
+# ===========================================================================
+#
+# make_vanilla_swap / make_ois are thin wrappers that map one keyword to one
+# chained setter. A keyword that never reaches its setter is exactly the defect
+# this file exists to catch, so each of the ones whose value is easy to get
+# wrong is checked against the reference case the corresponding setter produces.
+
+
+FACADE_VS_CASES: dict[str, Callable[[], VanillaSwap]] = {
+    "vs_float_leg_spread": lambda: make_vanilla_swap(
+        Period(5, _YEARS), euribor6m(), floating_leg_spread=0.0025
+    ),
+    "vs_fixed_leg_first_date": lambda: make_vanilla_swap(
+        Period(5, _YEARS),
+        euribor6m(),
+        effective_date=Date.from_ymd(17, Month.June, 2026),
+        fixed_leg_first_date=Date.from_ymd(17, Month.December, 2026),
+    ),
+    "vs_float_leg_next_to_last_date": lambda: make_vanilla_swap(
+        Period(5, _YEARS),
+        euribor6m(),
+        effective_date=Date.from_ymd(17, Month.June, 2026),
+        floating_leg_next_to_last_date=Date.from_ymd(17, Month.March, 2031),
+    ),
+    "vs_indexed_coupons": lambda: make_vanilla_swap(
+        Period(5, _YEARS),
+        euribor6m(),
+        floating_leg_tenor=Period(3, _MONTHS),
+        use_indexed_coupons=True,
+    ),
+    "vs_eom_maturity": lambda: make_vanilla_swap(
+        Period(5, _YEARS), euribor6m(), effective_date=EOM_START, maturity_end_of_month=True
+    ),
+    "vs_pricing_engine": lambda: make_vanilla_swap(
+        Period(5, _YEARS),
+        euribor6m(),
+        pricing_engine=DiscountingSwapEngine(
+            disc_curve(), include_settlement_date_flows=False
+        ),
+    ),
+}
+
+
+@pytest.mark.parametrize("key", sorted(FACADE_VS_CASES))
+def test_make_vanilla_swap_facade(key: str, cpp: dict[str, Any]) -> None:
+    _check_swap(FACADE_VS_CASES[key](), cpp[key])
+
+
+FACADE_OIS_CASES: dict[str, Callable[[], OvernightIndexedSwap]] = {
+    "ois_payment_lag": lambda: make_ois(Period(2, _YEARS), sofr(), payment_lag=2),
+    # Before this port grew the per-leg end-of-month keywords, the façade read
+    # ``maturity_end_of_month`` only when ``end_of_month`` was also given, so
+    # this call silently produced the default-end-of-month swap instead.
+    "ois_eom_maturity": lambda: make_ois(
+        Period(2, _YEARS), sofr(), effective_date=EOM_START, maturity_end_of_month=True
+    ),
+    "ois_eom_fixed_leg": lambda: make_ois(
+        Period(2, _YEARS), sofr(), effective_date=EOM_START, fixed_leg_end_of_month=True
+    ),
+    "ois_eom_overnight_leg": lambda: make_ois(
+        Period(2, _YEARS), sofr(), effective_date=EOM_START, overnight_leg_end_of_month=True
+    ),
+    "ois_eom_default": lambda: make_ois(
+        Period(2, _YEARS), sofr(), effective_date=EOM_START
+    ),
+    "ois_overnight_leg_spread": lambda: make_ois(
+        Period(2, _YEARS), sofr(), overnight_leg_spread=0.0025
+    ),
+    "ois_fixed_leg_rule_zero": lambda: make_ois(
+        Period(2, _YEARS), sofr(), fixed_rule=DateGeneration.Zero
+    ),
+}
+
+
+@pytest.mark.parametrize("key", sorted(FACADE_OIS_CASES))
+def test_make_ois_facade(key: str, cpp: dict[str, Any]) -> None:
+    _check_swap(FACADE_OIS_CASES[key](), cpp[key])
+
+
+def test_make_ois_facade_rejects_unsupported_averaging_method() -> None:
+    """The façade's ``averaging_method`` reaches the builder's guard."""
+    with pytest.raises(LibraryException, match=r"only RateAveraging\.Compound is supported"):
+        make_ois(Period(2, _YEARS), sofr(), averaging_method=RateAveraging.Simple)
+
+
+# --- with_evaluation_date (PQuantLib-only) ---------------------------------
+
+
+def test_with_evaluation_date_overrides_the_global() -> None:
+    """The local reference date wins over the pinned global one.
+
+    The autouse fixture pins the global to 15-Jun-2026, whose spot is
+    17-Jun-2026; pinning the builder to a week later must move the start date
+    without touching global state.
+    """
+    later = Date.from_ymd(22, Month.June, 2026)
+    swap = MakeVanillaSwap(Period(5, _YEARS), euribor6m()).with_evaluation_date(later).build()
+    assert swap.start_date() == Date.from_ymd(24, Month.June, 2026)
+    assert ObservableSettings().evaluation_date == TODAY
+
+    ois = MakeOIS(Period(2, _YEARS), sofr()).with_evaluation_date(later).build()
+    assert ois.start_date() == Date.from_ymd(24, Month.June, 2026)
+
+    mrs = (
+        MakeMultipleResetsSwap(Period(1, _YEARS), euribor3m(), 2)
+        .with_evaluation_date(later)
+        .build()
+    )
+    assert mrs.start_date() == Date.from_ymd(24, Month.June, 2026)
+
+
+def test_facade_evaluation_date_keyword_reaches_the_builder() -> None:
+    later = Date.from_ymd(22, Month.June, 2026)
+    swap = make_vanilla_swap(Period(5, _YEARS), euribor6m(), evaluation_date=later)
+    assert swap.start_date() == Date.from_ymd(24, Month.June, 2026)
+    ois = make_ois(Period(2, _YEARS), sofr(), evaluation_date=later)
+    assert ois.start_date() == Date.from_ymd(24, Month.June, 2026)
+
+
+# --- MakeCreditDefaultSwap's two PQuantLib-only setters --------------------
+
+
+def test_make_cds_with_calendar_moves_the_cash_settlement_date() -> None:
+    """``with_calendar`` (C++ hard-codes WeekendsOnly) reaches the upfront advance.
+
+    Three business days after Thursday 24-Dec-2026 is Tuesday 29-Dec on
+    WeekendsOnly, which does not know Christmas Day is a holiday, and Wednesday
+    30-Dec on TARGET, which does.
+    """
+    trade_date = Date.from_ymd(24, Month.December, 2026)
+    default_cds = cds_base().with_trade_date(trade_date).build()
+    target_cds = cds_base().with_trade_date(trade_date).with_calendar(TARGET()).build()
+    assert default_cds.upfront_payment().date() == Date.from_ymd(29, Month.December, 2026)
+    assert target_cds.upfront_payment().date() == Date.from_ymd(30, Month.December, 2026)
+
+
+def test_make_cds_termination_date_convention_changes_the_maturity() -> None:
+    """``with_termination_date_convention`` (C++ hard-codes Unadjusted) applies.
+
+    21-Jun-2031 is a Saturday, so it survives ``Unadjusted`` and rolls back to
+    Friday the 20th under ``Preceding``.
+    """
+    saturday = Date.from_ymd(21, Month.June, 2031)
+
+    def builder() -> MakeCreditDefaultSwap:
+        return (
+            MakeCreditDefaultSwap(termination_date=saturday, running_spread=0.01)
+            .with_date_generation_rule(DateGeneration.Backward)
+            .with_pricing_engine(cds_engine())
+        )
+
+    assert builder().build().protection_end_date() == saturday
+    preceding = (
+        builder().with_termination_date_convention(BusinessDayConvention.Preceding).build()
+    )
+    assert preceding.protection_end_date() == Date.from_ymd(20, Month.June, 2031)
+
+
+def test_make_cds_without_an_engine_cannot_price() -> None:
+    """``with_pricing_engine`` is what makes the CDS priceable at all."""
+    cds = MakeCreditDefaultSwap(tenor=Period(5, _YEARS), running_spread=0.01).build()
+    with pytest.raises(LibraryException):
+        cds.npv()
