@@ -1,9 +1,9 @@
-"""HestonSlvMcModel — Heston SLV calibration via MC bucketing.
+"""HestonSLVMCModel — Heston SLV calibration via MC bucketing.
 
 # C++ parity: ql/models/equity/hestonslvmcmodel.{hpp,cpp} (v1.42.1).
 
 The Monte-Carlo variant of the Heston stochastic-local-vol calibration.
-Instead of solving the Fokker-Planck PDE (as ``HestonSlvFdmModel``
+Instead of solving the Fokker-Planck PDE (as ``HestonSLVFDMModel``
 does), the calibration draws ``n_paths`` joint Heston paths and at
 each time step buckets the simulated ``(S, V)`` pairs by ``S``; within
 each bucket it estimates ``E[V | S, t]`` and sets the leverage
@@ -62,7 +62,7 @@ from pquantlib.time.frequency import Frequency
 from pquantlib.time.time_grid import TimeGrid
 
 
-class HestonSlvMcModel:
+class HestonSLVMCModel:
     """Heston-SLV model calibrated via MC bucketing.
 
     # C++ parity: ``class HestonSLVMCModel : public LazyObject`` in
@@ -311,4 +311,4 @@ class HestonSlvMcModel:
         return surface
 
 
-__all__ = ["HestonSlvMcModel"]
+__all__ = ["HestonSLVMCModel"]

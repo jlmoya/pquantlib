@@ -19,7 +19,7 @@ Implementation notes:
 - The C++ separates ``GsrProcessCore`` (cache-heavy math) from
   ``GsrProcess`` (StochasticProcess1D + ForwardMeasureProcess1D
   surface). PQuantLib collapses both into this module:
-  ``_GsrProcessCore`` is the cache + closed-form arithmetic, and
+  ``GsrProcessCore`` is the cache + closed-form arithmetic, and
   ``GsrProcess`` is the public 1-D forward-measure process.
 
 - Reversions with ``|kappa| < 1e-4`` are treated as "approximately
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 _REV_ZERO_THRESHOLD: float = 1.0e-4
 
 
-class _GsrProcessCore:
+class GsrProcessCore:
     """Cached closed-form arithmetic for the GSR process.
 
     # C++ parity: ``QuantLib::detail::GsrProcessCore`` in
@@ -552,7 +552,7 @@ class GsrProcess(ForwardMeasureProcess1D):
     ) -> None:
         # C++ parity: gsrprocess.cpp:26-35.
         super().__init__(T=T)
-        self._core: _GsrProcessCore = _GsrProcessCore(times, vols, reversions, T)
+        self._core: GsrProcessCore = GsrProcessCore(times, vols, reversions, T)
         self._reference_date: Date | None = reference_date
         self._day_counter: DayCounter | None = day_counter
         self.flush_cache()

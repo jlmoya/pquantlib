@@ -1,8 +1,8 @@
-"""GjrGarchModel — Glosten-Jagannathan-Runkle GARCH(1,1) calibrated model.
+"""GJRGARCHModel — Glosten-Jagannathan-Runkle GARCH(1,1) calibrated model.
 
 # C++ parity: ql/models/equity/gjrgarchmodel.{hpp,cpp} (v1.42.1).
 
-Subclass of ``CalibratedModel`` that wraps a ``GjrGarchProcess`` and
+Subclass of ``CalibratedModel`` that wraps a ``GJRGARCHProcess`` and
 exposes its parameters (omega, alpha, beta, gamma, lambda, v0) to the
 calibration optimizer as a 6-element ``ConstantParameter`` vector.
 
@@ -21,7 +21,7 @@ In addition, a composite ``VolatilityConstraint`` is layered on top of
 the per-Parameter constraints to enforce ``beta + gamma >= 0`` —
 required for variance positivity.
 
-``generate_arguments`` rebuilds the underlying ``GjrGarchProcess`` from
+``generate_arguments`` rebuilds the underlying ``GJRGARCHProcess`` from
 the current optimizer params on each iteration.
 
 Reference:
@@ -55,7 +55,7 @@ from pquantlib.math.optimization.constraint import (
 )
 from pquantlib.models.model import CalibratedModel
 from pquantlib.models.parameter import ConstantParameter
-from pquantlib.processes.gjr_garch_process import GjrGarchProcess
+from pquantlib.processes.gjr_garch_process import GJRGARCHProcess
 
 
 class VolatilityConstraint(Constraint):
@@ -93,7 +93,7 @@ class _AndConstraint(Constraint):
         return self._c1.test(params) and self._c2.test(params)
 
 
-class GjrGarchModel(CalibratedModel):
+class GJRGARCHModel(CalibratedModel):
     """GJR-GARCH(1,1) calibrated model.
 
     # C++ parity: ``class GJRGARCHModel : public CalibratedModel`` in
@@ -104,11 +104,11 @@ class GjrGarchModel(CalibratedModel):
 
     _N_ARGUMENTS: int = 6
 
-    def __init__(self, process: GjrGarchProcess) -> None:
+    def __init__(self, process: GJRGARCHProcess) -> None:
         # C++ parity: gjrgarchmodel.cpp:43-66 — CalibratedModel(6) +
         # ConstantParameter assignments with their constraints.
         super().__init__(self._N_ARGUMENTS)
-        self._process: GjrGarchProcess = process
+        self._process: GJRGARCHProcess = process
 
         self._arguments[0] = ConstantParameter(process.omega, PositiveConstraint())
         self._arguments[1] = ConstantParameter(
@@ -184,8 +184,8 @@ class GjrGarchModel(CalibratedModel):
         """
         return self._arguments[5](0.0)
 
-    def process(self) -> GjrGarchProcess:
-        """The underlying ``GjrGarchProcess``.
+    def process(self) -> GJRGARCHProcess:
+        """The underlying ``GJRGARCHProcess``.
 
         # C++ parity: ``GJRGARCHModel::process`` in gjrgarchmodel.hpp:61.
         """
@@ -194,16 +194,16 @@ class GjrGarchModel(CalibratedModel):
     # --- generateArguments ----------------------------------------------
 
     def generate_arguments(self) -> None:
-        """Rebuild the underlying ``GjrGarchProcess`` with current params.
+        """Rebuild the underlying ``GJRGARCHProcess`` with current params.
 
         # C++ parity: ``GJRGARCHModel::generateArguments`` in
         # gjrgarchmodel.cpp:68-76.
 
-        Constructs a fresh ``GjrGarchProcess`` from the same yield
+        Constructs a fresh ``GJRGARCHProcess`` from the same yield
         curves + spot quote but with parameters drawn from
         ``arguments_``.
         """
-        self._process = GjrGarchProcess(
+        self._process = GJRGARCHProcess(
             risk_free_rate=self._process.risk_free_rate(),
             dividend_yield=self._process.dividend_yield(),
             s0=self._process.s0(),
@@ -218,4 +218,4 @@ class GjrGarchModel(CalibratedModel):
         )
 
 
-__all__ = ["GjrGarchModel", "VolatilityConstraint"]
+__all__ = ["GJRGARCHModel", "VolatilityConstraint"]

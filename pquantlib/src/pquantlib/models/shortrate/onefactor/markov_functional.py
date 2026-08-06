@@ -56,7 +56,7 @@ Carve-outs (documented inline below):
   here. Re-add by selecting the smile-section factory in
   ``_update_smiles`` based on ``settings.adjustments``.
 - ``ModelOutputs`` (the C++ trace + diagnostic struct) — Python omits
-  the diagnostic surface entirely; ``_ModelOutputs`` here is a lightweight
+  the diagnostic surface entirely; ``ModelOutputs`` here is a lightweight
   dict that records the per-expiry atm / annuity / adjustment factors
   needed by the engine.
 - ``arbitrageIndices`` / ``forceArbitrageIndices`` — only meaningful
@@ -135,7 +135,7 @@ class MarkovFunctionalSettings:
 # record. PQuantLib stores it as a mutable dataclass keyed by expiry
 # in the model's ``_calibration_points`` dict.
 @dataclass(slots=True)
-class _CalibrationPoint:
+class CalibrationPoint:
     is_caplet: bool
     tenor: Any  # Period
     payment_dates: list[Any] = field(default_factory=lambda: [])  # list[Date]
@@ -233,7 +233,7 @@ def _gaussian_shifted_polynomial_integral(
 # C++ parity: ``ModelOutputs`` (markovfunctional.hpp:282-302) collapsed
 # to a tiny per-expiry diagnostics holder.
 @dataclass(slots=True)
-class _ModelOutputs:
+class ModelOutputs:
     expiries: list[Any] = field(default_factory=lambda: [])  # list[Date]
     times: list[float] = field(default_factory=lambda: [])
     atm: list[float] = field(default_factory=lambda: [])
@@ -330,10 +330,10 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         self._volsteptimes_array: npt.NDArray[np.float64] = np.zeros(
             len(self._volstepdates), dtype=np.float64
         )
-        # Sorted dict-equivalent: list of (expiry_date, _CalibrationPoint)
+        # Sorted dict-equivalent: list of (expiry_date, CalibrationPoint)
         # tuples ordered by expiry. Python uses a dict and re-sorts on
         # iteration; matches C++ ``std::map``'s ordering semantics.
-        self._calibration_points: dict[Any, _CalibrationPoint] = {}
+        self._calibration_points: dict[Any, CalibrationPoint] = {}
         self._times: list[float] = []
         self._numeraire_date: Date | None = None
         self._numeraire_time: float = 0.0
@@ -360,7 +360,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         self._gauss_hermite_x: npt.NDArray[np.float64] = nodes_scaled
         self._gauss_hermite_w: npt.NDArray[np.float64] = weights_scaled
         # Diagnostic outputs.
-        self._model_outputs: _ModelOutputs = _ModelOutputs()
+        self._model_outputs: ModelOutputs = ModelOutputs()
 
         # Initialize the model — builds the state process, calibration
         # points, and the numeraire tabulation. Runs the full bootstrap.
@@ -505,7 +505,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         dc: Any = swap_idx.day_counter()
         dates: list[Any] = list(sched.dates)
 
-        cp = _CalibrationPoint(is_caplet=False, tenor=swap_idx.tenor())
+        cp = CalibrationPoint(is_caplet=False, tenor=swap_idx.tenor())
         for k in range(1, len(dates)):
             prev_d = expiry if k == 1 else dates[k - 1]
             curr_d = dates[k]
@@ -712,7 +712,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
     def _market_swap_rate(
         self,
         expiry: Date,
-        cp: _CalibrationPoint,
+        cp: CalibrationPoint,
         digital_price: float,
         guess: float,
     ) -> float:
@@ -902,7 +902,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         """Constant reversion value used to build the state process."""
         return self._reversion_value
 
-    def model_outputs(self) -> _ModelOutputs:
+    def model_outputs(self) -> ModelOutputs:
         """Diagnostic per-expiry calibration outputs (atm / annuity / adj factors)."""
         return self._model_outputs
 

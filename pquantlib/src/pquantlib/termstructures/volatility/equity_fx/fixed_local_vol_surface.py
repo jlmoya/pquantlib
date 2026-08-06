@@ -6,8 +6,8 @@
 A local-volatility surface backed by a (times, strikes) grid of fixed
 local-vol values: one Linear interpolation in strike per time slice, linear
 in time between slices. Used as the leverage-function carrier in the
-Heston-SLV calibration pipelines (``HestonSlvFdmModel`` /
-``HestonSlvMcModel``).
+Heston-SLV calibration pipelines (``HestonSLVFDMModel`` /
+``HestonSLVMCModel``).
 
 Two behaviours here are easy to get wrong and are worth stating, because an
 earlier version of this port had both wrong:
@@ -22,7 +22,7 @@ earlier version of this port had both wrong:
   ``upperExtrapolation`` say (fixedlocalvolsurface.cpp:139-144). It is an
   asymmetry, not a tidy rule, and it is reproduced rather than smoothed over.
 
-``set_column`` has no C++ counterpart; it exists for ``HestonSlvMcModel``,
+``set_column`` has no C++ counterpart; it exists for ``HestonSLVMCModel``,
 whose calibration fills one time slice per step.
 """
 
@@ -302,7 +302,7 @@ class FixedLocalVolSurface(LocalVolTermStructure):
     ) -> None:
         """Overwrite slice ``j`` with new strikes + local-vol values.
 
-        # C++ parity: none — ``HestonSlvMcModel``'s calibration loop fills one
+        # C++ parity: none — ``HestonSLVMCModel``'s calibration loop fills one
         # slice per time step, which C++ does by rebuilding the surface.
         """
         qassert.require(0 <= j < len(self._times), f"slice index {j} out of range")

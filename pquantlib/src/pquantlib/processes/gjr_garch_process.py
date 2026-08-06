@@ -1,4 +1,4 @@
-"""GjrGarchProcess — Glosten-Jagannathan-Runkle GARCH(1,1) stochastic-vol process.
+"""GJRGARCHProcess — Glosten-Jagannathan-Runkle GARCH(1,1) stochastic-vol process.
 
 # C++ parity: ql/processes/gjrgarchprocess.{hpp,cpp} (v1.42.1).
 
@@ -71,7 +71,7 @@ class Discretization(IntEnum):
     Reflection = 2
 
 
-class GjrGarchProcess(StochasticProcess):
+class GJRGARCHProcess(StochasticProcess):
     """GJR-GARCH(1,1) two-factor stochastic-volatility process.
 
     # C++ parity: ``class GJRGARCHProcess : public StochasticProcess``
@@ -363,4 +363,4 @@ class GjrGarchProcess(StochasticProcess):
         )
 
 
-__all__ = ["Discretization", "GjrGarchProcess"]
+__all__ = ["Discretization", "GJRGARCHProcess"]

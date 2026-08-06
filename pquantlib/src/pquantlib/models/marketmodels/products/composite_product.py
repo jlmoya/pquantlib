@@ -38,7 +38,7 @@ from pquantlib.models.marketmodels.utilities import merge_times
 
 
 @dataclass(slots=True)
-class _SubProduct:
+class SubProduct:
     """One registered sub-product + its per-step working buffers.
 
     # C++ parity: compositeproduct.hpp MarketModelComposite::SubProduct.
@@ -59,7 +59,7 @@ class MarketModelComposite(MarketModelMultiProduct, ABC):
     """
 
     def __init__(self) -> None:
-        self._components: list[_SubProduct] = []
+        self._components: list[SubProduct] = []
         self._rate_times: list[float] = []
         self._evolution_times: list[float] = []
         self._evolution: EvolutionDescription | None = None
@@ -102,7 +102,7 @@ class MarketModelComposite(MarketModelMultiProduct, ABC):
                 and all(a == b for a, b in zip(rate_times1, rate_times2, strict=False)),
                 "incompatible rate times",
             )
-        self._components.append(_SubProduct(product=product.clone(), multiplier=multiplier))
+        self._components.append(SubProduct(product=product.clone(), multiplier=multiplier))
         self._all_evolution_times.append(list(d.evolution_times()))
 
     def subtract(

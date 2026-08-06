@@ -1,4 +1,4 @@
-"""HestonSlvFdmModel scaffold tests.
+"""HestonSLVFDMModel scaffold tests.
 
 C++ parity: ql/models/equity/hestonslvfdmmodel.{hpp,cpp}.
 
@@ -19,8 +19,8 @@ import pytest
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.models.equity.heston_model import HestonModel
 from pquantlib.models.equity.heston_slv_fdm_model import (
-    HestonSlvFdmModel,
-    HestonSlvFokkerPlanckFdmParams,
+    HestonSLVFDMModel,
+    HestonSLVFokkerPlanckFdmParams,
 )
 from pquantlib.processes.heston_process import HestonProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
@@ -38,7 +38,7 @@ from pquantlib.time.month import Month
 
 
 @pytest.fixture
-def fdm_model() -> HestonSlvFdmModel:
+def fdm_model() -> HestonSLVFDMModel:
     """Build a canonical SLV FDM model on the Heston testbed."""
     dc = Actual365Fixed()
     ref = Date.from_ymd(15, Month.June, 2026)
@@ -66,7 +66,7 @@ def fdm_model() -> HestonSlvFdmModel:
     local_vol = LocalVolSurface(
         black_ts=bvol, risk_free_ts=rf, dividend_ts=div, underlying=spot
     )
-    return HestonSlvFdmModel(
+    return HestonSLVFDMModel(
         local_vol=local_vol,
         heston_model=heston_model,
         end_date=ref + 365,
@@ -74,15 +74,15 @@ def fdm_model() -> HestonSlvFdmModel:
 
 
 def test_default_params_match_cpp_test_defaults() -> None:
-    """Default HestonSlvFokkerPlanckFdmParams mirrors the C++ test defaults."""
-    p = HestonSlvFokkerPlanckFdmParams()
+    """Default HestonSLVFokkerPlanckFdmParams mirrors the C++ test defaults."""
+    p = HestonSLVFokkerPlanckFdmParams()
     assert p.x_grid == 201
     assert p.v_grid == 51
     assert p.t_max_steps_per_year == 200
     assert p.t_min_steps_per_year == 4
 
 
-def test_heston_process_passthrough(fdm_model: HestonSlvFdmModel) -> None:
+def test_heston_process_passthrough(fdm_model: HestonSLVFDMModel) -> None:
     """``heston_process()`` returns the model's underlying process.
 
     # C++ parity: hestonslvfdmmodel.hpp:83.
@@ -92,7 +92,7 @@ def test_heston_process_passthrough(fdm_model: HestonSlvFdmModel) -> None:
     exact(proc.kappa, 2.0)
 
 
-def test_local_vol_passthrough(fdm_model: HestonSlvFdmModel) -> None:
+def test_local_vol_passthrough(fdm_model: HestonSLVFDMModel) -> None:
     """``local_vol()`` returns the input local-vol surface.
 
     # C++ parity: hestonslvfdmmodel.hpp:84.
@@ -105,7 +105,7 @@ def test_local_vol_passthrough(fdm_model: HestonSlvFdmModel) -> None:
     tight(v, 0.20, reason="Dupire FD introduces ~1e-14 float64 noise")
 
 
-def test_leverage_function_unit_at_atm(fdm_model: HestonSlvFdmModel) -> None:
+def test_leverage_function_unit_at_atm(fdm_model: HestonSLVFDMModel) -> None:
     """Scaffold leverage function returns L=1 at ATM.
 
     # Scaffold-only — see module docstring.
@@ -116,13 +116,13 @@ def test_leverage_function_unit_at_atm(fdm_model: HestonSlvFdmModel) -> None:
     exact(v, 1.0)
 
 
-def test_leverage_function_is_cached(fdm_model: HestonSlvFdmModel) -> None:
+def test_leverage_function_is_cached(fdm_model: HestonSLVFDMModel) -> None:
     """Repeated calls return the same surface object (lazy cache)."""
     lev1 = fdm_model.leverage_function()
     lev2 = fdm_model.leverage_function()
     assert lev1 is lev2
 
 
-def test_mixing_factor_default_is_one(fdm_model: HestonSlvFdmModel) -> None:
+def test_mixing_factor_default_is_one(fdm_model: HestonSLVFDMModel) -> None:
     """Default mixing factor is 1.0."""
     exact(fdm_model.mixing_factor(), 1.0)

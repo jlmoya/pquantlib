@@ -1,8 +1,8 @@
-"""LogNormalFwdRateIBalland — interpolated-Balland forward-rate evolver.
+"""LogNormalFwdRateiBalland — interpolated-Balland forward-rate evolver.
 
 # C++ parity: ql/models/marketmodels/evolvers/lognormalfwdrateiballand.{hpp,cpp}
 # (v1.42.1). The C++ class is spelled ``LogNormalFwdRateiBalland`` (lowercase
-# ``i``); pquantlib uses the idiomatic ``LogNormalFwdRateIBalland``.
+# ``i``); pquantlib uses the idiomatic ``LogNormalFwdRateiBalland``.
 
 Requires the terminal measure. Like the iterative predictor-corrector evolver,
 but the running quantity ``g_`` is built from the Balland geometric-mean
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from pquantlib.models.marketmodels.market_model import MarketModel
 
 
-class LogNormalFwdRateIBalland(MarketModelEvolver):
+class LogNormalFwdRateiBalland(MarketModelEvolver):
     """Interpolated-Balland forward-rate evolver (terminal measure).
 
     # C++ parity: lognormalfwdrateiballand.hpp/.cpp LogNormalFwdRateiBalland.
