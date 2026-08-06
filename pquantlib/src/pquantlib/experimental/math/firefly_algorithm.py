@@ -255,6 +255,43 @@ class LevyFlightWalk(DistributionRandomWalk):
         super().__init__(LevyFlightDistribution(xm, alpha), delta, seed)
 
 
+class DecreasingGaussianWalk(GaussianWalk):
+    """Gaussian walk whose step size shrinks once per swept generation.
+
+    # C++ parity: ``class DecreasingGaussianWalk``
+    # fireflyalgorithm.hpp:255-282.
+
+    Identical to :class:`GaussianWalk` except that ``delta`` is squared every
+    time the walk has been applied to all ``Mfa`` fireflies, so the step decays
+    as ``delta``, ``delta^2``, ``delta^4``, ... across generations.
+
+    # C++ parity note: the counter is incremented *before* the comparison and
+    # reset only when it exceeds ``Mfa_``, so the first squaring happens after
+    # ``Mfa_ + 1`` calls, not after ``Mfa_``. Reproduced verbatim — it is what
+    # the pinned firefly trajectories reflect.
+    """
+
+    def __init__(self, sigma: float, delta: float = 0.9, seed: int = 1) -> None:
+        super().__init__(sigma, delta, seed)
+        self._delta0: float = delta
+        self._iteration: int = 0
+
+    def _walk_impl(self, x_rw: npt.NDArray[np.float64]) -> None:
+        self._iteration += 1
+        assert self._fa is not None
+        if self._iteration > self._fa.mfa:
+            # Every time all the fireflies have been processed, multiply
+            # delta by itself.
+            self._iteration = 0
+            self._delta *= self._delta
+        super()._walk_impl(x_rw)
+
+    def init(self, fa: FireflyAlgorithm) -> None:
+        super().init(fa)
+        self._iteration = 0
+        self._delta = self._delta0
+
+
 class FireflyAlgorithm(OptimizationMethod):
     """Firefly Algorithm constrained global optimizer (firefly + DE hybrid).
 
