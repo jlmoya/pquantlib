@@ -268,14 +268,18 @@ class YoYInflationCapFloor(Instrument):
         return d
 
     def maturity_date(self) -> Date:
-        """Latest payment date in the leg.
+        """Latest accrual end date in the leg.
 
-        # C++ parity: YoYInflationCapFloor::maturityDate (inflationcapfloor.cpp:105-107).
+        # C++ parity: YoYInflationCapFloor::maturityDate
+        # (inflationcapfloor.cpp:105-107) delegates to
+        # ``CashFlows::maturityDate``, which takes ``accrualEndDate()`` for a
+        # Coupon. Using the payment date is wrong whenever the payment
+        # adjustment moves it off the accrual end.
         """
         qassert.require(len(self._yoy_leg) > 0, "empty leg")
         d: Date | None = None
         for cf in self._yoy_leg:
-            ed = cf.date()
+            ed = cf.accrual_end_date()
             d = ed if d is None else max(d, ed)
         assert d is not None
         return d
