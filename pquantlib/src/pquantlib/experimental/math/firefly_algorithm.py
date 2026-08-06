@@ -32,13 +32,19 @@ import numpy.typing as npt
 from pquantlib import qassert
 from pquantlib.experimental.math.isotropic_random_walk import IsotropicRandomWalk
 from pquantlib.experimental.math.levy_flight_distribution import LevyFlightDistribution
-from pquantlib.math.distributions.inverse_cumulative_normal import InverseCumulativeNormal
+from pquantlib.experimental.math.std_random import (
+    StdMt19937,
+    StdNormalDistribution,
+    StdUniformIntDistribution,
+)
 from pquantlib.math.optimization.end_criteria import Type
 from pquantlib.math.optimization.optimization_method import OptimizationMethod
 from pquantlib.math.randomnumbers.mersenne_twister import MersenneTwisterUniformRng
 from pquantlib.math.randomnumbers.sobol_rsg import SobolRsg
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from pquantlib.math.optimization.end_criteria import EndCriteria
     from pquantlib.math.optimization.problem import Problem
 
@@ -47,21 +53,24 @@ _REAL_MAX: float = sys.float_info.max
 
 
 class _GaussianRadius:
-    """Radius distribution drawing N(0, sigma) via inverse transform.
+    """``std::normal_distribution<Real>(0, sigma)`` as the walk's radius source.
 
-    Stands in for the C++ ``std::normal_distribution<Real>(0, sigma)``
-    used as the IsotropicRandomWalk radius source. Distributionally
-    faithful; the exact stream differs from C++ std::normal_distribution
-    (documented — firefly is stochastic with a LOOSE contract).
+    # C++ parity: ``GaussianWalk`` fireflyalgorithm.hpp:230-237 constructs
+    # ``DistributionRandomWalk<std::normal_distribution<Real>>`` with
+    # ``std::normal_distribution<Real>(0.0, sigma)``.
+
+    Wraps :class:`StdNormalDistribution`, which reproduces libc++'s Marsaglia
+    polar algorithm draw-for-draw (including the cached second variate, so a
+    call consumes either four engine words or none).
     """
 
-    __slots__ = ("_sigma",)
+    __slots__ = ("_dist",)
 
     def __init__(self, sigma: float) -> None:
-        self._sigma = sigma
+        self._dist = StdNormalDistribution(0.0, sigma)
 
-    def __call__(self, engine: MersenneTwisterUniformRng) -> float:
-        return self._sigma * InverseCumulativeNormal.standard_value(engine.next_real())
+    def __call__(self, engine: StdMt19937) -> float:
+        return self._dist(engine)
 
 
 class Intensity(ABC):
@@ -198,15 +207,17 @@ class DistributionRandomWalk(RandomWalk):
 
     def __init__(
         self,
-        distribution: object,
+        distribution: Callable[[StdMt19937], float],
         delta: float = 0.9,
         seed: int = 1,
     ) -> None:
         super().__init__()
-        # The radius distribution is consumed by an internal MT engine.
-        self._walk_random = IsotropicRandomWalk(
-            engine=MersenneTwisterUniformRng(seed),
-            distribution=distribution,  # type: ignore[arg-type]
+        # C++ parity: ``walkRandom_(std::mt19937(seed), dist, 1, Array(1,1.0),
+        # seed)`` — the radius engine is a std::mt19937, the angle stream a
+        # QuantLib MT, and both take the same seed.
+        self._walk_random: IsotropicRandomWalk[StdMt19937] = IsotropicRandomWalk(
+            engine=StdMt19937(seed),
+            distribution=distribution,
             dim=1,
             weights=np.ones(1, dtype=np.float64),
             seed=seed,
@@ -225,7 +236,7 @@ class DistributionRandomWalk(RandomWalk):
 class GaussianWalk(DistributionRandomWalk):
     """Gaussian random walk.
 
-    # C++ parity: ``class GaussianWalk`` fireflyalgorithm.hpp:225-234.
+    # C++ parity: ``class GaussianWalk`` fireflyalgorithm.hpp:230-237.
     """
 
     def __init__(self, sigma: float, delta: float = 0.9, seed: int = 1) -> None:
@@ -235,7 +246,7 @@ class GaussianWalk(DistributionRandomWalk):
 class LevyFlightWalk(DistributionRandomWalk):
     """Lévy-flight random walk.
 
-    # C++ parity: ``class LevyFlightWalk`` fireflyalgorithm.hpp:238-247.
+    # C++ parity: ``class LevyFlightWalk`` fireflyalgorithm.hpp:242-250.
     """
 
     def __init__(
@@ -294,12 +305,14 @@ class FireflyAlgorithm(OptimizationMethod):
         self._intensity = intensity
         self._random_walk = random_walk
         self._rng = MersenneTwisterUniformRng(seed)
-        # Integer index sampler: C++ uses std::uniform_int_distribution
-        # over [Mfa_, (Mde>0 ? M-1 : M)). We seed a separate MT for the
-        # DE index draws + crossover dimension index.
-        self._index_rng = MersenneTwisterUniformRng(seed if seed != 1 else 2)
+        # C++ parity: ``generator_(seed), distribution_(Mfa_, Mde > 0 ? M_-1 : M_)``
+        # fireflyalgorithm.cpp:34-36. std::uniform_int_distribution takes a
+        # CLOSED range, and the engine is a std::mt19937 seeded identically to
+        # the QuantLib MT above (the two streams are consumed independently).
+        self._index_rng = StdMt19937(seed)
         self._index_lo = self._mfa
-        self._index_hi = (m - 1) if m_de > 0 else m  # exclusive upper used as [lo, hi)
+        self._index_hi = (m - 1) if m_de > 0 else m  # inclusive upper bound
+        self._index_dist = StdUniformIntDistribution(self._index_lo, self._index_hi)
 
         self._x: list[npt.NDArray[np.float64]] = []
         self._xi: list[npt.NDArray[np.float64]] = []
@@ -351,12 +364,10 @@ class FireflyAlgorithm(OptimizationMethod):
         return self._ux
 
     def _draw_index(self, lo: int, hi: int) -> int:
-        # Uniform integer in [lo, hi) (hi exclusive). Matches C++
-        # std::uniform_int_distribution(lo, hi-1) inclusive semantics.
-        span = hi - lo
-        if span <= 0:
-            return lo
-        return lo + int(self._index_rng.next_real() * span) % span
+        # C++ parity: ``distribution_(generator_)`` / ``distribution_(generator_,
+        # nParam)`` — std::uniform_int_distribution over the CLOSED range
+        # [lo, hi], sharing one std::mt19937 across every draw site.
+        return self._index_dist(self._index_rng, lo, hi)
 
     # -- driver -----------------------------------------------------------
 
@@ -421,17 +432,30 @@ class FireflyAlgorithm(OptimizationMethod):
             if iteration > max_iteration or iteration_stat > max_i_stationary:
                 break
 
-            # Sort by value (ascending) — divides into sub-populations.
-            self._values.sort(key=lambda t: t[0])
+            # Sort by value then index — divides into sub-populations.
+            # C++ parity: ``std::sort(values_.begin(), values_.end())`` sorts
+            # std::pair lexicographically, i.e. on (value, index), not on
+            # value alone. Indices are unique so the orders agree, but the
+            # tuple sort is what the C++ actually does.
+            self._values.sort()
 
             # Differential evolution on the worse subpopulation.
             if self._mfa < self._m:
                 index_best = self._values[0][1]
-                x_best = self._x[index_best]
+                # C++ parity: ``Array& xBest = x_[indexBest];`` binds a
+                # REFERENCE. In the pure-DE branch below, ``xBest = x_[indexBest]``
+                # therefore does not rebind — it copies the newly chosen array
+                # *into* x_[values_[0].second], mutating the incumbent best.
+                # That aliasing is upstream behaviour, not an accident of this
+                # port, so ``x_best_ref`` is kept and written through.
+                x_best_ref = self._x[index_best]
+                x_best = x_best_ref
                 for i in range(self._mfa, self._m):
                     if not is_fa:
+                        # Pure DE requires a random index.
                         index_best = self._draw_index(self._index_lo, self._index_hi)
-                        x_best = self._x[index_best]
+                        x_best_ref[:] = self._x[index_best]
+                        x_best = x_best_ref
                     index_r1 = self._draw_index(self._index_lo, self._index_hi)
                     while index_r1 == index_best:
                         index_r1 = self._draw_index(self._index_lo, self._index_hi)
@@ -443,7 +467,8 @@ class FireflyAlgorithm(OptimizationMethod):
                     x = self._x[index]
                     x_r1 = self._x[index_r1]
                     x_r2 = self._x[index_r2]
-                    r_index = self._draw_index(0, self._n)
+                    # C++ parity: ``nParam(0, N_ - 1)`` — a closed range.
+                    r_index = self._draw_index(0, self._n - 1)
                     for j in range(self._n):
                         if j == r_index or self._rng.next_real() <= self._crossover:
                             z[j] = x_best[j] + self._mutation * (x_r1[j] - x_r2[j])

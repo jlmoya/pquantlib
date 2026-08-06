@@ -898,3 +898,15 @@ foreach(area
     add_executable(v143_math_${area}_probe v143_math_${area}/probe.cpp)
     target_link_libraries(v143_math_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
 endforeach()
+
+# === v1.43 experimental subsystem coverage ==================================
+# Each emits references/v143/experimental/<area>.json (generate-references.sh
+# turns underscores in the target name into slashes).
+
+# experimental/math swarm optimizers: the PSO Inertia/Topology strategy family
+# (AdaptiveInertia, LevyFlightInertia, ClubsTopology) and the FireflyAlgorithm
+# RandomWalk family (DecreasingGaussianWalk), plus the <random> primitives they
+# consume (std::mt19937 + uniform_int/uniform_real/normal distributions), which
+# have to be pinned in isolation because they are implementation-defined.
+add_executable(v143_experimental_pso_probe v143_experimental_pso/probe.cpp)
+target_link_libraries(v143_experimental_pso_probe PRIVATE ${QUANTLIB_LIBRARY})

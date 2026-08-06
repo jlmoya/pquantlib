@@ -16,33 +16,26 @@ implementation (and this port) allow.
 Random variates are produced by inverse transform:
 :math:`x = x_m\\, u^{-1/\\alpha}` for :math:`u \\sim U(0, 1)`.
 
-Divergence (documented): the C++ ``operator()(Engine&)`` draws ``u``
-from ``std::uniform_real_distribution<Real>(0,1)(eng)`` over a
-``std::mt19937`` engine. PQuantLib drives the inverse transform off a
-``MersenneTwisterUniformRng`` (the QuantLib MT wrapper, whose
-``next_real()`` is bit-identical to C++ ``mt.nextReal()``). The
-*transform* ``xm * u^{-1/alpha}`` is identical on both sides; only the
-uniform-draw source differs from ``std::mt19937`` — a deliberate choice
-because the IsotropicRandomWalk / firefly consumers in QuantLib already
-mix QuantLib-MT and std::mt19937 streams, and PQuantLib standardises on
-the QuantLib MT throughout this cluster for reproducibility.
+The C++ ``operator()(Engine&)`` draws ``u`` from
+``std::uniform_real_distribution<Real>(0,1)(eng)`` over a
+``std::mt19937``. That is **two** engine words combined by
+``generate_canonical``, not QuantLib's one-word ``nextReal``, so the
+uniform source is part of the contract and not an implementation
+detail: driving the same transform off a QuantLib ``nextReal`` produces
+a different sequence. The port therefore takes a
+:class:`~pquantlib.experimental.math.std_random.StdMt19937` and goes
+through :class:`~pquantlib.experimental.math.std_random.StdUniformRealDistribution`,
+which reproduces the C++ stream exactly (cross-validated in
+``migration-harness/references/v143/experimental/pso.json``, block B).
 """
 
 from __future__ import annotations
 
-from typing import Protocol
-
 from pquantlib import qassert
-
-
-class _UniformEngine(Protocol):
-    """Structural type for a uniform source exposing ``next_real()``.
-
-    ``MersenneTwisterUniformRng`` satisfies this; the inverse transform
-    only needs a uniform draw in (0, 1).
-    """
-
-    def next_real(self) -> float: ...
+from pquantlib.experimental.math.std_random import (
+    StdMt19937,
+    StdUniformRealDistribution,
+)
 
 
 class LevyFlightDistribution:
@@ -59,12 +52,13 @@ class LevyFlightDistribution:
         Tail exponent (must be > 0). Default 1.0.
     """
 
-    __slots__ = ("_alpha", "_xm")
+    __slots__ = ("_alpha", "_uniform", "_xm")
 
     def __init__(self, xm: float = 1.0, alpha: float = 1.0) -> None:
         qassert.require(alpha > 0.0, "alpha must be larger than 0")
         self._xm: float = xm
         self._alpha: float = alpha
+        self._uniform: StdUniformRealDistribution = StdUniformRealDistribution(0.0, 1.0)
 
     @property
     def xm(self) -> float:
@@ -93,15 +87,12 @@ class LevyFlightDistribution:
             return 0.0
         return self._alpha * (self._xm / x) ** self._alpha / x
 
-    def __call__(self, rng: _UniformEngine) -> float:
-        """Draw a random variate via inverse transform off ``rng``.
+    def __call__(self, engine: StdMt19937) -> float:
+        """Draw a random variate via inverse transform off ``engine``.
 
         # C++ parity: ``template<class Engine> operator()(Engine&)``
-        # levyflightdistribution.hpp:128-132 — ``xm * u^{-1/alpha}``.
-
-        ``rng`` must expose ``next_real() -> float`` returning a uniform
-        in (0, 1) (e.g. ``MersenneTwisterUniformRng``). See the module
-        docstring for the uniform-source divergence note.
+        # levyflightdistribution.hpp:128-131 — ``xm * u^{-1/alpha}`` with
+        # ``u`` from ``std::uniform_real_distribution<Real>(0,1)``.
         """
-        u = rng.next_real()
+        u = self._uniform(engine)
         return self._xm * u ** (-1.0 / self._alpha)
