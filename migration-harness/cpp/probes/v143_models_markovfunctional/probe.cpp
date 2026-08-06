@@ -210,6 +210,45 @@ namespace {
             num(mf.zerobond(T, 0.0, 0.0));
             out << "}";
         }
+        out << "\n    ],\n";
+
+        // stateProcess_->stdDeviation is the ONLY thing the calibration reads
+        // off the state process: deflatedZerobondArray (markovfunctional.cpp:
+        // 751-754) takes stdDeviation(0,0,t), stdDeviation(0,0,T) and
+        // stdDeviation(t,0,T-t) and forms the conditioning state
+        //     ya[i] = (y[j] * stdDev_0_t + stdDev_t_T * x_i) / stdDev_0_T .
+        //
+        // And that process is an MfStateProcess (markovfunctional.cpp:214-215),
+        // i.e. the driftless dx = sigma(t) e^{a t} dW whose variance over
+        // [t0, t0+dt] is \int sigma(u)^2 e^{2 a u} du (mfstateprocess.cpp:76-114)
+        // — NOT a GSR / Ornstein-Uhlenbeck process, whose variance is
+        // \int sigma(u)^2 e^{-2 a (t0+dt-u)} du. The two std devs differ by a
+        // factor e^{a (t0+dt)}, which at a = 0.01 over these horizons is a
+        // 1% to 14% difference, so pinning these numbers pins the CHOICE of
+        // process and not merely its parameters. A port that reached for a GSR
+        // process here would miss these by 1e-2, and would miss the numeraire
+        // surface above by ~1e-3 in a pattern that looks nothing like a wrong
+        // process — it is invisible at the first calibrated row and compounds
+        // backwards from the second.
+        const Real tN = mf.numeraireTime();
+        const std::pair<Real, Real> sdArgs[] = {
+            {0.0, 1.0},      {0.0, 2.0},      {0.0, 3.0},      {0.0, tN},
+            {1.0, tN - 1.0}, {2.0, tN - 2.0}, {3.0, tN - 3.0},
+        };
+        out << "    \"state_process_std_dev\": [\n";
+        first = true;
+        for (const auto& a : sdArgs) {
+            if (!first)
+                out << ",\n";
+            first = false;
+            out << "      {\"t0\": ";
+            num(a.first);
+            out << ", \"dt\": ";
+            num(a.second);
+            out << ", \"value\": ";
+            num(mf.stateProcess()->stdDeviation(a.first, 0.0, a.second));
+            out << "}";
+        }
         out << "\n    ]\n";
         out << "  }";
     }

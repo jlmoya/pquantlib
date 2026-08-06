@@ -39,11 +39,13 @@ Quote-wrapped lognormal volatility for that expiry. The
 the calibration-expiry grid (matching the C++ "smile step dates ==
 swaption expiries" convention seen in the test suite).
 
-State process: a ``Gaussian1dGsrProcess`` (delegating to ``GsrProcess``)
-matching the convention of the existing ``Gsr`` model. The forward
-measure horizon ``T_fwd`` is set internally to the last calibration
-payment date — equivalently, the discount-bond ``P(t, T_fwd | y)`` is
-the model's numeraire.
+State process: an ``MfStateProcess``, as C++ builds at
+markovfunctional.cpp:214-215 — the driftless ``dx = sigma(t) e^{a t} dW``,
+which is NOT the same process as the GSR/Ornstein-Uhlenbeck one used by
+the ``Gsr`` model and does not differ from it by a reparametrisation. See
+the note at the construction site for the arithmetic. The numeraire is
+the discount bond ``P(t, T_fwd | y)`` maturing at the last calibration
+payment date.
 
 Carve-outs (documented inline below):
 
@@ -62,9 +64,19 @@ Carve-outs (documented inline below):
 - ``arbitrageIndices`` / ``forceArbitrageIndices`` — only meaningful
   with Kahale pretreatment; deferred along with it.
 - ``Gauss-Hermite`` integration uses ``numpy.polynomial.hermite.hermgauss``
-  rather than QL's hand-rolled ``GaussHermiteIntegration`` — the
-  underlying recursion is the same (Golub-Welsch), so the resulting
-  nodes/weights match QL to TIGHT.
+  rather than QL's hand-rolled ``GaussHermiteIntegration``. Both are
+  Golub-Welsch, but they are not bit-identical. Measured at n = 16, the
+  effective nodes agree to 3.9e-15 relative and the effective weights to
+  8.6e-14 relative, bar the two largest nodes (2.4e-13 and 2.7e-11
+  relative on weights of 1.3e-7 and 1.5e-10, i.e. 3e-20 and 4e-21
+  absolute). Because C++ round-trips its weights through ``w * e^{x^2}``
+  and back, its effective weights sum to 1.0000000000000431 where this
+  port's sum to 0.9999999999999998; C++ is the less accurate of the two and
+  this port inherits the gap as its error, because C++ is the oracle. That
+  ~4e-14 per row is what is left of the MarkovFunctional cross-validation
+  residual (<= 2.7e-13 on the numeraire surface once it compounds through
+  the backward sweep) and it is the floor until QL's own Golub-Welsch is
+  transcribed.
 """
 
 from __future__ import annotations
@@ -460,14 +472,36 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         # Gauss-Hermite nodes + weights normalized for integration
         # against the standard normal density:
         #   E[g(Y)] = (1 / sqrt(pi)) * sum w_i * g(x_i * sqrt(2))
-        # where (x_i, w_i) are numpy.polynomial.hermite.hermgauss roots
-        # for \int exp(-x^2) f(x) dx ≈ sum w_i f(x_i).
         #
-        # Divergence from C++: the C++ uses QL's GaussHermiteIntegration
-        # which returns *bare* quadrature weights (no exp(-x^2)
-        # folded in), then multiplies them by exp(-x^2) / sqrt(pi).
-        # numpy's hermgauss already folds exp(-x^2) in, so we only
-        # divide by sqrt(pi).
+        # The two libraries state the SAME quadrature in two conventions, and
+        # the conversion cancels exactly:
+        #
+        #   numpy.polynomial.hermite.hermgauss returns (x, w) for
+        #       \int f(x) e^{-x^2} dx  ~  sum w_i f(x_i)
+        #   i.e. the Gaussian factor is accounted for BY the weights.
+        #
+        #   QL's GaussHermiteIntegration divides that factor back out —
+        #   gaussianquadratures.cpp:59 is
+        #       w_[i] = mu_0 * ev[0][i]^2 / orthPoly.w(x_[i])
+        #   with orthPoly.w(x) = e^{-x^2} for the Hermite polynomial — so its
+        #   weights are for  \int f(x) dx  with f expected to carry its own
+        #   e^{-x^2} decay, and they equal numpy's times e^{x^2}.
+        #
+        # markovfunctional.cpp:146-150 then multiplies QL's weights by
+        # e^{-x^2} / sqrt(pi), landing back on numpy's w / sqrt(pi), which is
+        # what this port uses directly.
+        #
+        # The cancellation is algebraic, not numerical: C++ round-trips
+        # through w * e^{x^2} * e^{-x^2} on nodes where e^{x^2} is ~3.5e9, so
+        # its effective weights sum to 1.0000000000000431 where this port's
+        # sum to 0.9999999999999998. C++ is the less accurate side and this
+        # port inherits the difference as its error, because C++ is the
+        # oracle. Measured at n = 16, the two effective quadratures agree to
+        # 3.9e-15 relative on nodes and 8.6e-14 on weights (see the module
+        # docstring for the two outliers, both on nodes whose weight is below
+        # 1.3e-7). That is the residual of the MarkovFunctional
+        # cross-validation, and it is NOT of a size that can produce anything
+        # visible at LOOSE.
         nodes, weights = np.polynomial.hermite.hermgauss(self._settings.gauss_hermite_points)
         nodes_scaled = nodes * math.sqrt(2.0)
         weights_scaled = weights / math.sqrt(math.pi)

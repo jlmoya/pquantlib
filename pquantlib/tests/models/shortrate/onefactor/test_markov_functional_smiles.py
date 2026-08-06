@@ -39,35 +39,53 @@ would agree only to solver tolerance and would hide a threading error
 underneath that noise. What is under test is that the branch is taken and the
 arguments reach it, so both sides compute the same exact function.
 
-KNOWN FAILING — read before "fixing" it
----------------------------------------
+Why these three used to fail, and what it turned out to be
+----------------------------------------------------------
 ``test_baseline_1y``, ``test_shifted_lognormal_smile`` and ``test_custom_smile``
-currently FAIL at LOOSE, and are deliberately left failing rather than given a
-fitted tolerance or an xfail. The measured relative error profile, with the
-back-fill confound eliminated (both sides calibrate the same 3 points and reach
-the same numeraire date, asserted above):
+failed at LOOSE for a long time and were deliberately left failing rather than
+given a fitted tolerance or an xfail. The error profile was:
 
     t = 0   rel = 0            exact, all three configurations
-    t = 3   rel ~ 1e-7 .. 1e-6 the FIRST row calibrated, from the curve alone
+    t = 3   rel ~ 1e-7 .. 1e-6
     t = 2   rel ~ 1e-6 .. 4e-4
     t = 1   rel ~ 4e-6 .. 9e-4
 
-That is the signature of a small systematic difference seeded in the first
-calibrated row and amplified by the backward sweep, not of round-off. Two
-causes have already been found and fixed and are NOT it:
+The cause was the state process. C++ builds an ``MfStateProcess``
+(markovfunctional.cpp:214-215); the port built a GSR/Ornstein-Uhlenbeck one,
+which is a different process, not a reparametrisation — see
+``test_the_state_process_is_mf_and_not_a_gsr_process``. Fixing it took the
+whole surface to <= 2.7e-13 relative, four orders inside LOOSE.
 
-* the omitted back-fill loop (markovfunctional.cpp:169-203) — still present as
-  a defect, but it is inert at this tenor, which is why this configuration was
-  chosen; see ``test_backfill_gap_is_exactly_this_big``;
-* the wrong cubic configuration — the port used a natural spline where C++ uses
-  ``Spline, monotonic=true, Lagrange/Lagrange`` (markovfunctional.cpp:221-223
-  and :478-482). Fixed in ``_mf_cubic``; it moved the numbers by ~4e-14, so it
-  was not the driver either.
+Two things the profile *looked* like and was not, recorded so they are not
+re-investigated:
 
-The prime remaining suspect is the module docstring's claim that
-``numpy.polynomial.hermite.hermgauss`` "matches QL to TIGHT" — a 1e-7 residual
-in the first calibrated row is what a quadrature difference would look like,
-and that claim has not been verified against ``GaussHermiteIntegration``.
+* it was NOT seeded in the first calibrated row. ``t = 3`` in the table is not
+  a calibrated row: the calibration times are 1.0, 2.0055 and 3.0027, so
+  ``numeraire(3.0, y)`` is the reciprocal interpolation of
+  markovfunctional.cpp:731-732 across the bracket [2.0055, 3.0027], putting
+  weight 0.99726/(0.99452 + 0.00274) ~ 0.9973 on row 3 and ~0.0027 on row 2.
+  The 1e-7 there was 0.0027 x the 1e-4 of row 2, sign pattern included
+  (measured: 2.581e-7 / 9.579e-5 = 0.0027). The
+  genuinely first calibrated row is exact to ~1e-14, and necessarily so: at
+  that row the last numeraire row is still all ones and its payment time IS
+  the numeraire time, so ``deflatedZerobondArray`` collapses to the bare sum of
+  the quadrature weights and cannot see the state process at all. That is also
+  why a wrong state process hides completely in the first row and only appears
+  from the second one backwards.
+* it was NOT Gauss-Hermite. QL's ``GaussHermiteIntegration`` and numpy's
+  ``hermgauss`` agree to 3.9e-15 relative on the effective nodes and 8.6e-14
+  on the effective weights, bar the two largest nodes (2.4e-13 and 2.7e-11
+  relative on weights of 1.3e-7 and 1.5e-10, i.e. 3e-20 and 4e-21 absolute).
+  That difference is what the residual 2.7e-13 is made of, and it is this
+  model's floor until QL's own Golub-Welsch is transcribed. Nine orders of
+  magnitude too small to have been the 1e-4.
+
+Two earlier fixes that were also not the driver: the omitted back-fill loop
+(markovfunctional.cpp:169-203 — still a defect, but inert at this tenor, which
+is why this configuration was chosen; see
+``test_backfill_gap_is_exactly_this_big``) and the cubic configuration (the
+port used a natural spline where C++ uses ``Spline, monotonic=true,
+Lagrange/Lagrange``; worth ~4e-14).
 """
 
 from __future__ import annotations
@@ -88,12 +106,13 @@ from pquantlib.models.shortrate.onefactor.markov_functional import (
     MarkovFunctionalSettings,
 )
 from pquantlib.patterns.observable_settings import ObservableSettings
+from pquantlib.processes.mf_state_process import MfStateProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.volatility.smile_section import SmileSection
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.reference_reader import load as load_reference
-from pquantlib.testing.tolerance import loose
+from pquantlib.testing.tolerance import loose, tight
 from pquantlib.time.calendars.target import TARGET
 from pquantlib.time.date import Date
 from pquantlib.time.period import Period
@@ -101,6 +120,7 @@ from pquantlib.time.time_unit import TimeUnit
 
 _REF: Final[dict[str, Any]] = load_reference("v143/models/markovfunctional")
 _TODAY: Final[Date] = Date(int(_REF["today_serial"]))
+_REVERSION: Final[float] = 0.01
 
 
 @pytest.fixture(autouse=True)
@@ -163,7 +183,7 @@ def _build(section: dict[str, Any]) -> MarkovFunctional:
     )
     return MarkovFunctional(
         term_structure=yts,
-        reversion=0.01,
+        reversion=_REVERSION,
         volatility=[0.01, 0.01, 0.01, 0.01],
         smile_step_dates=swaption_expiries,
         swap_indexes=[swap_idx, swap_idx, swap_idx],
@@ -259,6 +279,47 @@ def test_custom_smile_requires_a_factory() -> None:
             swaption_volatilities=[SimpleQuote(0.20)],
             settings=MarkovFunctionalSettings(custom_smile=True),
         )
+
+
+def test_the_state_process_is_mf_and_not_a_gsr_process() -> None:
+    """Pin the process itself, not just the surface it moves.
+
+    ``MarkovFunctional`` reads its state process in exactly one place: the
+    three standard deviations of ``deflatedZerobondArray``
+    (markovfunctional.cpp:751-754), which form the conditioning state
+
+        ya[i] = (y[j] * stdDev_0_t + stdDev_t_T * x_i) / stdDev_0_T .
+
+    C++ builds that process at markovfunctional.cpp:214-215 as an
+    ``MfStateProcess`` — the driftless ``dx = sigma(t) e^{a t} dW`` with
+    variance ``\\int sigma(u)^2 e^{2 a u} du`` (mfstateprocess.cpp:76-114).
+    This port used to build a GSR/Ornstein-Uhlenbeck process instead, whose
+    variance is ``\\int sigma(u)^2 e^{-2 a (t0+dt-u)} du``. Writing
+    ``A(t) = \\int_0^t sigma^2 e^{2 a u} du``, the two std devs are related by
+    ``sd_gsr(t0, dt) = e^{-a (t0+dt)} sd_mf(t0, dt)``, so the substitution
+    rescales the y-coefficient of ``ya`` by ``e^{a (T - t)}`` while leaving
+    the x-coefficient alone — a pure stretch of the conditioning state that
+    is invisible in the first calibrated row and compounds backwards from
+    there.
+
+    The values are C++'s, at TIGHT. The final assertion checks the pin is not
+    vacuous: the GSR counterpart of each number misses it by at least 0.5%
+    relative — five orders of magnitude outside LOOSE, never mind TIGHT.
+    """
+    section = _REF["baseline_1y"]
+    model = _build(section)
+    process = model.state_process()
+    assert isinstance(process, MfStateProcess)
+
+    for row in section["state_process_std_dev"]:
+        t0, dt = float(row["t0"]), float(row["dt"])
+        tight(
+            process.std_deviation_1d(t0, 0.0, dt),
+            row["value"],
+            reason=f"stdDeviation(t0={t0}, dt={dt})",
+        )
+        gsr_would_give = row["value"] * math.exp(-_REVERSION * (t0 + dt))
+        assert abs(gsr_would_give - row["value"]) / row["value"] > 5e-3
 
 
 def test_backfill_gap_is_exactly_this_big() -> None:
