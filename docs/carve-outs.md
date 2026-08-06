@@ -146,11 +146,12 @@ Still deferred (covered elsewhere in Phase 11 plan):
 - **PartialTimeBarrier**: barrier active only over a sub-period — Heynen-Kat formulas.
 - **SoftBarrier**: Hart-Ross / Carr formulas.
 - **HolderExtensibleOption**: holder can extend expiry by paying premium.
-- **ComplexChooserOption**: option to choose option type at an intermediate date.
+- ~~**ComplexChooserOption**: option to choose option type at an intermediate date.~~ **CLOSED (v1.43 coverage wave 5.)** `ComplexChooserOption` (`instruments/complex_chooser_option.py`) + `AnalyticComplexChooserEngine` (`pricingengines/exotic/`).
 - **CompoundOption** (Geske 1979).
 - **3+ asset baskets**: Stulz (L5-E) covers 2-asset; 3+ asset basket engines require multi-D bivariate normal.
 - **`DoubleBarrierOption.implied_volatility`**: same pattern as Phase 3 `VanillaOption.implied_volatility` — needs the FD engine for double-barrier (deferred multi-asset FD).
 - **AnalyticContinuousFixedLookbackEngine**: floating-strike lookback. (Floating-rate lookback is supported via L5-E.)
+- ~~**Partial-time lookbacks**~~ **CLOSED (v1.43 coverage wave 5.)** `ContinuousPartialFloatingLookbackOption` + `ContinuousPartialFixedLookbackOption` (`instruments/lookback_option.py`) + their two analytic engines (`pricingengines/lookback/`). Closing them required giving the bivariate normal CDF its closed form at |rho| = 1, which both engines reach.
 
 **Why deferred:** Each is closed-form but uses bespoke bivariate / trivariate normal CDF combinations. The Reiner-Rubinstein barrier framework (L5-E) covers the standard single-barrier cases.
 
@@ -160,7 +161,7 @@ Still deferred (covered elsewhere in Phase 11 plan):
 
 - **DigitalCoupon / DigitalIborCoupon / DigitalCmsCoupon**: coupon types with embedded digital options.
 - **CmsCoupon / CmsSpreadCoupon**: CMS-rate-indexed coupons (need swap rate forecasting + convexity adjustment).
-- **AverageBmaCoupon**: BMA-index-averaged coupon.
+- **AverageBmaCoupon**: BMA-index-averaged coupon. *(Stale: `AverageBMACoupon` has been present in `cashflows/average_bma_coupon.py` since W12; `AverageBMALeg` landed in v1.43 coverage wave 5.)*
 - **CapFlooredCoupon / CapFlooredOvernightIndexedCoupon**: coupons with cap/floor embedded.
 
 **Why deferred:** Specialized; each requires a corresponding pricer that involves convexity adjustments or option-replication. The base Coupon + Pricer infrastructure (L2-D) supports adding these as needed.
@@ -334,3 +335,68 @@ pquantlib's `JamshidianSwaptionEngine` → `OneFactorAffineModel.discount_bond`
 path has a multi-factor signature issue (`'float' object is not subscriptable`)
 that surfaces during calibration; the tree-engine calibration path is exercised
 instead (matching the C++ HW2 / Black-Karasinski legs). Small core follow-up.
+
+---
+
+## v1.43 coverage wave 5 — `instruments` + `cashflows`
+
+Closed against the `migration-harness/check_coverage.py` gap list for those two
+subsystems. `cashflows` went 30 unflagged -> 0; `instruments` went 56 -> the
+allowlist candidates below.
+
+**cashflows:** `MultipleResetsCoupon` + its three pricers + `MultipleResetsLeg`;
+`RangeAccrualFloatersCoupon` + `RangeAccrualPricer` + `RangeAccrualPricerByBgm` +
+`RangeAccrualLeg`; `LinearTsrPricer` + `PriceHelper` + `VegaRatioHelper`;
+`BlackAveragingOvernightIndexedCouponPricer` +
+`BlackCompoundingOvernightIndexedCouponPricer`; `TimeBasket`; `EquityCashFlow` +
+`EquityCashFlowPricer` + `EquityQuantoCashFlowPricer`; the eight chained leg
+builders (`FixedRateLeg`, `IborLeg`, `OvernightLeg`, `CmsLeg`, `CPILeg`,
+`DigitalIborLeg`, `DigitalCmsLeg`, `AverageBMALeg`); `CashFlows::IrrFinder`; and
+the conundrum pricer's nested `Function` / `ObjectiveFunction`.
+
+**instruments:** the sticky/ratchet payoff family; `MargrabeOption`;
+`ComplexChooserOption`; `VanillaForwardPayoff`; the quanto family
+(`QuantoOptionResults`, `QuantoVanillaOption`, `QuantoForwardVanillaOption`,
+`QuantoBarrierOption`); the partial-time lookbacks; `VarianceSwap`; `Stock`;
+`CompositeInstrument`; `FaceValueAccrualClaim`; `ImpliedVolatilityHelper`;
+`EquityTotalReturnSwap`; `AssetSwap`; `BMASwap`; `OvernightIndexFuture`;
+`PerpetualFutures`; the `instruments/bonds` batch; and the `Make*` builders.
+
+**Prerequisites pulled in from outside those two subsystems** (each in its own
+commit): `EquityIndex`; `QuantoTermStructure`; `ImpliedVolTermStructure`;
+`GaussKronrodNonAdaptive`; `SmileSection.vega`; `LazyObject.deepUpdate` /
+`isCalculated`; and the engines without which the new instruments would not
+price — `AnalyticEuropeanMargrabeEngine`, `AnalyticAmericanMargrabeEngine`,
+`AnalyticComplexChooserEngine`, `QuantoEngine`, `ForwardVanillaEngine`,
+`AnalyticContinuousPartialFixedLookbackEngine`,
+`AnalyticContinuousPartialFloatingLookbackEngine`,
+`ReplicatingVarianceSwapEngine`.
+
+### Allowlist candidates (reported, not applied)
+
+Name-match false positives of `check_coverage.py`, all in `instruments`:
+
+| C++ name | header | why |
+|---|---|---|
+| `Average` | `averagetype.hpp` | `struct` holding only `enum Type`; flattened to `AverageType` |
+| `Barrier` | `barriertype.hpp` | same; flattened to `BarrierType` |
+| `DoubleBarrier` | `doublebarriertype.hpp` | same; flattened to `DoubleBarrierType` |
+| `PartialBarrier` | `partialtimebarrieroption.hpp` | same; flattened to `PartialBarrierRange` |
+| `Futures` | `futures.hpp` | same; flattened to `FuturesType` |
+| `Settlement` | `swaption.hpp` | `struct` holding two enums; flattened to `SettlementType` + `SettlementMethod` |
+| `Price` | `bond.hpp` | nested `Bond::Price`; flattened to `BondPrice` + `BondPriceType` |
+| `StickyRatchetPayoff` | `stickyratchet.hpp` | declared only inside the commented-out block at the foot of the header and the .cpp, which C++ itself labels "Old code ... superated by DoubleStickyRatchetPayoff" |
+| `RatchetPayoff_2` | `stickyratchet.hpp` | same commented-out block |
+| `StickyPayoff_2` | `stickyratchet.hpp` | same commented-out block |
+
+### Upstream C++ v1.43 defects reproduced rather than repaired
+
+* `RangeAccrualLeg::operator Leg()` (`rangeaccrual.cpp:643`) returns `2n` entries
+  of which the first `n` are null `shared_ptr`s. Nothing in QuantLib uses the
+  class, which is why it survived.
+* `LinearTsrPricer`'s `PriceThreshold` strategy is inert: `lineartsrpricer.cpp:283`
+  passes `vegaRatio_` instead of `priceThreshold_`, and `strikeFromPrice` hands
+  `Brent` a guess that is also one end of its own bracket, so the solve always
+  throws into a blanket `catch (...)`. The strategy collapses onto `RateBound`.
+
+Both are pinned as such, so a port that "helpfully fixed" either would fail.

@@ -850,3 +850,122 @@ target_link_libraries(currencies_all_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/currencies/exchangerate.json.
 add_executable(currencies_exchangerate_probe currencies_exchangerate/probe.cpp)
 target_link_libraries(currencies_exchangerate_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === coverage wave 5: cashflows ===
+# One probe per cluster of C++ v1.43 cashflows classes PQuantLib lacked.
+# Each pins not just a headline number but the structure that produced it —
+# for a coupon: nominal, accrual start/end, accrual period, rate and amount —
+# so that two cancelling errors cannot both hide behind a matching total.
+
+# MultipleResetsCoupon + MultipleResetsPricer + Averaging/Compounding
+# variants + MultipleResetsLeg (ql/cashflows/multipleresetscoupon.hpp).
+add_executable(v143_cf_multipleresets_probe v143_cf_multipleresets/probe.cpp)
+target_link_libraries(v143_cf_multipleresets_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# RangeAccrualFloatersCoupon + RangeAccrualPricer + RangeAccrualPricerByBgm
+# + RangeAccrualLeg (ql/cashflows/rangeaccrual.hpp).
+add_executable(v143_cf_rangeaccrual_probe v143_cf_rangeaccrual/probe.cpp)
+target_link_libraries(v143_cf_rangeaccrual_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# LinearTsrPricer + its nested PriceHelper / VegaRatioHelper strike-solving
+# helpers (ql/cashflows/lineartsrpricer.hpp).
+add_executable(v143_cf_lineartsr_probe v143_cf_lineartsr/probe.cpp)
+target_link_libraries(v143_cf_lineartsr_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# BlackAveragingOvernightIndexedCouponPricer +
+# BlackCompoundingOvernightIndexedCouponPricer
+# (ql/cashflows/blackovernightindexedcouponpricer.hpp).
+add_executable(v143_cf_blackovernight_probe v143_cf_blackovernight/probe.cpp)
+target_link_libraries(v143_cf_blackovernight_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# The chained leg builders: FixedRateLeg, IborLeg, OvernightLeg, CmsLeg,
+# CPILeg, DigitalIborLeg, DigitalCmsLeg, AverageBMALeg. Every optional
+# setter is exercised with a non-default value and the resulting coupons
+# are emitted in full, so a silently-dropped setter fails the reference.
+add_executable(v143_cf_legs_probe v143_cf_legs/probe.cpp)
+target_link_libraries(v143_cf_legs_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# TimeBasket (ql/cashflows/timebasket.hpp) — the date-keyed cash-flow
+# bucket with its rebin() redistribution.
+add_executable(v143_cf_timebasket_probe v143_cf_timebasket/probe.cpp)
+target_link_libraries(v143_cf_timebasket_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# EquityCashFlow + EquityCashFlowPricer + EquityQuantoCashFlowPricer
+# (ql/cashflows/equitycashflow.hpp), together with the EquityIndex they
+# are defined against (ql/indexes/equityindex.hpp).
+add_executable(v143_cf_equitycashflow_probe v143_cf_equitycashflow/probe.cpp)
+target_link_libraries(v143_cf_equitycashflow_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === coverage wave 5: instruments ===
+
+# MargrabeOption (exchange option, Margrabe 1978) + ComplexChooserOption
+# + VanillaForwardPayoff, together with their analytic engines.
+add_executable(v143_inst_margrabechooser_probe v143_inst_margrabechooser/probe.cpp)
+target_link_libraries(v143_inst_margrabechooser_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# The quanto family: QuantoOptionResults, QuantoVanillaOption,
+# QuantoForwardVanillaOption, QuantoBarrierOption and the QuantoEngine
+# decorator that produces qvega / qrho / qlambda.
+add_executable(v143_inst_quanto_probe v143_inst_quanto/probe.cpp)
+target_link_libraries(v143_inst_quanto_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# ContinuousPartialFixedLookbackOption + ContinuousPartialFloatingLookbackOption
+# + VarianceSwap, with their analytic / replicating engines.
+add_executable(v143_inst_lookbackvarswap_probe v143_inst_lookbackvarswap/probe.cpp)
+target_link_libraries(v143_inst_lookbackvarswap_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# CashFlows::IrrFinder — the nested solver objective behind CashFlows::yield.
+# The class is private, so it is probed through the public yield(): its value,
+# its NewtonSafe-with-derivative solve path, and its constructor-time
+# checkSign guard (which PQuantLib was missing entirely).
+add_executable(v143_cf_irr_probe v143_cf_irr/probe.cpp)
+target_link_libraries(v143_cf_irr_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# The sticky/ratchet payoff family (ql/instruments/stickyratchet.hpp):
+# DoubleStickyRatchetPayoff plus the six named specialisations, each of which
+# is nothing but a particular (type1, type2, gearing, spread) preset — so the
+# probe sweeps forwards through every branch of the nested max().
+add_executable(v143_inst_stickyratchet_probe v143_inst_stickyratchet/probe.cpp)
+target_link_libraries(v143_inst_stickyratchet_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# instruments/bonds, part 1: the coupon-driven concretes —
+# CmsRateBond, AmortizingCmsRateBond, AmortizingFloatingRateBond, CPIBond.
+add_executable(v143_inst_bondsamort_probe v143_inst_bondsamort/probe.cpp)
+target_link_libraries(v143_inst_bondsamort_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# instruments/bonds, part 2: the Italian government-bond family —
+# BTP, CCTEU, RendistatoBasket, RendistatoCalculator and the two
+# Rendistato-derived quotes — plus ConvertibleFloatingRateBond.
+add_executable(v143_inst_bondsbtp_probe v143_inst_bondsbtp/probe.cpp)
+target_link_libraries(v143_inst_bondsbtp_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# instruments odds and ends: Stock, CompositeInstrument,
+# FaceValueAccrualClaim, ImpliedVolatilityHelper, OvernightIndexFuture,
+# PerpetualFutures.
+add_executable(v143_inst_misc_probe v143_inst_misc/probe.cpp)
+target_link_libraries(v143_inst_misc_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# instruments swaps: AssetSwap and BMASwap.
+add_executable(v143_inst_swaps_probe v143_inst_swaps/probe.cpp)
+target_link_libraries(v143_inst_swaps_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# The Make* builder family, part 1 — swaps: MakeVanillaSwap, MakeOIS,
+# MakeCreditDefaultSwap, MakeMultipleResetsSwap (+ MultipleResetsSwap).
+# Every chained setter is exercised at a non-default value and the resulting
+# instrument is emitted in full, so a silently-dropped setter fails.
+add_executable(v143_inst_makeswaps_probe v143_inst_makeswaps/probe.cpp)
+target_link_libraries(v143_inst_makeswaps_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# The Make* builder family, part 2 — options: MakeCapFloor, MakeSwaption,
+# MakeCms, MakeYoYInflationCapFloor.
+add_executable(v143_inst_makeoptions_probe v143_inst_makeoptions/probe.cpp)
+target_link_libraries(v143_inst_makeoptions_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# EquityTotalReturnSwap (ql/instruments/equitytotalreturnswap.hpp) — the
+# equity-leg-vs-floating-leg swap, in both its Ibor and its OvernightIndex
+# flavour. Probed with a NON-ZERO payment delay, because the delay is
+# threaded through to withPaymentLag on the interest leg and to the equity
+# cash flow's payment date, and that is exactly the argument this port has
+# dropped before.
+add_executable(v143_inst_etrs_probe v143_inst_etrs/probe.cpp)
+target_link_libraries(v143_inst_etrs_probe PRIVATE ${QUANTLIB_LIBRARY})
