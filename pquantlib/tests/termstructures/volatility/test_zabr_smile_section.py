@@ -110,8 +110,15 @@ def test_gamma_one_reduces_to_sabr_short_maturity() -> None:
     tolerance.tight(section.volatility(0.05), expected_atm)
 
 
-def test_normal_arm_atm() -> None:
-    """Normal arm at ATM equals ``alpha * F^beta``."""
+def test_normal_arm_model_normal_vol_atm() -> None:
+    """The MODEL's normal vol at ATM equals ``alpha * F^beta``.
+
+    Note this is ``model().normal_volatility(K)``, not
+    ``section.volatility(K)``: C++ ``volatilityImpl(strike,
+    ZabrShortMaturityNormal)`` reports an implied *lognormal* vol backed
+    out of the Bachelier price (see
+    ``test_zabr_fd_smile_section.py::test_normal_arm_reports_implied_lognormal_not_normal_vol``).
+    """
     section = ZabrSmileSection(
         exercise_time=5.0,
         forward=0.05,
@@ -119,7 +126,7 @@ def test_normal_arm_atm() -> None:
         evaluation=ZabrEvaluation.ShortMaturityNormal,
     )
     expected = 0.04 * (0.05**0.5)
-    tolerance.tight(section.volatility(0.05), expected)
+    tolerance.tight(section.model().normal_volatility(0.05), expected)
 
 
 def test_zero_forward_raises() -> None:
@@ -165,16 +172,32 @@ def test_clamps_small_strike() -> None:
     tolerance.tight(v_clamped, v_floor)
 
 
-def test_fd_evaluation_mode_raises() -> None:
-    """Constructing a section with an FD evaluation mode is fine.
+def test_fd_evaluation_modes_are_supported() -> None:
+    """The FD modes price and quote vols; they no longer raise.
 
-    The exception only fires when ``volatility(K)`` is called.
+    Cross-validation of their values lives in
+    ``test_zabr_fd_smile_section.py``; this only guards against the
+    carve-out coming back.
     """
-    section = ZabrSmileSection(
-        exercise_time=5.0,
-        forward=0.05,
-        zabr_params=(0.04, 0.5, 0.4, -0.1, 0.75),
-        evaluation=ZabrEvaluation.LocalVolatility,
-    )
-    with pytest.raises(LibraryException, match="not implemented"):
-        section.volatility(0.05)
+    for mode in (ZabrEvaluation.LocalVolatility, ZabrEvaluation.FullFd):
+        section = ZabrSmileSection(
+            exercise_time=1.0,
+            forward=0.05,
+            zabr_params=(0.04, 0.5, 0.4, -0.1, 1.0),
+            evaluation=mode,
+            moneyness=[0.75, 1.0, 1.25],
+            fd_refinement=1,
+        )
+        assert section.volatility(0.05) > 0.0
+        assert section.option_price(0.05, 1, 1.0) > 0.0
+
+
+def test_projected_hedge_mode_rejected() -> None:
+    """``ProjectedHedge`` has no C++ v1.43 counterpart."""
+    with pytest.raises(LibraryException, match="no counterpart"):
+        ZabrSmileSection(
+            exercise_time=5.0,
+            forward=0.05,
+            zabr_params=(0.04, 0.5, 0.4, -0.1, 0.75),
+            evaluation=ZabrEvaluation.ProjectedHedge,
+        )

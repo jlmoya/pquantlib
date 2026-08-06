@@ -145,17 +145,27 @@ def test_atm_normal_closed_form() -> None:
         tolerance.tight(actual, expected)
 
 
-def test_fd_modes_raise() -> None:
-    """LocalVolatility / FullFd / ProjectedHedge raise LibraryException."""
-    for mode in (
-        ZabrEvaluation.LocalVolatility,
-        ZabrEvaluation.FullFd,
-        ZabrEvaluation.ProjectedHedge,
-    ):
-        with pytest.raises(LibraryException, match="not implemented"):
+def test_fd_modes_are_not_pointwise_formulas() -> None:
+    """LocalVolatility / FullFd are smile-section modes, not formulas.
+
+    They price a whole strike grid off a PDE and interpolate, so there is
+    nothing for a pointwise ``zabr_volatility(K, ...)`` to return; the
+    caller is redirected to ``ZabrSmileSection``.
+    """
+    for mode in (ZabrEvaluation.LocalVolatility, ZabrEvaluation.FullFd):
+        with pytest.raises(LibraryException, match="ZabrSmileSection"):
             zabr_volatility(
                 0.05, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 1.0, mode=mode,
             )
+
+
+def test_projected_hedge_mode_rejected() -> None:
+    """``ProjectedHedge`` has no counterpart in C++ QuantLib v1.43."""
+    with pytest.raises(LibraryException, match="no counterpart"):
+        zabr_volatility(
+            0.05, FORWARD, EXPIRY, ALPHA, BETA, NU, RHO, 1.0,
+            mode=ZabrEvaluation.ProjectedHedge,
+        )
 
 
 def test_negative_gamma_raises() -> None:
