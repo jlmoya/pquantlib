@@ -78,6 +78,17 @@ class BlackStyleCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]
             return self._vol.value()
         return float(self._vol)
 
+    def term_structure(self) -> YieldTermStructureProtocol:
+        """The discount curve this engine was built with.
+
+        # C++ parity: ``BlackCapFloorEngine::termStructure()`` /
+        # ``BachelierCapFloorEngine::termStructure()`` (blackcapfloorengine.hpp:52,
+        # bacheliercapfloorengine.hpp:50). ``MakeCapFloor`` reads it back off the
+        # engine to compute an ATM strike (makecapfloor.cpp:60-85), so the
+        # accessor is not optional.
+        """
+        return self._discount_curve
+
     @property
     def displacement(self) -> float:
         return self._displacement

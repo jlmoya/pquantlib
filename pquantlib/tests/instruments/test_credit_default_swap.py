@@ -6,6 +6,7 @@ Reference:    migration-harness/references/cluster/l8b.json (key: "cds_engine")
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -13,6 +14,7 @@ import pytest
 from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.instruments.credit_default_swap import CreditDefaultSwap, ProtectionSide
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.credit.integral_cds_engine import IntegralCdsEngine
 from pquantlib.pricingengines.credit.midpoint_cds_engine import MidPointCdsEngine
 from pquantlib.termstructures.credit.flat_hazard_rate import FlatHazardRate
@@ -38,6 +40,25 @@ def cpp_ref() -> dict[str, Any]:
 @pytest.fixture(scope="module")
 def ref_date() -> Date:
     return Date.from_ymd(15, Month.June, 2026)
+
+
+@pytest.fixture(autouse=True)
+def _eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date to the probe's.
+
+    The C++ probe sets ``Settings::instance().evaluationDate() = Date(15, June,
+    2026)`` (cluster_l8b/probe.cpp:64-65). Nothing here pinned the Python
+    equivalent, so the engines fell back to the machine's wall-clock date to
+    decide which premium flows had already occurred: the test passed only while
+    the real date was on or before 15 June 2026, or when an unrelated test
+    module happened to leave an evaluation date set before it ran. Past that
+    date, the early coupons drop out of the premium leg and both leg NPVs move
+    (~2.7% on the total). Pinning it makes the comparison against the probe
+    deterministic and order-independent.
+    """
+    ObservableSettings().evaluation_date = Date.from_ymd(15, Month.June, 2026)
+    yield
+    ObservableSettings().evaluation_date = None
 
 
 @pytest.fixture

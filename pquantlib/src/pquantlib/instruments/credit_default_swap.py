@@ -37,8 +37,7 @@ from typing import cast
 
 from pquantlib import qassert
 from pquantlib.cashflows.cash_flow import CashFlow
-from pquantlib.cashflows.fixed_rate_coupon import FixedRateCoupon
-from pquantlib.cashflows.fixed_rate_leg import fixed_rate_leg
+from pquantlib.cashflows.fixed_rate_coupon import FixedRateCoupon, FixedRateLeg
 from pquantlib.cashflows.simple_cash_flow import SimpleCashFlow
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.instruments.claim import Claim, FaceValueClaim
@@ -49,7 +48,10 @@ from pquantlib.pricingengines.pricing_engine import (
 )
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.date import Date
-from pquantlib.time.schedule import Schedule
+from pquantlib.time.date_generation import DateGeneration
+from pquantlib.time.month import Month
+from pquantlib.time.period import Period
+from pquantlib.time.schedule import Schedule, previous_twentieth
 from pquantlib.time.time_unit import TimeUnit
 
 
@@ -271,14 +273,23 @@ class CreditDefaultSwap(Instrument):
         # introspection. Skip the protection-start-vs-schedule-start
         # check, mirroring how the C++ default constructor handles missing
         # rule info. Per L8-B carve-out doc.
-        del last_period_day_counter  # not yet wired into fixed_rate_leg builder.
-        self._leg = fixed_rate_leg(
-            schedule=schedule,
-            nominals=[self._notional],
-            rates=[self._running_spread],
-            day_counter=day_counter,
-            payment_adjustment=payment_convention,
+        # C++ parity: creditdefaultswap.cpp:102-107 — the premium leg is a
+        # FixedRateLeg carrying ``withLastPeriodDayCounter``. That setter used
+        # to be accepted here and discarded ("not yet wired into fixed_rate_leg
+        # builder"); the builder class now exposes it, so it is threaded
+        # through. A ``None`` last-period day counter is C++'s empty
+        # DayCounter, i.e. "use the coupon rate's own", which is what the
+        # discarding code silently did — so default-argument callers are
+        # unaffected.
+        builder = (
+            FixedRateLeg(schedule)
+            .with_notionals([self._notional])
+            .with_coupon_rates([self._running_spread], day_counter)
+            .with_payment_adjustment(payment_convention)
         )
+        if last_period_day_counter is not None:
+            builder = builder.with_last_period_day_counter(last_period_day_counter)
+        self._leg = builder.build()
 
         # Deduce the trade date if not given (matches C++ creditdefaultswap.cpp:110-116).
         if self._trade_date == _NULL_DATE:
@@ -598,10 +609,67 @@ class CreditDefaultSwap(Instrument):
         )
 
 
+_QUARTER: Period = Period(3, TimeUnit.Months)
+_CDS_MATURITY_RULES: tuple[DateGeneration, ...] = (
+    DateGeneration.CDS2015,
+    DateGeneration.CDS,
+    DateGeneration.OldCDS,
+)
+_MONTHS_PER_QUARTER: int = 3
+_TWENTIETH: int = 20
+
+
+def cds_maturity(
+    trade_date: Date, tenor: Period, rule: DateGeneration
+) -> Date:
+    """Standard CDS maturity for a trade date and tenor.
+
+    # C++ parity: free function ``cdsMaturity`` (creditdefaultswap.hpp:361,
+    .cpp:479-503).
+
+    The maturity is the IMM/CDS twentieth on or before ``trade_date``, plus the
+    tenor, plus one quarter. Under ``CDS2015`` a 20-Dec or 20-Jun anchor rolls
+    back one quarter first (and a zero tenor then has no maturity at all, which
+    C++ signals with a null ``Date`` — reproduced here as ``Date()``).
+    """
+    qassert.require(
+        rule in _CDS_MATURITY_RULES,
+        "cdsMaturity should only be used with date generation rule "
+        "CDS2015, CDS or OldCDS",
+    )
+    qassert.require(
+        tenor.units == TimeUnit.Years
+        or (tenor.units == TimeUnit.Months and tenor.length % _MONTHS_PER_QUARTER == 0),
+        "cdsMaturity expects a tenor that is a multiple of 3 months.",
+    )
+    if rule == DateGeneration.OldCDS:
+        # C++ tests ``tenor != 0 * Months``; a C++ Period compares equal to any
+        # other zero-length Period regardless of unit, so test the length.
+        qassert.require(tenor.length != 0, "A tenor of 0M is not supported for OldCDS.")
+
+    anchor_date = previous_twentieth(trade_date, rule)
+    if rule == DateGeneration.CDS2015 and anchor_date in (
+        Date.from_ymd(_TWENTIETH, Month.December, anchor_date.year()),
+        Date.from_ymd(_TWENTIETH, Month.June, anchor_date.year()),
+    ):
+        if tenor.length == 0:
+            return _NULL_DATE
+        anchor_date = anchor_date - _QUARTER
+
+    maturity = anchor_date + tenor + _QUARTER
+    qassert.require(
+        maturity > trade_date,
+        f"error calculating CDS maturity. Tenor is {tenor}, trade date is "
+        f"{trade_date} generating a maturity of {maturity} <= trade date.",
+    )
+    return maturity
+
+
 __all__ = [
     "CreditDefaultSwap",
     "CreditDefaultSwapArguments",
     "CreditDefaultSwapResults",
     "PricingModel",
     "ProtectionSide",
+    "cds_maturity",
 ]

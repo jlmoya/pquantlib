@@ -1,6 +1,6 @@
-"""VanillaSwingOption — multi-exercise option with min/max-rights cap.
+"""VanillaSwingOption + VanillaForwardPayoff — swing instrument and its payoff.
 
-# C++ parity: ql/instruments/vanillaswingoption.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/instruments/vanillaswingoption.{hpp,cpp} (v1.43).
 
 A swing option is a Bermudan-style instrument granting the holder a
 range ``[min_exercise_rights, max_exercise_rights]`` of exercise
@@ -8,19 +8,51 @@ events across the swing-exercise date list. At each event the holder
 collects the underlying payoff (a :class:`StrikedTypePayoff`).
 
 Used by :class:`FdSimpleExtOUJumpSwingEngine` (W5-B scaffold).
+
+``VanillaForwardPayoff`` lives in the same C++ header, so it is kept in
+the same module here.  Note the *directory* divergence: C++ has this
+header under ``ql/instruments/`` while this port placed the swing option
+under ``experimental/finitedifferences/`` (next to the swing exercise
+and the FD swing engines that consume it).
 """
 
 from __future__ import annotations
+
+from typing import final
 
 from pquantlib import qassert
 from pquantlib.experimental.finitedifferences.swing_exercise import SwingExercise
 from pquantlib.instruments.instrument import Instrument
 from pquantlib.option import Option, OptionArguments
-from pquantlib.payoffs import StrikedTypePayoff
+from pquantlib.payoffs import OptionType, StrikedTypePayoff
 from pquantlib.pricingengines.pricing_engine import (
     PricingEngineArguments,
     PricingEngineResults,
 )
+
+
+@final
+class VanillaForwardPayoff(StrikedTypePayoff):
+    """Linear (unclamped) forward payoff: ``price - strike`` / ``strike - price``.
+
+    # C++ parity: ``VanillaForwardPayoff`` in
+    # ql/instruments/vanillaswingoption.{hpp,cpp}.
+
+    Unlike :class:`~pquantlib.payoffs.PlainVanillaPayoff` this payoff is
+    **not** floored at zero — a swing right on a forward contract is an
+    obligation, so an out-of-the-money exercise returns a negative
+    amount.
+    """
+
+    def name(self) -> str:
+        return "ForwardTypePayoff"
+
+    def __call__(self, price: float) -> float:
+        # C++ vanillaswingoption.cpp: `return price-strike_` (Call) /
+        # `return strike_-price` (Put) — no max(..., 0.0).
+        if self._option_type == OptionType.Call:
+            return price - self._strike
+        return self._strike - price
 
 
 class VanillaSwingOptionArguments(OptionArguments):
@@ -97,4 +129,8 @@ class VanillaSwingOption(Option):
         Instrument.fetch_results(self, results)
 
 
-__all__ = ["VanillaSwingOption", "VanillaSwingOptionArguments"]
+__all__ = [
+    "VanillaForwardPayoff",
+    "VanillaSwingOption",
+    "VanillaSwingOptionArguments",
+]

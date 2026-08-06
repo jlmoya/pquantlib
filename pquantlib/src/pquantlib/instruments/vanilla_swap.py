@@ -83,10 +83,12 @@ class VanillaSwap(FixedVsFloatingSwap):
         # ``set_coupon_pricer`` on ``floating_leg()`` if you want Black-vol
         # or any other pricer.
         #
-        # ``use_indexed_coupons`` has to reach the pricer, because that is
-        # where C++ keeps the flag (``IborLeg::operator Leg()`` hands it to
-        # the BlackIborCouponPricer it attaches, iborcoupon.cpp:288-294).
-        # ``None`` means "leave the default", i.e. par coupons.
+        # C++ parity: vanillaswap.cpp:30-53 — ``useIndexedCoupons`` reaches the
+        # floating leg (``IborLeg::withIndexedCoupons``). It was accepted here
+        # and dropped, so ``MakeVanillaSwap().withIndexedCoupons(true)`` and
+        # ``.withAtParCoupons(true)`` produced identical swaps. In this port the
+        # flag lives on the coupon pricer (see ``IborLeg.build``); C++'s
+        # ``ext::nullopt`` means "library default", which here is at-par.
         set_coupon_pricer(
             self._legs[1],
             IborCouponPricer(use_indexed_coupons=bool(use_indexed_coupons)),

@@ -8,7 +8,11 @@ Two rules:
   from QUADPACK's ``qng``: the 10-, 21-, 43- and 87-point rules are applied in
   succession, each reusing every function value its predecessor computed, and
   the first one whose error estimate meets either the absolute or the relative
-  accuracy wins. Fast for smooth integrands; it never subdivides.
+  accuracy wins. Fast for smooth integrands; it never subdivides. It is also
+  the default integrator of
+  :class:`~pquantlib.cashflows.linear_tsr_pricer.LinearTsrPricer`, which is
+  why bit-level parity with the C++ rule matters: substituting the adaptive
+  rule would move every CMS convexity adjustment.
 * :class:`GaussKronrodAdaptive` — the 15-point rule with G7 nested inside K15,
   bisecting the interval whenever the K15/G7 discrepancy exceeds the
   tolerance. More robust on less smooth integrands, but it recomputes every

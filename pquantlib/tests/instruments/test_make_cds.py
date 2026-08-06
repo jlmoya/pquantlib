@@ -211,14 +211,21 @@ def test_make_cds_npv_matches_manual_cds(eval_date_fixture: Date) -> None:
     )
     probability = FlatHazardRate.from_rate(eval_date, 0.02, dc365)
 
-    # Manual.
+    # Manual. The last-period day counter must be spelled out to match the
+    # factory: C++ ``MakeCreditDefaultSwap`` defaults it to ``Actual360(true)``
+    # (makecds.hpp:83) and threads it into ``FixedRateLeg::withLastPeriodDayCounter``
+    # (creditdefaultswap.cpp:102-107), so a manual CDS built with an *empty*
+    # last-period day counter genuinely prices differently — the final coupon
+    # accrues one extra day. This test read as equal only while the Python port
+    # discarded that setter; now that ``FixedRateLeg`` honours it, the two
+    # constructions have to be given the same convention to be comparable.
     cds_manual = CreditDefaultSwap(
         ProtectionSide.Buyer, notional, spread, schedule, bdc, dc360,
         settles_accrual=True,
         pays_at_default_time=True,
         protection_start=eval_date,
         claim=None,
-        last_period_day_counter=None,
+        last_period_day_counter=Actual360(include_last_day=True),
         rebates_accrual=True,
         trade_date=eval_date,
     )

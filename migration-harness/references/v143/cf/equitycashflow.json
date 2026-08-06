@@ -1,0 +1,309 @@
+{
+  "quantlib_version": "1.43",
+  "setup": {
+    "today_serial": 44953,
+    "base_date_serial": 44931,
+    "fixing_date_serial": 45021,
+    "payment_date_serial": 45028,
+    "notional": 10000000,
+    "spot": 8700,
+    "correlation": 0.40000000000000002,
+    "local_rate": 0.037499999999999999,
+    "dividend_rate": 0.0050000000000000001,
+    "quanto_rate": 0.001,
+    "equity_vol": 0.40000000000000002,
+    "fx_vol": 0.20000000000000001,
+    "base_fixing": 9010,
+    "todays_fixing": 8690
+  },
+  "equity_index": {
+    "name": "eqIndex",
+    "fixing_calendar": "TARGET",
+    "currency_code": "EUR",
+    "valid_business_day_serial": 44953,
+    "is_valid_business_day": true,
+    "holiday_serial": 44927,
+    "is_valid_holiday": false,
+    "weekend_serial": 44954,
+    "is_valid_weekend": false,
+    "has_historical_fixing_base": true,
+    "past_fixing_base": 9010,
+    "fixing_base_date": 9010,
+    "past_fixing_today": 8690,
+    "fixing_today": 8690,
+    "fixing_today_forecast": 8700,
+    "spot_value": 8700,
+    "has_dividend_curve": true,
+    "has_interest_curve": true,
+    "forecast_with_dividend": {
+      "date_serial_1": 45021,
+      "fixing_1": 8752.8365080105632,
+      "forecast_fixing_1": 8752.8365080105632,
+      "date_serial_2": 45657,
+      "fixing_2": 9262.8146204680033,
+      "forecast_fixing_2": 9262.8146204680033,
+      "date_serial_3": 47623,
+      "fixing_3": 11034.897507166843,
+      "forecast_fixing_3": 11034.897507166843
+    },
+    "forecast_no_dividend": {
+      "date_serial_1": 45021,
+      "fixing_1": 8760.9936337881445,
+      "forecast_fixing_1": 8760.9936337881445,
+      "date_serial_2": 45657,
+      "fixing_2": 9352.5758074043242,
+      "forecast_fixing_2": 9352.5758074043242,
+      "date_serial_3": 47623,
+      "fixing_3": 11445.974477357398,
+      "forecast_fixing_3": 11445.974477357398
+    },
+    "forecast_no_spot": {
+      "date_serial_1": 45021,
+      "fixing_1": 8742.77577639216,
+      "forecast_fixing_1": 8742.77577639216,
+      "date_serial_2": 45657,
+      "fixing_2": 9252.1677071111444,
+      "forecast_fixing_2": 9252.1677071111444,
+      "date_serial_3": 47623,
+      "fixing_3": 11022.213716928722,
+      "forecast_fixing_3": 11022.213716928722
+    },
+    "clone_name": "eqIndex",
+    "clone_calendar": "TARGET",
+    "clone_currency_code": "EUR",
+    "clone_spot_value": 9000,
+    "forecast_clone_relinked": {
+      "date_serial_1": 45021,
+      "fixing_1": 9067.3190141056421,
+      "forecast_fixing_1": 9067.3190141056421,
+      "date_serial_2": 45657,
+      "fixing_2": 9721.8435124909065,
+      "forecast_fixing_2": 9721.8435124909065,
+      "date_serial_3": 47623,
+      "fixing_3": 12059.193523670825,
+      "forecast_fixing_3": 12059.193523670825
+    },
+    "spot_proxy_today": 8700,
+    "raises": {
+      "fixing_on_holiday": { "raises": true },
+      "fixing_missing_past": { "raises": true },
+      "forecast_without_interest_curve": { "raises": true },
+      "forecast_without_spot_and_history": { "raises": true }
+    }
+  },
+  "quanto_term_structure": {
+    "day_counter": "Actual/365 (Fixed)",
+    "reference_date_serial": 44953,
+    "max_date_serial": 109574,
+    "strike": 8752.8365080105632,
+    "time_1": 0.25,
+    "zero_rate_1": 0.0005000000000004776,
+    "discount_1": 0.99987500781217431,
+    "time_2": 1,
+    "zero_rate_2": 0.00049999999999991327,
+    "discount_2": 0.9995001249791694,
+    "time_3": 7.5,
+    "zero_rate_3": 0.00049999999999999188,
+    "discount_3": 0.99625702246917103,
+    "discount_date_serial": 47623,
+    "discount_at_date": 0.99634914638444627
+  },
+  "quanto_term_structure_delegation": {
+    "dividend_reference_date_serial": 44946,
+    "day_counter": "Actual/360",
+    "reference_date_serial": 44946,
+    "zero_rate_1y": 0.00049999999999991327
+  },
+  "quanto_term_structure_strike_sensitivity": {
+    "vol_date_serial_1": 45134,
+    "vol_date_serial_2": 45318,
+    "vol_date_serial_3": 45684,
+    "time": 0.75,
+    "k1_atm1": {
+      "strike": 8000,
+      "exch_rate_atm_level": 1,
+      "equity_vol": 0.41762093622903007,
+      "fx_vol": 0.19333598823764314,
+      "zero_rate": 0.00079646256582767904
+    },
+    "k1_atm2": {
+      "strike": 8000,
+      "exch_rate_atm_level": 1.25,
+      "equity_vol": 0.41762093622903007,
+      "fx_vol": 0.17595488706656801,
+      "zero_rate": -0.0021070221316747809
+    },
+    "k2_atm1": {
+      "strike": 9000,
+      "exch_rate_atm_level": 1,
+      "equity_vol": 0.3697419618564925,
+      "fx_vol": 0.19333598823764314,
+      "zero_rate": -0.0029062289646200391
+    },
+    "k2_atm2": {
+      "strike": 9000,
+      "exch_rate_atm_level": 1.25,
+      "equity_vol": 0.3697419618564925,
+      "fx_vol": 0.17595488706656801,
+      "zero_rate": -0.0054768379431078167
+    }
+  },
+  "equity_cash_flow": {
+    "no_pricer_growth_only": {
+      "date_serial": 45028,
+      "base_date_serial": 44931,
+      "fixing_date_serial": 45021,
+      "notional": 10000000,
+      "growth_only": true,
+      "has_pricer": false,
+      "base_fixing": { "value": 9010 },
+      "index_fixing": { "value": 8752.8365080105632 },
+      "amount": { "value": -285420.07989948546 }
+    },
+    "no_pricer_total_return": {
+      "date_serial": 45028,
+      "base_date_serial": 44931,
+      "fixing_date_serial": 45021,
+      "notional": 10000000,
+      "growth_only": false,
+      "has_pricer": false,
+      "base_fixing": { "value": 9010 },
+      "index_fixing": { "value": 8752.8365080105632 },
+      "amount": { "value": 9714579.9201005138 }
+    },
+    "quanto_growth_only": {
+      "date_serial": 45028,
+      "base_date_serial": 44931,
+      "fixing_date_serial": 45021,
+      "notional": 10000000,
+      "growth_only": true,
+      "has_pricer": true,
+      "base_fixing": { "value": 9010 },
+      "index_fixing": { "value": 8752.8365080105632 },
+      "price": { "value": -0.034316265404523594 },
+      "amount": { "value": -343162.65404523595 }
+    },
+    "quanto_total_return": {
+      "date_serial": 45028,
+      "base_date_serial": 44931,
+      "fixing_date_serial": 45021,
+      "notional": 10000000,
+      "growth_only": false,
+      "has_pricer": true,
+      "base_fixing": { "value": 9010 },
+      "index_fixing": { "value": 8752.8365080105632 },
+      "price": { "value": 0.96568373459547641 },
+      "amount": { "value": 9656837.3459547646 }
+    },
+    "quanto_no_dividend": {
+      "date_serial": 45028,
+      "base_date_serial": 44931,
+      "fixing_date_serial": 45021,
+      "notional": 10000000,
+      "growth_only": true,
+      "has_pricer": true,
+      "base_fixing": { "value": 9010 },
+      "index_fixing": { "value": 8760.9936337881445 },
+      "price": { "value": -0.033416305297048421 },
+      "amount": { "value": -334163.05297048419 }
+    }
+  },
+  "quanto_grid": {
+    "base": {
+      "equity_vol": 0.40000000000000002,
+      "fx_vol": 0.20000000000000001,
+      "correlation": 0.40000000000000002,
+      "growth_only": true,
+      "price": -0.034316265404523594,
+      "amount": -343162.65404523595
+    },
+    "zero_correlation": {
+      "equity_vol": 0.40000000000000002,
+      "fx_vol": 0.20000000000000001,
+      "correlation": 0,
+      "growth_only": true,
+      "price": -0.028542007989948548,
+      "amount": -285420.07989948546
+    },
+    "negative_correlation": {
+      "equity_vol": 0.40000000000000002,
+      "fx_vol": 0.20000000000000001,
+      "correlation": -0.5,
+      "growth_only": true,
+      "price": -0.021275608626930231,
+      "amount": -212756.08626930232
+    },
+    "unit_correlation": {
+      "equity_vol": 0.40000000000000002,
+      "fx_vol": 0.20000000000000001,
+      "correlation": 1,
+      "growth_only": true,
+      "price": -0.042913362217112616,
+      "amount": -429133.62217112619
+    },
+    "swapped_vols": {
+      "equity_vol": 0.25,
+      "fx_vol": 0.34999999999999998,
+      "correlation": 0.40000000000000002,
+      "growth_only": true,
+      "price": -0.034855839213297046,
+      "amount": -348558.39213297045
+    },
+    "zero_equity_vol": {
+      "equity_vol": 0,
+      "fx_vol": 0.20000000000000001,
+      "correlation": 0.40000000000000002,
+      "growth_only": true,
+      "price": -0.028542007989948548,
+      "amount": -285420.07989948546
+    },
+    "zero_fx_vol": {
+      "equity_vol": 0.40000000000000002,
+      "fx_vol": 0,
+      "correlation": 0.40000000000000002,
+      "growth_only": true,
+      "price": -0.028542007989948548,
+      "amount": -285420.07989948546
+    },
+    "total_return": {
+      "equity_vol": 0.40000000000000002,
+      "fx_vol": 0.20000000000000001,
+      "correlation": 0.40000000000000002,
+      "growth_only": false,
+      "price": 0.96568373459547641,
+      "amount": 9656837.3459547646
+    },
+    "no_dividend": {
+      "equity_vol": 0.40000000000000002,
+      "fx_vol": 0.20000000000000001,
+      "correlation": 0.40000000000000002,
+      "growth_only": true,
+      "price": -0.033416305297048421,
+      "amount": -334163.05297048419
+    },
+    "strike_dependent_surfaces": {
+      "correlation": 0.40000000000000002,
+      "growth_only": true,
+      "price": -0.034180000796614318,
+      "amount": -341800.0079661432
+    }
+  },
+  "pricer_raises": {
+    "fixing_before_base_date": { "raises": true },
+    "empty_quanto_curve": { "raises": true },
+    "empty_equity_vol": { "raises": true },
+    "empty_fx_vol": { "raises": true },
+    "empty_correlation": { "raises": true },
+    "inconsistent_reference_dates": { "raises": true }
+  },
+  "set_coupon_pricer": {
+    "amount_before_1": -285420.07989948546,
+    "amount_before_2": 280593.3634495039,
+    "cf1_has_pricer": true,
+    "cf2_has_pricer": true,
+    "amount_after_1": -343162.65404523595,
+    "amount_after_2": -334745.63380440412,
+    "simple_amount": 1234.5,
+    "simple_date_serial": 45028
+  }
+}

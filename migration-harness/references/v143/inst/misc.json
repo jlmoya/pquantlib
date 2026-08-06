@@ -1,0 +1,44 @@
+{
+  "today_serial": 46188,
+  "stock": {
+    "quote": 123.75,
+    "npv": 123.75,
+    "is_expired": false,
+    "npv_after_quote_bump": 150.25,
+    "null_quote_raises": true,
+    "null_quote_error": "null quote set"
+  },
+  "composite": {
+    "call90_npv": 14.368908600851412,
+    "call110_npv": 4.7977536071023783,
+    "put100_npv": 6.7309176491632989,
+    "npv": 30.891661514281019,
+    "is_expired": false,
+    "npv_default_multipliers": 9.5711549937490332,
+    "empty_is_expired": true,
+    "empty_npv": 0,
+    "expired_component_npv": 0,
+    "mixed_is_expired": false,
+    "mixed_npv": 14.368908600851412,
+    "all_expired_is_expired": true,
+    "all_expired_npv": 0
+  },
+  "claim": {
+    "cases": [
+      {"date_serial": 46188, "bond_notional": 90, "bond_accrued": 0, "face_value_claim": 600, "face_value_accrual_claim": 600, "face_value_accrual_claim_rr0": 1000},
+      {"date_serial": 46280, "bond_notional": 90, "bond_accrued": 1.0000000000000009, "face_value_claim": 600, "face_value_accrual_claim": 588.88888888888891, "face_value_accrual_claim_rr0": 988.88888888888891},
+      {"date_serial": 46371, "bond_notional": 90, "bond_accrued": 2.0000000000000018, "face_value_claim": 600, "face_value_accrual_claim": 577.77777777777771, "face_value_accrual_claim_rr0": 977.77777777777771},
+      {"date_serial": 46461, "bond_notional": 90, "bond_accrued": 3.0000000000000027, "face_value_claim": 600, "face_value_accrual_claim": 566.66666666666663, "face_value_accrual_claim_rr0": 966.66666666666663},
+      {"date_serial": 46919, "bond_notional": 70, "bond_accrued": 0, "face_value_claim": 600, "face_value_accrual_claim": 600, "face_value_accrual_claim_rr0": 1000}
+    ]
+  },
+  "implied_vol": {
+    "cases": [
+      {"option_type": 1, "strike": 100, "spot": 100, "dividend_yield": 0.029999999999999999, "risk_free": 0.050000000000000003, "true_vol": 0.20000000000000001, "expiry_serial": 46553, "target_value": 8.6525285539427248, "implied_vol": 0.19999999999999865, "cloned_spot": 100, "cloned_dividend_discount": 0.97044553354850815, "cloned_riskfree_discount": 0.9512294245007139, "cloned_vol_at_recovered": 0.19999999999999865},
+      {"option_type": -1, "strike": 100, "spot": 100, "dividend_yield": 0.029999999999999999, "risk_free": 0.050000000000000003, "true_vol": 0.20000000000000001, "expiry_serial": 46553, "target_value": 6.7309176491632989, "implied_vol": 0.19999999999999873, "cloned_spot": 100, "cloned_dividend_discount": 0.97044553354850815, "cloned_riskfree_discount": 0.9512294245007139, "cloned_vol_at_recovered": 0.19999999999999873},
+      {"option_type": 1, "strike": 120, "spot": 100, "dividend_yield": 0, "risk_free": 0.02, "true_vol": 0.34999999999999998, "expiry_serial": 46553, "target_value": 7.8808485613846395, "implied_vol": 0.34999999999906972, "cloned_spot": 100, "cloned_dividend_discount": 1, "cloned_riskfree_discount": 0.98019867330675536, "cloned_vol_at_recovered": 0.34999999999906972},
+      {"option_type": -1, "strike": 80, "spot": 100, "dividend_yield": 0.059999999999999998, "risk_free": 0.01, "true_vol": 0.14999999999999999, "expiry_serial": 46553, "target_value": 0.79613057534773835, "implied_vol": 0.14999999996588742, "cloned_spot": 100, "cloned_dividend_discount": 0.94176453358424872, "cloned_riskfree_discount": 0.99004983374916811, "cloned_vol_at_recovered": 0.14999999996588742},
+      {"option_type": 1, "strike": 100, "spot": 130, "dividend_yield": 0.029999999999999999, "risk_free": 0.050000000000000003, "true_vol": 0.45000000000000001, "expiry_serial": 46553, "target_value": 38.875627906087495, "implied_vol": 0.45000000000000134, "cloned_spot": 130, "cloned_dividend_discount": 0.97044553354850815, "cloned_riskfree_discount": 0.9512294245007139, "cloned_vol_at_recovered": 0.45000000000000134}
+    ]
+  }
+}

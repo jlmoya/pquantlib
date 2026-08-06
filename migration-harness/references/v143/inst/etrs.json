@@ -1,0 +1,138 @@
+{
+  "today_serial": 46188,
+  "start_serial": 46371,
+  "ibor_plain": {
+    "type": 1,
+    "nominal": 10000000,
+    "margin": 0.0035000000000000001,
+    "gearing": 1,
+    "payment_delay": 0,
+    "payment_convention": 4,
+    "payment_calendar": "",
+    "day_counter": "Actual/365 (Fixed)",
+    "npv": 540671.71409074706,
+    "equity_leg_npv": -187652.79409879429,
+    "interest_rate_leg_npv": 728324.50818954129,
+    "interest_leg_bps": 1900.4008485801369,
+    "fair_margin": -0.024950403739542829,
+    "legs": {
+      "equity": [
+        {"date_serial": 47102, "amount": 202292.9113129024}
+      ],
+      "interest": [
+        {"date_serial": 46553, "amount": 191092.69611272245, "nominal": 10000000, "accrual_start_serial": 46371, "accrual_end_serial": 46553, "accrual_period": 0.49863013698630138, "rate": 0.038323535209419612},
+        {"date_serial": 46736, "amount": 192151.05157783729, "nominal": 10000000, "accrual_start_serial": 46553, "accrual_end_serial": 46736, "accrual_period": 0.50136986301369868, "rate": 0.038325209740934757},
+        {"date_serial": 46919, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46736, "accrual_end_serial": 46919, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194},
+        {"date_serial": 47102, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46919, "accrual_end_serial": 47102, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194}
+      ]
+    }
+  },
+  "ibor_lagged": {
+    "type": 1,
+    "nominal": 10000000,
+    "margin": 0.0035000000000000001,
+    "gearing": 1,
+    "payment_delay": 2,
+    "payment_convention": 1,
+    "payment_calendar": "US government bond market",
+    "day_counter": "Actual/365 (Fixed)",
+    "npv": 540539.78594212723,
+    "equity_leg_npv": -187591.11016988105,
+    "interest_rate_leg_npv": 728130.89611200825,
+    "interest_leg_bps": 1899.8956630619787,
+    "fair_margin": -0.02495102478264322,
+    "legs": {
+      "equity": [
+        {"date_serial": 47106, "amount": 202292.9113129024}
+      ],
+      "interest": [
+        {"date_serial": 46555, "amount": 191092.69611272245, "nominal": 10000000, "accrual_start_serial": 46371, "accrual_end_serial": 46553, "accrual_period": 0.49863013698630138, "rate": 0.038323535209419612},
+        {"date_serial": 46738, "amount": 192151.05157783729, "nominal": 10000000, "accrual_start_serial": 46553, "accrual_end_serial": 46736, "accrual_period": 0.50136986301369868, "rate": 0.038325209740934757},
+        {"date_serial": 46924, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46736, "accrual_end_serial": 46919, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194},
+        {"date_serial": 47106, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46919, "accrual_end_serial": 47102, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194}
+      ]
+    }
+  },
+  "ibor_geared_receiver": {
+    "type": -1,
+    "nominal": 5000000,
+    "margin": -0.0011999999999999999,
+    "gearing": 1.3500000000000001,
+    "payment_delay": 1,
+    "payment_convention": 0,
+    "payment_calendar": "TARGET",
+    "day_counter": "Actual/365 (Fixed)",
+    "npv": -341463.11495526007,
+    "equity_leg_npv": 93803.264625472235,
+    "interest_rate_leg_npv": -435266.37958073232,
+    "interest_leg_bps": -950.08410893015377,
+    "fair_margin": -0.037140303784237175,
+    "legs": {
+      "equity": [
+        {"date_serial": 47105, "amount": 101146.4556564512}
+      ],
+      "interest": [
+        {"date_serial": 46554, "amount": 114215.65206786848, "nominal": 5000000, "accrual_start_serial": 46371, "accrual_end_serial": 46553, "accrual_period": 0.49863013698630138, "rate": 0.045811772532716476},
+        {"date_serial": 46737, "amount": 114848.87762325934, "nominal": 5000000, "accrual_start_serial": 46553, "accrual_end_serial": 46736, "accrual_period": 0.50136986301369868, "rate": 0.045814033150261918},
+        {"date_serial": 46920, "amount": 114848.87762326082, "nominal": 5000000, "accrual_start_serial": 46736, "accrual_end_serial": 46919, "accrual_period": 0.50136986301369868, "rate": 0.045814033150262508},
+        {"date_serial": 47105, "amount": 114848.87762326082, "nominal": 5000000, "accrual_start_serial": 46919, "accrual_end_serial": 47102, "accrual_period": 0.50136986301369868, "rate": 0.045814033150262508}
+      ]
+    }
+  },
+  "overnight_plain": {
+    "type": 1,
+    "nominal": 10000000,
+    "margin": 0.0035000000000000001,
+    "gearing": 1,
+    "payment_delay": 0,
+    "payment_convention": 4,
+    "payment_calendar": "",
+    "day_counter": "Actual/365 (Fixed)",
+    "npv": 540671.71409074706,
+    "equity_leg_npv": -187652.79409879429,
+    "interest_rate_leg_npv": 728324.50818954129,
+    "interest_leg_bps": 1900.4008485801369,
+    "fair_margin": -0.024950403739542829,
+    "legs": {
+      "equity": [
+        {"date_serial": 47102, "amount": 202292.9113129024}
+      ],
+      "interest": [
+        {"date_serial": 46553, "amount": 191092.69611272245, "nominal": 10000000, "accrual_start_serial": 46371, "accrual_end_serial": 46553, "accrual_period": 0.49863013698630138, "rate": 0.038323535209419612},
+        {"date_serial": 46736, "amount": 192151.05157783729, "nominal": 10000000, "accrual_start_serial": 46553, "accrual_end_serial": 46736, "accrual_period": 0.50136986301369868, "rate": 0.038325209740934757},
+        {"date_serial": 46919, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46736, "accrual_end_serial": 46919, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194},
+        {"date_serial": 47102, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46919, "accrual_end_serial": 47102, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194}
+      ]
+    }
+  },
+  "overnight_lagged": {
+    "type": 1,
+    "nominal": 10000000,
+    "margin": 0.0035000000000000001,
+    "gearing": 1,
+    "payment_delay": 2,
+    "payment_convention": 1,
+    "payment_calendar": "US government bond market",
+    "day_counter": "Actual/365 (Fixed)",
+    "npv": 540539.78594212723,
+    "equity_leg_npv": -187591.11016988105,
+    "interest_rate_leg_npv": 728130.89611200825,
+    "interest_leg_bps": 1899.8956630619787,
+    "fair_margin": -0.02495102478264322,
+    "legs": {
+      "equity": [
+        {"date_serial": 47106, "amount": 202292.9113129024}
+      ],
+      "interest": [
+        {"date_serial": 46555, "amount": 191092.69611272245, "nominal": 10000000, "accrual_start_serial": 46371, "accrual_end_serial": 46553, "accrual_period": 0.49863013698630138, "rate": 0.038323535209419612},
+        {"date_serial": 46738, "amount": 192151.05157783729, "nominal": 10000000, "accrual_start_serial": 46553, "accrual_end_serial": 46736, "accrual_period": 0.50136986301369868, "rate": 0.038325209740934757},
+        {"date_serial": 46924, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46736, "accrual_end_serial": 46919, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194},
+        {"date_serial": 47106, "amount": 192151.05157783948, "nominal": 10000000, "accrual_start_serial": 46919, "accrual_end_serial": 47102, "accrual_period": 0.50136986301369868, "rate": 0.038325209740935194}
+      ]
+    }
+  },
+  "negative_nominal": {
+    "raises": true,
+    "error": "Nominal cannot be negative"
+  }
+}

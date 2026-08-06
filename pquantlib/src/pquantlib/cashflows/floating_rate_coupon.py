@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from pquantlib.termstructures.protocols import (
         IborIndexProtocol,
         OvernightIndexProtocol,
+        YieldTermStructureProtocol,
     )
 
 
@@ -170,6 +171,13 @@ class FloatingRateCoupon(Coupon):
         if d <= self._accrual_start_date or d > self._payment_date:
             return 0.0
         return self._nominal * self.rate() * self.accrued_period(d)
+
+    def price(self, discounting_curve: YieldTermStructureProtocol) -> float:
+        """amount() discounted to the curve's reference date.
+
+        C++ parity: ql/cashflows/floatingratecoupon.hpp:88-90 (inline).
+        """
+        return self.amount() * discounting_curve.discount(self.date())
 
     # --- derived ------------------------------------------------------
 

@@ -219,6 +219,20 @@ class BivariateCumulativeNormalDistributionWe04DP:
             if self._correlation < 0:
                 k *= -1
                 hk *= -1
+            # C++ parity: bivariatenormaldistribution.cpp:213. At |rho| == 1
+            # exactly, this guard skips the whole Genz series block and only
+            # the closing correction below survives — which IS the comonotone
+            # / countermonotone limit: N(min(a, b)) at rho = +1, and
+            # max(0, N(a) + N(b) - 1) at rho = -1. Both endpoints are reached
+            # by real engines (both partial-time lookback engines build the
+            # degenerate copula when the lookback window meets the option's
+            # own window), and the constructor admits the closed interval, so
+            # this branch is load-bearing, not a formality. No special case is
+            # written for it here on purpose: the transcription already gives
+            # C++'s answer. Cross-validated against all 84 ``bvn_rhop1_*`` /
+            # ``bvn_rhom1_*`` cases of
+            # ``references/v143/inst/lookbackvarswap.json`` (max rel err
+            # 4.7e-16); see test_bivariate_normal_distribution.py.
             if math.fabs(self._correlation) < 1:
                 ass = (1 - self._correlation) * (1 + self._correlation)
                 a = math.sqrt(ass)

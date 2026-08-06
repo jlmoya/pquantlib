@@ -9,6 +9,7 @@ identity).
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
 
@@ -18,6 +19,7 @@ from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.indexes.ibor.euribor import Euribor
 from pquantlib.models.calibration_helper import CalibrationErrorType
 from pquantlib.models.cap_helper import CapHelper
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.capfloor.black_capfloor_engine import BlackCapFloorEngine
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.protocols import YieldTermStructureProtocol
@@ -29,6 +31,25 @@ from pquantlib.time.frequency import Frequency
 from pquantlib.time.month import Month
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
+
+
+@pytest.fixture(autouse=True)
+def _eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date to the probe's.
+
+    The C++ probe sets ``Settings::instance().evaluationDate() = Date(17,
+    January, 2024)`` (cluster_l4e/probe.cpp:71). The Python side used that date only to build
+    the curves and never pinned the global, so the engines fell back to the
+    machine's wall-clock date to decide which flows had already occurred:
+    these comparisons held only while the real date was on or before the
+    probe's, or when an unrelated module happened to leave an evaluation date
+    set before this one ran.
+    """
+    ObservableSettings().evaluation_date = Date.from_ymd(17, Month.January, 2024)
+    yield
+    ObservableSettings().evaluation_date = None
+
+
 
 _REF_PATH = (
     Path(__file__).resolve().parents[3] / "migration-harness/references/cluster/l4e.json"

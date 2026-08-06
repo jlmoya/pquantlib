@@ -306,14 +306,23 @@ class CapFloor(Instrument):
         return d
 
     def maturity_date(self) -> Date:
-        """Latest payment date in the leg.
+        """Latest accrual end date in the leg.
 
-        # C++ parity: CapFloor::maturityDate (capfloor.cpp:183-185).
+        # C++ parity: CapFloor::maturityDate (capfloor.cpp:183-185) delegates
+        # to ``CashFlows::maturityDate``, which takes ``accrualEndDate()`` for
+        # a Coupon and only falls back to ``date()`` for a non-Coupon flow
+        # (cashflows.cpp). Using the payment date for coupons is wrong whenever
+        # the two differ — an unadjusted termination date or a payment lag —
+        # and silently right otherwise.
         """
         qassert.require(len(self._floating_leg) > 0, "empty leg")
         d: Date | None = None
         for cf in self._floating_leg:
-            ed = cf.date()
+            ed = (
+                cf.accrual_end_date()
+                if isinstance(cf, FloatingRateCoupon)
+                else cf.date()
+            )
             d = ed if d is None else max(d, ed)
         assert d is not None
         return d

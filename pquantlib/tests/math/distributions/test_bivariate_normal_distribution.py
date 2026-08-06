@@ -33,7 +33,7 @@ from pquantlib.math.distributions.bivariate_normal_distribution import (
 from pquantlib.math.distributions.cumulative_normal_distribution import (
     CumulativeNormalDistribution,
 )
-from pquantlib.testing import tolerance
+from pquantlib.testing import reference_reader, tolerance
 
 
 def test_we04dp_matches_cpp_tight(v143: dict[str, Any]) -> None:
@@ -151,3 +151,78 @@ def test_default_typedef_is_we04dp() -> None:
     """
     assert BivariateCumulativeNormalDistribution is BivariateCumulativeNormalDistributionWe04DP
     assert BivariateCumulativeNormalDistributionDr78 is not BivariateCumulativeNormalDistribution
+
+
+# --- |rho| == 1 (the singular endpoints) ------------------------------------
+#
+# From coverage wave 5. The constructor admits rho in the CLOSED interval
+# [-1, 1] and both endpoints are reached by real engines:
+# AnalyticContinuousPartialFloatingLookbackEngine builds rho == +1 whenever
+# the lookback window runs to expiry, and
+# AnalyticContinuousPartialFixedLookbackEngine builds rho == -1 whenever the
+# window starts at expiry. Under the old scipy delegation both endpoints
+# raised outright (``LinAlgError: the input matrix must be symmetric positive
+# definite``), and wave 5 special-cased them in closed form. The West
+# transcription needs no special case: C++ skips its whole Genz series block
+# at |rho| == 1 (bivariatenormaldistribution.cpp:213) and keeps only the
+# closing correction, which IS the comonotone / countermonotone limit. These
+# cases pin what that correction evaluates to, straight from the C++ probe —
+# so a future re-delegation, or a "simplification" of the guard, fails here.
+
+
+@pytest.fixture(scope="module")
+def cpp() -> dict[str, Any]:
+    return reference_reader.load("v143/inst/lookbackvarswap")
+
+
+def test_rho_plus_one_matches_cpp(cpp: dict[str, Any]) -> None:
+    """rho == +1 collapses to ``N(min(a, b))``."""
+    cnd = CumulativeNormalDistribution()
+    checked = 0
+    for name, case in cpp.items():
+        if not name.startswith("bvn_rhop1_"):
+            continue
+        a, b = float(case["inputs"]["x"]), float(case["inputs"]["y"])
+        actual = BivariateCumulativeNormalDistribution(1.0)(a, b)
+        tolerance.tight(actual, float(case["expected"]["value"]), reason=name)
+        tolerance.tight(actual, min(cnd(a), cnd(b)), reason=f"{name}: comonotone limit")
+        checked += 1
+    assert checked >= 40, f"expected the rho=+1 grid in the reference, got {checked}"
+
+
+def test_rho_minus_one_matches_cpp(cpp: dict[str, Any]) -> None:
+    """rho == -1 collapses to ``max(0, N(a) + N(b) - 1)``.
+
+    The grid straddles every branch of the C++ tail selection: ``a + b``
+    below, at and above zero, and ``a`` below and above zero.
+    """
+    cnd = CumulativeNormalDistribution()
+    checked = 0
+    zeros = 0
+    for name, case in cpp.items():
+        if not name.startswith("bvn_rhom1_"):
+            continue
+        a, b = float(case["inputs"]["x"]), float(case["inputs"]["y"])
+        expected = float(case["expected"]["value"])
+        actual = BivariateCumulativeNormalDistribution(-1.0)(a, b)
+        tolerance.tight(actual, expected, reason=name)
+        tolerance.tight(actual, max(0.0, cnd(a) + cnd(b) - 1.0), reason=f"{name}: countermonotone")
+        zeros += int(expected == 0.0)
+        checked += 1
+    assert checked >= 40, f"expected the rho=-1 grid in the reference, got {checked}"
+    assert zeros > 0, "the a + b <= 0 branch must be exercised"
+
+
+def test_rho_one_is_the_limit_of_rho_below_one() -> None:
+    """The closed form is the limit the integrator is converging towards."""
+    for rho in (0.9, 0.99, 0.999):
+        near = BivariateCumulativeNormalDistribution(rho)(0.3, -0.7)
+        limit = BivariateCumulativeNormalDistribution(1.0)(0.3, -0.7)
+        assert abs(near - limit) < 0.2
+    assert abs(
+        BivariateCumulativeNormalDistribution(0.999)(0.3, -0.7)
+        - BivariateCumulativeNormalDistribution(1.0)(0.3, -0.7)
+    ) < abs(
+        BivariateCumulativeNormalDistribution(0.9)(0.3, -0.7)
+        - BivariateCumulativeNormalDistribution(1.0)(0.3, -0.7)
+    )

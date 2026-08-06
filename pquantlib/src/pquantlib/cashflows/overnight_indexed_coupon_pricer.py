@@ -37,31 +37,30 @@ available; if ``Settings`` is not initialised, the split degenerates to
 
 Python divergences from C++:
 
-- **Optionlet volatility / capped-floored variants.** The C++ base pricer
-  carries a ``Handle<OptionletVolatilityStructure>`` and ``capletRate(Rate,
-  bool)`` / ``floorletRate(Rate, bool)`` / ``averageRate(Date)`` virtuals
-  used by ``CappedFlooredOvernightIndexedCoupon`` and the Black overnight
-  pricers. Those coupon/pricer variants are a deferred carve-out in this
-  port (``CappedFlooredOvernightIndexedCoupon`` is not ported), so the vol
-  handle and caplet/floorlet machinery are omitted. ``averageRate(date)``
-  *is* ported (it drives the arithmetic pricer's ``swapletRate``).
-- **Telescopic forward-discount optimisation + lockout (rate cutoff) +
-  observation shift + compound-spread-daily.** The C++ ``compute()`` has a
-  fast path using ``curve->discount(valueDates[...])`` ratios plus lockout
-  and observation-shift handling. The ported
+- **Lockout (rate cutoff) + observation shift + compound-spread-daily.** The
+  ported
   :class:`~pquantlib.cashflows.overnight_indexed_coupon.OvernightIndexedCoupon`
-  does not expose ``lockoutDays`` / ``applyObservationShift`` /
-  ``compoundSpreadDaily`` / ``canApplyTelescopicFormula`` (all fixed at
-  0 / False), so the forward part here is the straightforward per-fixing
-  projection loop (correct for the no-lockout, no-observation-shift,
-  spread-not-compounded-daily case, which is the standard OIS coupon).
-  Telescopic speed-up + lockout + observation shift are deferred carve-outs.
+  fixes ``lockoutDays`` at 0, ``applyObservationShift`` at False and
+  ``compoundSpreadDaily`` at False, so those branches of the C++
+  ``compute()`` are deferred carve-outs. The **telescopic** forward-discount
+  path *is* ported (see
+  :meth:`CompoundingOvernightIndexedCouponPricer._forward_compound`) — it is
+  not merely a speed-up, it is what v1.42.1 actually evaluates, and the
+  per-fixing product it replaces differs from it in the last few ULPs.
 - ``effectiveSpread`` / ``effectiveIndexFixing`` (only meaningful with
   compound-spread-daily) collapse to ``spread`` / ``rate`` respectively.
+- C++ *privatises* the one-argument ``capletRate(Rate)`` /
+  ``floorletRate(Rate)`` it inherits from ``FloatingRateCouponPricer``
+  (overnightindexedcouponpricer.hpp:52-53) so that only the two-argument
+  ``(strike, dailyCapFloor)`` forms are reachable through a base-class
+  handle. Python has no such access control; the one-argument forms stay
+  visible and simply delegate to the two-argument ones with
+  ``daily_cap_floor=False``, which is what the C++ Black pricers do too.
 """
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import TYPE_CHECKING
 
 from pquantlib import qassert
@@ -72,6 +71,9 @@ from pquantlib.time.date import Date
 if TYPE_CHECKING:
     from pquantlib.cashflows.floating_rate_coupon import FloatingRateCoupon
     from pquantlib.cashflows.overnight_indexed_coupon import OvernightIndexedCoupon
+    from pquantlib.termstructures.volatility.optionlet.optionlet_volatility_structure import (
+        OptionletVolatilityStructure,
+    )
 
 
 def _evaluation_date() -> Date | None:
@@ -98,30 +100,110 @@ class OvernightIndexedCouponPricer(CouponPricer):
     """Abstract base pricer for overnight-indexed floating coupons.
 
     # C++ parity: ``OvernightIndexedCouponPricer`` in
-    # overnightindexedcouponpricer.hpp:51-101.
+    # overnightindexedcouponpricer.hpp:51-101 + .cpp:38-68.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        caplet_volatility: OptionletVolatilityStructure | None = None,
+        effective_volatility_input: bool = False,
+    ) -> None:
         super().__init__()
         self._coupon: OvernightIndexedCoupon | None = None
+        self._caplet_vol: OptionletVolatilityStructure | None = caplet_volatility
+        self._effective_volatility_input: bool = effective_volatility_input
+        # ``Null<Real>`` until a caplet / floorlet has actually been priced.
+        self._effective_caplet_volatility: float | None = None
+        self._effective_floorlet_volatility: float | None = None
 
     def initialize(self, coupon: FloatingRateCoupon) -> None:
         """Bind the (overnight) coupon being priced.
 
-        # C++ parity: overnightindexedcouponpricer.cpp:54-64 — also unwraps a
-        # ``CappedFlooredOvernightIndexedCoupon``; that variant is not ported,
-        # so we only accept a plain ``OvernightIndexedCoupon``.
+        # C++ parity: overnightindexedcouponpricer.cpp:46-56 — a
+        # ``CappedFlooredOvernightIndexedCoupon`` is unwrapped to its
+        # underlying coupon, anything else that is not an
+        # ``OvernightIndexedCoupon`` is rejected.
         """
+        from pquantlib.cashflows.capped_floored_coupon import (  # noqa: PLC0415
+            CappedFlooredOvernightIndexedCoupon,
+        )
         from pquantlib.cashflows.overnight_indexed_coupon import (  # noqa: PLC0415
             OvernightIndexedCoupon,
         )
 
+        if isinstance(coupon, CappedFlooredOvernightIndexedCoupon):
+            underlying = coupon.underlying()
+            qassert.require(
+                isinstance(underlying, OvernightIndexedCoupon),
+                "OvernightIndexedCouponPricer: CappedFlooredOvernightIndexedCoupon "
+                "underlying coupon not defined",
+            )
+            assert isinstance(underlying, OvernightIndexedCoupon)
+            self._coupon = underlying
+            return
         qassert.require(
             isinstance(coupon, OvernightIndexedCoupon),
             "OvernightIndexedCouponPricer: unsupported coupon type",
         )
         assert isinstance(coupon, OvernightIndexedCoupon)
         self._coupon = coupon
+
+    # --- optionlet volatility wiring -----------------------------------
+
+    def caplet_volatility(self) -> OptionletVolatilityStructure | None:
+        """# C++ parity: ``capletVolatility()`` (hpp:73-75)."""
+        return self._caplet_vol
+
+    def set_caplet_volatility(self, caplet_volatility: OptionletVolatilityStructure | None = None) -> None:
+        """Re-link the optionlet vol surface and notify observers.
+
+        # C++ parity: ``setCapletVolatility`` (hpp:64-71).
+        """
+        self._caplet_vol = caplet_volatility
+        self.update()
+
+    def effective_volatility_input(self) -> bool:
+        """# C++ parity: ``effectiveVolatilityInput()`` (cpp:58-60)."""
+        return self._effective_volatility_input
+
+    def set_effective_volatility_input(self, effective_volatility_input: bool) -> None:
+        """# C++ parity: ``setEffectiveVolatilityInput`` (hpp:77-79)."""
+        self._effective_volatility_input = effective_volatility_input
+
+    def effective_caplet_volatility(self) -> float | None:
+        """Effective vol recorded by the last ``caplet_rate`` call, else ``None``.
+
+        # C++ parity: ``effectiveCapletVolatility()`` (cpp:62-64) — C++
+        # returns ``Null<Real>`` before the first call; Python returns
+        # ``None``.
+        """
+        return self._effective_caplet_volatility
+
+    def effective_floorlet_volatility(self) -> float | None:
+        """# C++ parity: ``effectiveFloorletVolatility()`` (cpp:66-68)."""
+        return self._effective_floorlet_volatility
+
+    # --- pure virtuals (C++ hpp:92-94) ---------------------------------
+
+    @abstractmethod
+    def caplet_rate(self, effective_cap: float, daily_cap_floor: bool = False) -> float:
+        """Caplet rate; ``daily_cap_floor`` selects the per-day cap formula.
+
+        # C++ parity: ``virtual Rate capletRate(Rate, bool) const = 0``
+        # (hpp:92). C++ additionally *privatises* the inherited one-argument
+        # form; Python keeps it visible with ``daily_cap_floor=False``.
+        """
+
+    @abstractmethod
+    def floorlet_rate(self, effective_floor: float, daily_cap_floor: bool = False) -> float:
+        """# C++ parity: ``virtual Rate floorletRate(Rate, bool) const = 0`` (hpp:93)."""
+
+    @abstractmethod
+    def average_rate(self, date: Date) -> float:
+        """Coupon rate accrued up to ``date``.
+
+        # C++ parity: ``virtual Rate averageRate(const Date&) const = 0`` (hpp:94).
+        """
 
     # --- shared helpers ------------------------------------------------
 
@@ -149,18 +231,42 @@ class OvernightIndexedCouponPricer(CouponPricer):
             interest_dates[i], date
         )
 
-    def _denominator(self, date: Date, full: bool) -> float:
-        """Accrual denominator: full ``accrualPeriod`` or ``accruedPeriod(date)``.
+    def _number_of_fixings(self, date: Date) -> int:
+        """``lower_bound(interestDates.begin(), interestDates.end()-1, date)``.
 
-        The ported coupon's terminal interest (value) date can fall after the
-        unadjusted accrual end / payment date because value dates are snapped
-        to business days; ``accruedPeriod`` past the payment date returns 0,
-        so the whole-coupon case uses ``accrualPeriod()`` directly.
+        # C++ parity: anonymous ``determineNumberOfFixings``
+        (overnightindexedcouponpricer.cpp:32-37).
+        """
+        interest_dates = self._coupon_required().interest_dates()
+        last = len(interest_dates) - 1  # end() - 1
+        for i in range(last):
+            if interest_dates[i] >= date:
+                return i
+        return last
+
+    def _denominator(self, date: Date, full: bool) -> float:
+        """Rate-accrual denominator ``tau``.
+
+        # C++ parity: overnightindexedcouponpricer.cpp:206-210 —
+        # ``tau = index.dayCounter().yearFraction(interestDates.front(),
+        #                                         min(date, interestDates[n]))``.
+        #
+        # This is the **rate-computation** window measured with the **index's**
+        # day counter, not the coupon's own accrual period. The two coincide
+        # for a plain in-arrears coupon whose payment day counter is the
+        # index's, which is why the previous ``accrualPeriod()`` spelling
+        # passed; they part company as soon as the rate-computation dates are
+        # decoupled from the accrual dates (``OvernightLeg.in_arrears(False)``,
+        # ``with_last_recent_period``) or a different payment day counter is
+        # set.
         """
         coupon = self._coupon_required()
-        if full:
-            return coupon.accrual_period()
-        return coupon.accrued_period(date)
+        interest_dates = coupon.interest_dates()
+        n = coupon.n() if full else self._number_of_fixings(date)
+        end = min(date, interest_dates[n])
+        return coupon.overnight_index().day_counter().year_fraction(
+            interest_dates[0], end
+        )
 
     @staticmethod
     def _fixing_value(index: object, fixing_date: Date, today: Date | None) -> float:
@@ -193,11 +299,68 @@ class CompoundingOvernightIndexedCouponPricer(OvernightIndexedCouponPricer):
     # overnightindexedcouponpricer.{hpp,cpp}.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        caplet_volatility: OptionletVolatilityStructure | None = None,
+        effective_volatility_input: bool = False,
+    ) -> None:
+        super().__init__(caplet_volatility, effective_volatility_input)
         self._swaplet_rate: float = 0.0
         self._effective_spread: float = 0.0
         self._effective_index_fixing: float = 0.0
+
+    def _forward_compound(self, first: int, n: int, date: Date, *, full: bool) -> float | None:
+        """Compound factor for the not-yet-fixed fixings ``[first, n)``.
+
+        # C++ parity: overnightindexedcouponpricer.cpp:158-199 — the telescopic
+        # fast path. Because every projected fixing comes off the same curve,
+        # ``prod_k (1 + f_k * dt_k) == D(v_first) / D(v_end)``; C++ evaluates
+        # the ratio, not the product. The identity is exact in real arithmetic
+        # but *not* in floating point (the product drifts ~1e-13 relative,
+        # which is enough to move a far-out-of-the-money caplet by ~2e-12), so
+        # the port has to telescope too in order to reproduce v1.42.1.
+
+        Returns ``None`` when the telescopic path does not apply — no
+        forwarding curve (e.g. a flat-forecast mock index), an index whose
+        fixing delay differs from the coupon's (C++
+        ``canApplyTelescopicFormula``), or a partial-accrual evaluation where
+        the last span is truncated. The caller then falls back to the
+        per-fixing product, which is the same number in exact arithmetic.
+        """
+        if not full or first >= n:
+            return None
+        coupon = self._coupon_required()
+        index = coupon.overnight_index()
+        # ``canApplyTelescopicFormula()``: the coupon fixes with zero delay, so
+        # the index must too, otherwise value dates and fixing dates decouple.
+        fixing_days = getattr(index, "fixing_days", None)
+        if fixing_days is None or fixing_days() != coupon.fixing_days():
+            return None
+        get_ts = getattr(index, "forecast_term_structure", None)
+        curve = get_ts() if get_ts is not None else None
+        if curve is None:
+            return None
+
+        value_dates = coupon.value_dates()
+        interest_dates = coupon.interest_dates()
+        fixing_dates = coupon.fixing_dates()
+        today = _evaluation_date()
+
+        # C++ cpp:174-181: a first interest date that lands before the first
+        # value date (start on a fixing holiday) accrues partially and cannot
+        # be telescoped; likewise a final value date past ``date``.
+        start = 1 if (first == 0 and value_dates[0] < interest_dates[0]) else first
+        end = n if value_dates[n] <= date else n - 1
+        if start >= end:
+            return None
+
+        factor = 1.0
+        for k in range(first, start):
+            factor *= 1.0 + self._fixing_value(index, fixing_dates[k], today) * self._span(k, date, full)
+        factor *= curve.discount(value_dates[start]) / curve.discount(value_dates[end])
+        for k in range(end, n):
+            factor *= 1.0 + self._fixing_value(index, fixing_dates[k], today) * self._span(k, date, full)
+        return factor
 
     def _compute(self, date: Date, full: bool) -> tuple[float, float, float]:
         """Return ``(swapletRate, effectiveSpread, effectiveIndexFixing)`` at ``date``.
@@ -215,10 +378,32 @@ class CompoundingOvernightIndexedCouponPricer(OvernightIndexedCouponPricer):
         n = coupon.n()
 
         compound = 1.0
-        for i in range(n):
-            span = self._span(i, date, full)
-            fixing = self._fixing_value(index, fixing_dates[i], today)
-            compound *= 1.0 + fixing * span
+        i = 0
+        # Already-fixed part, day by day (C++ cpp:126-155).
+        has_hist = getattr(index, "has_historical_fixing", None)
+        while i < n and today is not None and fixing_dates[i] < today:
+            compound *= 1.0 + self._fixing_value(index, fixing_dates[i], today) * self._span(i, date, full)
+            i += 1
+        # Today is a border case: consume it only if it has actually been published.
+        if (
+            i < n
+            and today is not None
+            and fixing_dates[i] == today
+            and has_hist is not None
+            and has_hist(today)
+        ):
+            compound *= 1.0 + self._fixing_value(index, fixing_dates[i], today) * self._span(i, date, full)
+            i += 1
+
+        telescopic = self._forward_compound(i, n, date, full=full)
+        if telescopic is not None:
+            compound *= telescopic
+        else:
+            while i < n:
+                compound *= 1.0 + self._fixing_value(index, fixing_dates[i], today) * self._span(
+                    i, date, full
+                )
+                i += 1
 
         rate = (compound - 1.0) / self._denominator(date, full)
         swaplet_rate = coupon.gearing() * rate + coupon.spread()
@@ -263,8 +448,12 @@ class CompoundingOvernightIndexedCouponPricer(OvernightIndexedCouponPricer):
         msg = "capletPrice not available"
         raise LibraryException(msg)
 
-    def caplet_rate(self, effective_cap: float) -> float:
+    def caplet_rate(self, effective_cap: float, daily_cap_floor: bool = False) -> float:
+        """# C++ parity: hpp:118 (one-arg) + hpp:122-124 (two-arg) — both QL_FAIL."""
         del effective_cap
+        if daily_cap_floor:
+            msg = "CompoundingOvernightIndexedCouponPricer::capletRate(Rate, bool) not implemented"
+            raise LibraryException(msg)
         msg = "capletRate not available"
         raise LibraryException(msg)
 
@@ -273,8 +462,12 @@ class CompoundingOvernightIndexedCouponPricer(OvernightIndexedCouponPricer):
         msg = "floorletPrice not available"
         raise LibraryException(msg)
 
-    def floorlet_rate(self, effective_floor: float) -> float:
+    def floorlet_rate(self, effective_floor: float, daily_cap_floor: bool = False) -> float:
+        """# C++ parity: hpp:120 (one-arg) + hpp:125-127 (two-arg) — both QL_FAIL."""
         del effective_floor
+        if daily_cap_floor:
+            msg = "CompoundingOvernightIndexedCouponPricer::floorletRate(Rate, bool) not implemented"
+            raise LibraryException(msg)
         msg = "floorletRate not available"
         raise LibraryException(msg)
 
@@ -301,8 +494,10 @@ class ArithmeticAveragedOvernightIndexedCouponPricer(OvernightIndexedCouponPrice
         mean_reversion: float = 0.03,
         volatility: float = 0.0,
         by_approx: bool = False,
+        caplet_volatility: OptionletVolatilityStructure | None = None,
+        effective_volatility_input: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(caplet_volatility, effective_volatility_input)
         self._mrs: float = mean_reversion
         self._vol: float = volatility
         self._by_approx: bool = by_approx
@@ -345,8 +540,12 @@ class ArithmeticAveragedOvernightIndexedCouponPricer(OvernightIndexedCouponPrice
         msg = "capletPrice not available"
         raise LibraryException(msg)
 
-    def caplet_rate(self, effective_cap: float) -> float:
+    def caplet_rate(self, effective_cap: float, daily_cap_floor: bool = False) -> float:
+        """# C++ parity: hpp:157 (one-arg) + hpp:160-162 (two-arg) — both QL_FAIL."""
         del effective_cap
+        if daily_cap_floor:
+            msg = "ArithmeticAveragedOvernightIndexedCouponPricer::capletRate(Rate, bool) not implemented"
+            raise LibraryException(msg)
         msg = "capletRate not available"
         raise LibraryException(msg)
 
@@ -355,7 +554,11 @@ class ArithmeticAveragedOvernightIndexedCouponPricer(OvernightIndexedCouponPrice
         msg = "floorletPrice not available"
         raise LibraryException(msg)
 
-    def floorlet_rate(self, effective_floor: float) -> float:
+    def floorlet_rate(self, effective_floor: float, daily_cap_floor: bool = False) -> float:
+        """# C++ parity: hpp:159 (one-arg) + hpp:163-165 (two-arg) — both QL_FAIL."""
         del effective_floor
+        if daily_cap_floor:
+            msg = "ArithmeticAveragedOvernightIndexedCouponPricer::floorletRate(Rate, bool) not implemented"
+            raise LibraryException(msg)
         msg = "floorletRate not available"
         raise LibraryException(msg)

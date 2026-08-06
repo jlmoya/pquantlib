@@ -188,9 +188,19 @@ def test_cms_leg_builds_plain_coupons() -> None:
     assert leg[0].nominal() == 1.0e6  # type: ignore[attr-defined]
 
 
-def test_cms_leg_capped_raises() -> None:
-    """Capped/floored CMS legs raise (deferred to W12-B)."""
-    from pquantlib.exceptions import LibraryException  # noqa: PLC0415
+def test_cms_leg_capped_builds_capped_floored_coupons() -> None:
+    """Capped/floored CMS legs build ``CappedFlooredCmsCoupon``.
+
+    This test previously asserted that they *raise*, on the premise that
+    ``CappedFlooredCmsCoupon`` was "deferred to W12-B". That premise is stale:
+    the class landed in ``capped_floored_coupon.py``, and C++ ``CmsLeg``
+    dispatches capped periods to it (cmscoupon.cpp:162-176 via ``FloatingLeg``).
+    Pricing such a coupon still needs a CMS optionlet pricer; *building* the
+    leg does not, which is exactly what C++ does.
+    """
+    from pquantlib.cashflows.capped_floored_coupon import (  # noqa: PLC0415
+        CappedFlooredCmsCoupon,
+    )
 
     curve = _curve()
     swap_index = _swap_index(Period(10, TimeUnit.Years), curve)
@@ -207,5 +217,8 @@ def test_cms_leg_capped_raises() -> None:
         DateGeneration.Forward,
         False,
     )
-    with pytest.raises(LibraryException, match="capped/floored CMS legs"):
-        cms_leg(schedule, swap_index, 1.0e6, caps=0.05)
+    leg = cms_leg(schedule, swap_index, 1.0e6, caps=0.05)
+    assert len(leg) == 5
+    assert all(isinstance(cf, CappedFlooredCmsCoupon) for cf in leg)
+    assert all(cf.cap() == 0.05 for cf in leg)  # type: ignore[attr-defined]
+    assert all(cf.floor() is None for cf in leg)  # type: ignore[attr-defined]

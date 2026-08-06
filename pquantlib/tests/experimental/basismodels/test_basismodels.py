@@ -13,6 +13,7 @@ smile-section divergence note).
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
@@ -40,6 +41,7 @@ from pquantlib.indexes.ibor_index import IborIndex
 from pquantlib.instruments.make_vanilla_swap import make_vanilla_swap
 from pquantlib.instruments.swaption import Swaption
 from pquantlib.math.interpolations.linear import LinearInterpolation
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.swap.discounting_swap_engine import DiscountingSwapEngine
 from pquantlib.termstructures.volatility.optionlet.constant_optionlet_vol import (
     ConstantOptionletVolatility,
@@ -70,6 +72,23 @@ def _d(day: int, month: Month, year: int) -> Date:
 
 
 _TODAY = _d(15, Month.January, 2024)
+
+
+@pytest.fixture(autouse=True)
+def _eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date to the probe's.
+
+    The C++ probe sets ``Settings::instance().evaluationDate() = today``
+    (cluster_w8a/probe.cpp:82,301). The Python side used ``_TODAY`` only to
+    build the curves and never pinned the global, so ``has_occurred`` fell
+    back to the machine's wall-clock date: the swaption-cashflow weights only
+    sum to their target while the real date is on or before the probe's, or
+    when an unrelated module happens to leave an evaluation date set before
+    this one runs.
+    """
+    ObservableSettings().evaluation_date = _TODAY
+    yield
+    ObservableSettings().evaluation_date = None
 
 
 def _curve(rate: float = 0.03) -> FlatForward:

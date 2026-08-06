@@ -83,6 +83,18 @@ class _ZeroInflationTSLike(Protocol):
     def day_counter(self) -> _DayCounterLike: ...
 
 
+@runtime_checkable
+class _YoYInflationTSLike(Protocol):
+    """Structural subset of ``YoYInflationTermStructure`` used by
+    ``YoYInflationIndex._forecast_fixing``.
+
+    Avoids the circular import on
+    ``pquantlib.termstructures.inflation.yoy_inflation_term_structure``.
+    """
+
+    def yoy_rate(self, d: Date, extrapolate: bool = False) -> float: ...
+
+
 def inflation_year_fraction(
     f: Frequency,
     index_is_interpolated: bool,
@@ -435,11 +447,20 @@ class YoYInflationIndex(InflationIndex):
         self.update()
 
     def fixing(self, fixing_date: Date, forecast_todays_fixing: bool = False) -> float:
-        """Look up the YoY fixing on ``fixing_date``.
+        """Look up a past YoY fixing or forecast via the YoY-inflation curve.
 
-        # C++ parity: ``YoYInflationIndex::fixing``. Ratio mode delegates
-        # to underlying past fixings; quoted mode reads from local history.
-        # Forecasting via ``YoYInflationTermStructure`` lands with L7-B.
+        # C++ parity: ``YoYInflationIndex::fixing`` (inflationindex.cpp:278-285)
+        # → ``pastFixing`` / ``forecastFixing``. Ratio mode delegates to the
+        # underlying zero index's fixings; quoted mode reads local history and
+        # falls back to the attached ``YoYInflationTermStructure``.
+        #
+        # Divergence from C++: C++ chooses between the two branches with
+        # ``needsForecast(fixingDate)``, which compares against the
+        # availability lag and so *insists* on a stored fixing for a date well
+        # in the past. PQuantLib uses the history-first-then-forecast shape
+        # already established by ``ZeroInflationIndex.fixing`` above; the two
+        # differ only for a deep-past date with no stored fixing, where C++
+        # errors and this forecasts.
         """
         del forecast_todays_fixing
         if self._ratio:
@@ -459,12 +480,28 @@ class YoYInflationIndex(InflationIndex):
         if value is not None:
             return value
         qassert.require(
-            self._yoy_inflation_ts is None,
-            f"forecast path for {self.name()} not yet wired (L7-B will land it)",
+            self._yoy_inflation_ts is not None,
+            f"Missing {self.name()} YoY fixing for {start} and no YoY-inflation "
+            "term structure to forecast from.",
         )
-        qassert.fail(
-            f"Missing {self.name()} YoY fixing for {start}; "
-            "store one via add_fixing before calling fixing()."
-        )
+        return self._forecast_fixing(fixing_date)
+
+    def _forecast_fixing(self, fixing_date: Date) -> float:
+        """Forecast the YoY rate off the attached curve.
+
+        # C++ parity: ``YoYInflationIndex::forecastFixing``
+        # (inflationindex.cpp:372-387) — a non-interpolated index reads the
+        # rate at the *start* of the fixing's inflation period, an interpolated
+        # one reads it at the fixing date itself.
+        """
+        qassert.require(self._yoy_inflation_ts is not None, "no YoY TS")
+        ts = cast(_YoYInflationTSLike, self._yoy_inflation_ts)
+        # C++ wraps the same read in QL_DEPRECATED_DISABLE_WARNING — the flag
+        # is deprecated but still drives the branch.
+        if self.interpolated():  # pyright: ignore[reportDeprecated]
+            d = fixing_date
+        else:
+            d, _ = inflation_period(fixing_date, self.frequency())
+        return ts.yoy_rate(d)
 
 

@@ -23,20 +23,29 @@ for swap-style).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from pquantlib import qassert
+from pquantlib.cashflows import cash_flow_vectors as cfv
+from pquantlib.cashflows.cash_flow import CashFlow
+from pquantlib.cashflows.fixed_rate_coupon import FixedRateCoupon
 from pquantlib.cashflows.indexed_cashflow import IndexedCashFlow
 from pquantlib.cashflows.inflation_coupon import InflationCoupon
 from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.daycounters.thirty_360 import Convention as Thirty360Convention
+from pquantlib.daycounters.thirty_360 import Thirty360
 from pquantlib.indexes.inflation.cpi import InterpolationType, lagged_fixing
 from pquantlib.indexes.inflation.inflation_index import ZeroInflationIndex
+from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.date import Date
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
 
 if TYPE_CHECKING:
     from pquantlib.cashflows.inflation_coupon_pricer import InflationCouponPricer
+    from pquantlib.time.calendar import Calendar
+    from pquantlib.time.schedule import Schedule
 
 # Module-level null Date for defaults (avoids B008).
 _NULL_DATE: Date = Date()
@@ -310,3 +319,234 @@ class CPICashFlow(IndexedCashFlow):
             self._observation_lag,
             self._interpolation,
         )
+
+
+class CPILeg:
+    """Chained builder for a sequence of CPI coupons plus the notional flow.
+
+    # C++ parity: ``CPILeg`` (cpicoupon.hpp:205-247, .cpp:179-350).
+
+    Every C++ ``withXxx`` setter is present as ``with_xxx`` and returns
+    ``self``; C++'s ``operator Leg()`` is :meth:`build`. A CPI leg always
+    ends with a :class:`CPICashFlow` notional exchange, even when the
+    schedule has a single date.
+    """
+
+    def __init__(
+        self,
+        schedule: Schedule,
+        index: ZeroInflationIndex,
+        base_cpi: float | None,
+        observation_lag: Period,
+    ) -> None:
+        # C++ parity: .cpp:179-186 — the payment day counter defaults to
+        # Thirty360(BondBasis) and the payment calendar to the schedule's.
+        self._schedule: Schedule = schedule
+        self._index: ZeroInflationIndex = index
+        self._base_cpi: float | None = base_cpi
+        self._observation_lag: Period = observation_lag
+        self._notionals: list[float] = []
+        self._fixed_rates: list[float] = []
+        self._payment_day_counter: DayCounter = Thirty360(Thirty360Convention.BondBasis)
+        self._payment_adjustment: BusinessDayConvention = (
+            BusinessDayConvention.ModifiedFollowing
+        )
+        self._payment_calendar: Calendar = schedule.calendar
+        self._observation_interpolation: InterpolationType = InterpolationType.Flat
+        self._subtract_inflation_nominal: bool = True
+        self._caps: list[float] = []
+        self._floors: list[float] = []
+        self._ex_coupon_period: Period | None = None
+        self._ex_coupon_calendar: Calendar | None = None
+        self._ex_coupon_adjustment: BusinessDayConvention = BusinessDayConvention.Following
+        self._ex_coupon_end_of_month: bool = False
+        self._base_date: Date | None = None
+
+    # --- chained setters -----------------------------------------------
+
+    def with_notionals(self, notionals: float | Sequence[float]) -> CPILeg:
+        """# C++ parity: ``withNotionals`` (.cpp:204-212)."""
+        self._notionals = cfv.as_float_list(notionals)
+        return self
+
+    def with_fixed_rates(self, fixed_rates: float | Sequence[float]) -> CPILeg:
+        """# C++ parity: ``withFixedRates`` (.cpp:194-202).
+
+        A period whose fixed rate is exactly ``0.0`` degenerates to a
+        :class:`~pquantlib.cashflows.fixed_rate_coupon.FixedRateCoupon`
+        paying the cap/floor-clamped zero rate, as in C++.
+        """
+        self._fixed_rates = cfv.as_float_list(fixed_rates)
+        return self
+
+    def with_payment_day_counter(self, day_counter: DayCounter) -> CPILeg:
+        """# C++ parity: ``withPaymentDayCounter`` (.cpp:220-223)."""
+        self._payment_day_counter = day_counter
+        return self
+
+    def with_payment_adjustment(self, convention: BusinessDayConvention) -> CPILeg:
+        """# C++ parity: ``withPaymentAdjustment`` (.cpp:225-228)."""
+        self._payment_adjustment = convention
+        return self
+
+    def with_payment_calendar(self, calendar: Calendar) -> CPILeg:
+        """# C++ parity: ``withPaymentCalendar`` (.cpp:230-233)."""
+        self._payment_calendar = calendar
+        return self
+
+    def with_observation_interpolation(self, interpolation: InterpolationType) -> CPILeg:
+        """# C++ parity: ``withObservationInterpolation`` (.cpp:188-191)."""
+        self._observation_interpolation = interpolation
+        return self
+
+    def with_subtract_inflation_nominal(self, growth_only: bool) -> CPILeg:
+        """# C++ parity: ``withSubtractInflationNominal`` (.cpp:214-218).
+
+        Controls whether the final :class:`CPICashFlow` pays the inflated
+        notional or only its growth.
+        """
+        self._subtract_inflation_nominal = growth_only
+        return self
+
+    def with_caps(self, caps: float | Sequence[float]) -> CPILeg:
+        """# C++ parity: ``withCaps`` (.cpp:235-243).
+
+        Only observable on zero-fixed-rate periods, which degenerate to a
+        fixed coupon paying ``effectiveFixedRate({}, caps, floors, i)``. A
+        cap on a non-zero-rate CPI coupon is a C++ ``QL_FAIL``.
+        """
+        self._caps = cfv.as_float_list(caps)
+        return self
+
+    def with_floors(self, floors: float | Sequence[float]) -> CPILeg:
+        """# C++ parity: ``withFloors`` (.cpp:245-253) — see :meth:`with_caps`."""
+        self._floors = cfv.as_float_list(floors)
+        return self
+
+    def with_ex_coupon_period(
+        self,
+        period: Period,
+        calendar: Calendar,
+        convention: BusinessDayConvention,
+        end_of_month: bool = False,
+    ) -> CPILeg:
+        """# C++ parity: ``withExCouponPeriod`` (.cpp:255-266)."""
+        self._ex_coupon_period = period
+        self._ex_coupon_calendar = calendar
+        self._ex_coupon_adjustment = convention
+        self._ex_coupon_end_of_month = end_of_month
+        return self
+
+    def with_base_date(self, base_date: Date) -> CPILeg:
+        """# C++ parity: ``withBaseDate`` (.cpp:268-271)."""
+        self._base_date = base_date
+        return self
+
+    # --- operator Leg() -------------------------------------------------
+
+    def build(self) -> list[CashFlow]:
+        """Build the leg.
+
+        # C++ parity: ``CPILeg::operator Leg()`` (.cpp:274-350).
+        """
+        # Local import for the coupon ↔ pricer cycle (see CPICoupon above).
+        from pquantlib.cashflows.cpi_coupon_pricer import CPICouponPricer  # noqa: PLC0415
+        from pquantlib.cashflows.inflation_coupon_pricer import (  # noqa: PLC0415
+            set_coupon_pricer,
+        )
+
+        qassert.require(len(self._notionals) > 0, "no notional given")
+        schedule = self._schedule
+        n = len(schedule) - 1
+        leg: list[CashFlow] = []
+
+        base_date = self._base_date
+        if n > 0:
+            qassert.require(len(self._fixed_rates) > 0, "no fixedRates given")
+            if self._base_date is None and self._base_cpi is None:
+                base_date = schedule.date(0) - self._observation_lag
+
+            for i in range(n):
+                start = schedule.date(i)
+                end = schedule.date(i + 1)
+                payment_date = self._payment_calendar.adjust(end, self._payment_adjustment)
+                ex_coupon_date: Date | None = None
+                if self._ex_coupon_period is not None:
+                    cal = self._ex_coupon_calendar
+                    assert cal is not None
+                    ex_coupon_date = cal.advance(
+                        payment_date,
+                        -self._ex_coupon_period.length,
+                        self._ex_coupon_period.units,
+                        self._ex_coupon_adjustment,
+                        self._ex_coupon_end_of_month,
+                    )
+                ref_start, ref_end = start, end
+                bdc = schedule.business_day_convention
+                if schedule.has_is_regular() and schedule.has_tenor():
+                    if i == 0 and not schedule.is_regular_at(1):
+                        ref_start = schedule.calendar.adjust(end - schedule.tenor, bdc)
+                    if i == n - 1 and not schedule.is_regular_at(i + 1):
+                        ref_end = schedule.calendar.adjust(start + schedule.tenor, bdc)
+
+                if cfv.get(self._fixed_rates, i, 1.0) == 0.0:
+                    leg.append(
+                        FixedRateCoupon.from_rate(
+                            payment_date,
+                            cfv.get(self._notionals, i, 0.0),
+                            cfv.effective_fixed_rate([], self._caps, self._floors, i),
+                            self._payment_day_counter,
+                            start,
+                            end,
+                            ref_start,
+                            ref_end,
+                            ex_coupon_date,
+                        )
+                    )
+                    continue
+                qassert.require(
+                    cfv.no_option(self._caps, self._floors, i),
+                    "caps/floors on CPI coupons not implemented.",
+                )
+                leg.append(
+                    CPICoupon(
+                        payment_date,
+                        cfv.get(self._notionals, i, 0.0),
+                        start,
+                        end,
+                        self._index,
+                        self._observation_lag,
+                        self._observation_interpolation,
+                        self._payment_day_counter,
+                        cfv.get(self._fixed_rates, i, 0.0),
+                        self._base_cpi,
+                        base_date,
+                        ref_start,
+                        ref_end,
+                        ex_coupon_date,
+                    )
+                )
+
+        # in CPI legs you always have a notional flow of some sort
+        payment_date = self._payment_calendar.adjust(
+            schedule.date(n), self._payment_adjustment
+        )
+        leg.append(
+            CPICashFlow(
+                cfv.get(self._notionals, n, 0.0),
+                self._index,
+                base_date if base_date is not None else _NULL_DATE,
+                self._base_cpi,
+                schedule.date(n),
+                self._observation_lag,
+                self._observation_interpolation,
+                payment_date,
+                self._subtract_inflation_nominal,
+            )
+        )
+        # no caps and floors here, so this is enough
+        set_coupon_pricer(leg, CPICouponPricer())
+        return leg
+
+
+__all__ = ["CPICashFlow", "CPICoupon", "CPILeg"]

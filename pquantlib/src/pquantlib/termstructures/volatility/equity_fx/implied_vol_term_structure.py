@@ -36,9 +36,12 @@ from pquantlib.time.date import Date
 class ImpliedVolTermStructure(BlackVarianceTermStructure):
     """Black vol term structure implied at a future reference date."""
 
+    # Positional-or-keyword deliberately: C++ takes both arguments positionally
+    # (`ImpliedVolTermStructure(Handle<BlackVolTermStructure>, const Date&)`),
+    # and callers in this port were written both ways. Keyword-only here would
+    # break the positional callers for no gain.
     def __init__(
         self,
-        *,
         original_ts: BlackVolTermStructure,
         reference_date: Date,
     ) -> None:

@@ -24,6 +24,13 @@ class LazyObject(Observable):
     @abstractmethod
     def _perform_calculations(self) -> None: ...
 
+    def is_calculated(self) -> bool:
+        """True while the cached result is valid.
+
+        # C++ parity: ``LazyObject::isCalculated`` (lazyobject.hpp:44, 272).
+        """
+        return self._calculated
+
     def calculate(self) -> None:
         """Run ``_perform_calculations`` exactly once until ``update`` invalidates.
 
@@ -45,3 +52,16 @@ class LazyObject(Observable):
         """Invalidate the cache and notify downstream observers."""
         self._calculated = False
         self.notify_observers()
+
+    def deep_update(self) -> None:
+        """Force an update of this object *and* of anything it aggregates.
+
+        # C++ parity: ``Observer::deepUpdate`` (ql/patterns/observable.hpp:155,
+        # 267-269) — the default is plain ``update()``. C++ declares it on
+        # ``Observer``; here ``Observer`` is a structural Protocol, and a
+        # method with a body on a Protocol becomes a *required* member for
+        # every structural implementer, so it lives on this concrete base
+        # instead. Classes that aggregate other lazy objects
+        # (``CompositeInstrument``) override it to cascade first.
+        """
+        self.update()

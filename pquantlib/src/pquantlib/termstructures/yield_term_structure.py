@@ -206,11 +206,20 @@ class YieldTermStructure(TermStructure):
             t1_adj = max(t1 - _DT / 2.0, 0.0)
             t2_adj = t1_adj + _DT
             compound = self.discount(t1_adj, True) / self.discount(t2_adj, True)
-            # C++ parity: yieldtermstructure.cpp:160-171 — when t2 == t1
-            # the outer t1/t2 are reassigned to the adjusted pair and
-            # ``t2 - t1`` then evaluates to ``dt`` (the fd width).
-            # Reproduce that semantically by passing ``_DT``.
-            t_for_rate = _DT
+            # ALIGN(termstructures): C++ parity fix — a previous comment here
+            # claimed that after the reassignment ``t2 - t1`` "evaluates to
+            # ``dt``" and passed ``_DT`` instead.  That premise is false in
+            # floating point: for ``t1 = 59.75`` the adjusted pair differs by
+            # 1.0000000000033197e-04, a relative 3.3e-11 away from ``_DT``,
+            # because ``max(t - dt/2, 0) + dt`` rounds at the ULP of ``t``.
+            # C++ (yieldtermstructure.cpp:169-171) really does pass the
+            # reassigned ``t2 - t1``, so the instantaneous forward it returns
+            # carries that same rounding.  The 3.3e-11 gap is visible at
+            # TIGHT tolerance in anything that divides by a near-cancelling
+            # combination of instantaneous forwards (e.g. the perpetual-futures
+            # tail factor).  Note the Date overload above correctly passes
+            # ``_DT`` — C++ passes ``dt`` there (yieldtermstructure.cpp:144).
+            t_for_rate = t2_adj - t1_adj
         else:
             qassert.require(t2 > t1, f"t2 ({t2}) < t1 ({t1})")
             compound = self.discount(t1, extrapolate) / self.discount(t2, extrapolate)
