@@ -48,6 +48,18 @@ CPP_DECL = re.compile(
     r"(?:\s+final)?\s*(?:[:{]|$)",
     re.MULTILINE,
 )
+# Block comments are stripped before scanning. Five C++ "classes" live only
+# inside /* ... */ blocks — ESFIntegrator (saddlepointlossmodel.hpp:355, opened
+# by "Just for testing ... not for release"), StickyRatchetPayoff,
+# RatchetPayoff_2, StickyPayoff_2 (stickyratchet.hpp, under a header C++ itself
+# labels "Old code ... superated by DoubleStickyRatchetPayoff") and Foo.
+# They compile to nothing and cannot be instantiated, so counting them inflates
+# the denominator with classes QuantLib does not have. Allowlisting each would
+# also work but records them as real-but-excused, which they are not.
+# Line comments need no handling: the pattern is line-anchored, so "// class X"
+# cannot match.
+CPP_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+
 PY_DECL = re.compile(r"^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
 
 
@@ -454,7 +466,7 @@ def main() -> None:
             continue
         cpp_files += 1
         sub = cpp_subsystem(hpp)
-        for name in CPP_DECL.findall(hpp.read_text(errors="ignore")):
+        for name in CPP_DECL.findall(CPP_BLOCK_COMMENT.sub("", hpp.read_text(errors="ignore"))):
             cpp.setdefault(name, sub)
 
     py: set[str] = set()

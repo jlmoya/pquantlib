@@ -23,6 +23,7 @@ import bisect
 from typing import Final, NoReturn
 
 from pquantlib import qassert
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 
@@ -292,7 +293,9 @@ def _date_from_code(ecb_code: str, reference_date: Date | None) -> Date:
     qassert.require(is_ecb_code(ecb_code), f"{ecb_code} is not a valid ECB code")
     month = _NAME_TO_MONTH[ecb_code[:3].upper()]
     y = int(ecb_code[3]) * 10 + int(ecb_code[4])
-    ref = reference_date if reference_date is not None else Date.todays_date()
+    # C++ parity: ECB resolves an unset reference date to
+    # Settings::instance().evaluationDate() (ecb.cpp:192-194), not the wall clock.
+    ref = reference_date if reference_date is not None else ObservableSettings().evaluation_date_or_today()
     reference_year_lo = ref.year() % 100
     y += ref.year() - reference_year_lo
     if y < Date.min_date().year():
@@ -318,7 +321,7 @@ def next_date(d: Date | str | None = None, reference_date: Date | None = None) -
     """
     if isinstance(d, str):
         return next_date(date(d, reference_date))
-    ref = d if d is not None else Date.todays_date()
+    ref = d if d is not None else ObservableSettings().evaluation_date_or_today()
     sorted_known = sorted(_known_dates)
     idx = bisect.bisect_right(sorted_known, ref)
     qassert.require(idx < len(sorted_known), f"ECB dates after {sorted_known[-1]} are unknown")
@@ -333,7 +336,7 @@ def next_dates(d: Date | str | None = None, reference_date: Date | None = None) 
     """
     if isinstance(d, str):
         return next_dates(date(d, reference_date))
-    ref = d if d is not None else Date.todays_date()
+    ref = d if d is not None else ObservableSettings().evaluation_date_or_today()
     sorted_known = sorted(_known_dates)
     idx = bisect.bisect_right(sorted_known, ref)
     qassert.require(idx < len(sorted_known), f"ECB dates after {sorted_known[-1]} are unknown")

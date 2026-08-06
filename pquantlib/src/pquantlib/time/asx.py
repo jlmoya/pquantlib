@@ -21,6 +21,7 @@ from enum import IntEnum
 from typing import NoReturn
 
 from pquantlib import qassert
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 from pquantlib.time.weekday import Weekday
@@ -73,7 +74,9 @@ def code(d: Date) -> str:
 
 def date(asx_code: str, reference_date: Date | None = None) -> Date:
     qassert.require(is_asx_code(asx_code, main_cycle=False), f"{asx_code} is not a valid ASX code")
-    ref = reference_date if reference_date is not None else Date.todays_date()
+    # C++ parity: ASX::date resolves an unset reference date to
+    # Settings::instance().evaluationDate() (asx.cpp:95-97), not the wall clock.
+    ref = reference_date if reference_date is not None else ObservableSettings().evaluation_date_or_today()
 
     upper = asx_code.upper()
     month = _LETTER_TO_MONTH[upper[0]]
@@ -104,7 +107,7 @@ def next_date(
     """
     if isinstance(d, str):
         return next_date(date(d, reference_date) + 1, main_cycle)
-    ref = d if d is not None else Date.todays_date()
+    ref = d if d is not None else ObservableSettings().evaluation_date_or_today()
     y = ref.year()
     m = int(ref.month())
 
