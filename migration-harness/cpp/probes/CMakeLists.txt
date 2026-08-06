@@ -898,3 +898,22 @@ foreach(area
     add_executable(v143_math_${area}_probe v143_math_${area}/probe.cpp)
     target_link_libraries(v143_math_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
 endforeach()
+
+# === v1.43 methods-subsystem coverage closure ==============================
+# One probe per methods area. Each emits references/v143/methods/<area>.json
+# (generate-references.sh turns every underscore in the target name into a
+# slash, so v143_methods_meshers_probe → v143/methods/meshers.json).
+foreach(area
+        core
+        meshers
+        operators
+        operators2
+        schemes
+        solvers
+        stepconditions
+        utilities
+        rnd
+        lattices)
+    add_executable(v143_methods_${area}_probe v143_methods_${area}/probe.cpp)
+    target_link_libraries(v143_methods_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
+endforeach()

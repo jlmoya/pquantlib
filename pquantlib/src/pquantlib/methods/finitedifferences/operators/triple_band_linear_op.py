@@ -32,6 +32,9 @@ from pquantlib import qassert
 from pquantlib.math.array import Array
 from pquantlib.methods.finitedifferences.meshers.fdm_mesher import FdmMesher
 from pquantlib.methods.finitedifferences.operators.fdm_linear_op import FdmLinearOp
+from pquantlib.methods.finitedifferences.operators.fdm_linear_op_layout import (
+    FdmLinearOpLayout,
+)
 
 # Integer index array (separate from the float-Array alias).
 _IntArray = npt.NDArray[np.int64]
@@ -46,21 +49,56 @@ class TripleBandLinearOp(FdmLinearOp):
     def __init__(self, direction: int, mesher: FdmMesher) -> None:
         self._direction: int = direction
         self._mesher: FdmMesher = mesher
-        n = mesher.layout().size()
+        layout = mesher.layout()
+        n = layout.size()
         self._i0: _IntArray = np.zeros(n, dtype=np.int64)
         self._i2: _IntArray = np.zeros(n, dtype=np.int64)
-        # 1-D specialisation: reverseIndex is the identity for any
-        # 1-D direction (multi-D requires the iter_swap permutation —
-        # deferred to Phase 6).
-        self._reverse_index: _IntArray = np.arange(n, dtype=np.int64)
+        self._reverse_index: _IntArray = np.zeros(n, dtype=np.int64)
         self._lower: Array = np.zeros(n, dtype=np.float64)
         self._diag: Array = np.zeros(n, dtype=np.float64)
         self._upper: Array = np.zeros(n, dtype=np.float64)
 
-        for iter_ in mesher.layout().iter():
+        # reverseIndex_ orders the flat grid so that walking it visits
+        # every line along ``direction`` contiguously — that is what makes
+        # the Thomas sweep in ``solve_splitting`` a per-line tridiagonal
+        # solve. C++ builds it by swapping axis 0 with ``direction`` in
+        # the dim vector, taking the resulting spacing, swapping the same
+        # two entries back, and using that as an alternative stride set.
+        #
+        # # C++ parity: TripleBandLinearOp::TripleBandLinearOp
+        # (triplebandlinearop.cpp) — std::iter_swap on dim then on spacing.
+        new_dim = list(layout.dim())
+        new_dim[0], new_dim[direction] = new_dim[direction], new_dim[0]
+        new_spacing = list(FdmLinearOpLayout(tuple(new_dim)).spacing())
+        new_spacing[0], new_spacing[direction] = new_spacing[direction], new_spacing[0]
+
+        for iter_ in layout.iter():
             i = iter_.index
-            self._i0[i] = mesher.layout().neighbourhood(iter_, direction, -1)
-            self._i2[i] = mesher.layout().neighbourhood(iter_, direction, +1)
+            self._i0[i] = layout.neighbourhood(iter_, direction, -1)
+            self._i2[i] = layout.neighbourhood(iter_, direction, +1)
+            new_index = sum(c * s for c, s in zip(iter_.coordinates, new_spacing, strict=True))
+            self._reverse_index[new_index] = i
+
+    def _like(self) -> TripleBandLinearOp:
+        """A zero-banded operator sharing this one's structural arrays.
+
+        ``i0`` / ``i2`` / ``reverseIndex`` depend only on ``(direction,
+        mesher)``, so the derived operators C++ builds by value
+        (``mult`` / ``multR`` / ``add``) can reuse them instead of
+        re-running the O(N) layout walk. The arrays are never mutated
+        after construction, so sharing them is safe.
+        """
+        other = object.__new__(type(self))
+        other._direction = self._direction
+        other._mesher = self._mesher
+        other._i0 = self._i0
+        other._i2 = self._i2
+        other._reverse_index = self._reverse_index
+        n = self._i0.shape[0]
+        other._lower = np.zeros(n, dtype=np.float64)
+        other._diag = np.zeros(n, dtype=np.float64)
+        other._upper = np.zeros(n, dtype=np.float64)
+        return other
 
     # --- mutating arithmetic builders ----------------------------------
 
@@ -118,10 +156,33 @@ class TripleBandLinearOp(FdmLinearOp):
         # (each row of the operator scales by ``u[i]``).
         """
         u_arr = np.asarray(u, dtype=np.float64)
-        result = TripleBandLinearOp(self._direction, self._mesher)
+        result = self._like()
         result._lower = self._lower * u_arr
         result._diag = self._diag * u_arr
         result._upper = self._upper * u_arr
+        return result
+
+    def mult_r(self, u: Array) -> TripleBandLinearOp:
+        """Return ``self @ diag(u)`` — ``u`` as a diagonal matrix on the RIGHT.
+
+        # C++ parity: ``TripleBandLinearOp::multR(const Array&)``. Note
+        # C++ scales the bands with the *flat* neighbours ``u[i-1]`` /
+        # ``u[i+1]`` (falling back to 1.0 at the two flat ends), **not**
+        # with ``u[i0[i]]`` / ``u[i2[i]]``. Ported verbatim.
+        """
+        u_arr = np.asarray(u, dtype=np.float64)
+        size = self._mesher.layout().size()
+        qassert.require(u_arr.size == size, "inconsistent size of rhs")
+        result = self._like()
+        sm1 = np.empty(size, dtype=np.float64)
+        sm1[0] = 1.0
+        sm1[1:] = u_arr[:-1]
+        sp1 = np.empty(size, dtype=np.float64)
+        sp1[-1] = 1.0
+        sp1[:-1] = u_arr[1:]
+        result._lower = self._lower * sm1
+        result._diag = self._diag * u_arr
+        result._upper = self._upper * sp1
         return result
 
     def add(self, other: TripleBandLinearOp | Array) -> TripleBandLinearOp:
@@ -130,7 +191,7 @@ class TripleBandLinearOp(FdmLinearOp):
         # C++ parity: two overloads — ``add(TripleBandLinearOp)`` and
         # ``add(Array)`` (the latter adds to the diagonal only).
         """
-        result = TripleBandLinearOp(self._direction, self._mesher)
+        result = self._like()
         if isinstance(other, TripleBandLinearOp):
             result._lower = self._lower + other._lower
             result._diag = self._diag + other._diag

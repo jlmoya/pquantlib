@@ -130,17 +130,60 @@ class FdmLinearOpLayout:
         """Flat index of the neighbour offset by ``offset`` along ``direction``.
 
         # C++ parity: ``FdmLinearOpLayout::neighbourhood(iter, i, offset)``
-        # — clamps at the boundary (i.e. returns the iter's own index
-        # if going past the edge).
+        # — **reflects** at the boundary:
+        #     coorOffset < 0        -> -coorOffset
+        #     coorOffset >= dim[i]  -> 2*(dim[i]-1) - coorOffset
+        # so a -1 step from coordinate 0 lands on coordinate 1, not on 0.
         """
         coords = list(iterator.coordinates)
-        new_coord = coords[direction] + offset
-        if new_coord < 0:
-            new_coord = 0
-        elif new_coord >= self._dim[direction]:
-            new_coord = self._dim[direction] - 1
-        coords[direction] = new_coord
+        coords[direction] = self._reflect(coords[direction] + offset, direction)
         return self.index(tuple(coords))
+
+    def _reflect(self, coord_offset: int, direction: int) -> int:
+        """Reflect ``coord_offset`` back inside ``[0, dim[direction]-1]``.
+
+        # C++ parity: the shared boundary branch of both
+        # ``FdmLinearOpLayout::neighbourhood`` overloads and of
+        # ``iter_neighbourhood``.
+        """
+        if coord_offset < 0:
+            return -coord_offset
+        if coord_offset >= self._dim[direction]:
+            return 2 * (self._dim[direction] - 1) - coord_offset
+        return coord_offset
+
+    def neighbourhood2(
+        self,
+        iterator: FdmLinearOpIterator,
+        direction1: int,
+        offset1: int,
+        direction2: int,
+        offset2: int,
+    ) -> int:
+        """Flat index of the neighbour offset along **two** directions at once.
+
+        # C++ parity: ``FdmLinearOpLayout::neighbourhood(iter, i1, off1,
+        # i2, off2)`` — the second overload. Python cannot overload on
+        # arity, so the two-direction form gets its own name. Each
+        # direction reflects independently, exactly as in C++.
+        """
+        coords = list(iterator.coordinates)
+        coords[direction1] = self._reflect(coords[direction1] + offset1, direction1)
+        coords[direction2] = self._reflect(coords[direction2] + offset2, direction2)
+        return self.index(tuple(coords))
+
+    def iter_neighbourhood(
+        self, iterator: FdmLinearOpIterator, direction: int, offset: int
+    ) -> FdmLinearOpIterator:
+        """Neighbour as a full ``FdmLinearOpIterator`` (index + coordinates).
+
+        # C++ parity: ``FdmLinearOpLayout::iter_neighbourhood`` —
+        # "smart but sometimes too slow".
+        """
+        coords = list(iterator.coordinates)
+        coords[direction] = self._reflect(coords[direction] + offset, direction)
+        coords_t = tuple(coords)
+        return FdmLinearOpIterator(self._dim, coords_t, self.index(coords_t))
 
 
 __all__ = ["FdmLinearOpIterator", "FdmLinearOpLayout"]

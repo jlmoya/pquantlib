@@ -30,51 +30,9 @@ from pquantlib import qassert
 from pquantlib.math.array import Array
 from pquantlib.methods.finitedifferences.meshers.fdm_mesher import FdmMesher
 from pquantlib.methods.finitedifferences.operators.fdm_linear_op import FdmLinearOp
-from pquantlib.methods.finitedifferences.operators.fdm_linear_op_layout import (
-    FdmLinearOpIterator,
-    FdmLinearOpLayout,
-)
 
 # Integer index array (separate from the float-Array alias).
 _IntArray = npt.NDArray[np.int64]
-
-
-def _two_dir_neighbourhood(
-    layout: FdmLinearOpLayout,
-    iterator: FdmLinearOpIterator,
-    d0: int,
-    o0: int,
-    d1: int,
-    o1: int,
-) -> int:
-    """Two-direction neighbourhood — adjust both directions together.
-
-    # C++ parity: ``FdmLinearOpLayout::neighbourhood(iter, i1, off1, i2, off2)``
-    # — clamping at boundaries (Python defers to ``layout.neighbourhood``
-    # twice with the same iter, since the layout's single-direction
-    # neighbourhood implementation is index-based and order-independent).
-    """
-    # Resolve the d0 offset first, then re-target a "virtual" iter at
-    # that index for the d1 offset. Layout's neighbourhood operates on
-    # the iter's coordinates directly, so we just chain by walking
-    # along both coords.
-    # The simplest correct implementation: rebuild the coordinate
-    # vector with both offsets applied, then call layout.index.
-    coords = list(iterator.coordinates)
-    nd0: int = coords[d0] + o0
-    nd1: int = coords[d1] + o1
-    dim = layout.dim()
-    if nd0 < 0:
-        nd0 = 0
-    elif nd0 >= dim[d0]:
-        nd0 = dim[d0] - 1
-    if nd1 < 0:
-        nd1 = 0
-    elif nd1 >= dim[d1]:
-        nd1 = dim[d1] - 1
-    coords[d0] = nd0
-    coords[d1] = nd1
-    return layout.index(tuple(coords))
 
 
 class NinePointLinearOp(FdmLinearOp):
@@ -130,10 +88,10 @@ class NinePointLinearOp(FdmLinearOp):
             self._i21[i] = layout.neighbourhood(iter_, d0, +1)
             self._i12[i] = layout.neighbourhood(iter_, d1, +1)
             # Corner neighbours (both directions).
-            self._i00[i] = _two_dir_neighbourhood(layout, iter_, d0, -1, d1, -1)
-            self._i20[i] = _two_dir_neighbourhood(layout, iter_, d0, +1, d1, -1)
-            self._i02[i] = _two_dir_neighbourhood(layout, iter_, d0, -1, d1, +1)
-            self._i22[i] = _two_dir_neighbourhood(layout, iter_, d0, +1, d1, +1)
+            self._i00[i] = layout.neighbourhood2(iter_, d0, -1, d1, -1)
+            self._i20[i] = layout.neighbourhood2(iter_, d0, +1, d1, -1)
+            self._i02[i] = layout.neighbourhood2(iter_, d0, -1, d1, +1)
+            self._i22[i] = layout.neighbourhood2(iter_, d0, +1, d1, +1)
 
     @property
     def d0(self) -> int:
