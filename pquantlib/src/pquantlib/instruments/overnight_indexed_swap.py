@@ -80,7 +80,15 @@ class OvernightIndexedSwap(FixedVsFloatingSwap):
             ibor_index=cast(IborIndexProtocol, overnight_index),
             spread=spread,
             floating_day_count=overnight_index.day_counter(),
-            payment_convention=payment_adjustment,
+            # C++ parity: overnightindexedswap.cpp:143 — the base class is given
+            # ``ext::nullopt``, NOT ``paymentAdjustment``. So an OIS's
+            # ``paymentConvention()`` is the OVERNIGHT schedule's business-day
+            # convention, and that is what rolls the FIXED leg's payment dates;
+            # ``payment_adjustment`` reaches the overnight leg only (below).
+            # Passing it here instead was invisible while the payment lag was
+            # zero — a zero lag adjusts an already-adjusted accrual end date to
+            # itself under either convention — and wrong as soon as it was not.
+            payment_convention=None,
             payment_calendar=payment_calendar,
             # C++ parity: overnightindexedswap.cpp:146-147 — the lag reaches
             # the fixed leg through the base class too. It was dropped here.

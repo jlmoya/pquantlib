@@ -48,7 +48,10 @@ from pquantlib.pricingengines.pricing_engine import (
 )
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.date import Date
-from pquantlib.time.schedule import Schedule
+from pquantlib.time.date_generation import DateGeneration
+from pquantlib.time.month import Month
+from pquantlib.time.period import Period
+from pquantlib.time.schedule import Schedule, previous_twentieth
 from pquantlib.time.time_unit import TimeUnit
 
 
@@ -606,10 +609,67 @@ class CreditDefaultSwap(Instrument):
         )
 
 
+_QUARTER: Period = Period(3, TimeUnit.Months)
+_CDS_MATURITY_RULES: tuple[DateGeneration, ...] = (
+    DateGeneration.CDS2015,
+    DateGeneration.CDS,
+    DateGeneration.OldCDS,
+)
+_MONTHS_PER_QUARTER: int = 3
+_TWENTIETH: int = 20
+
+
+def cds_maturity(
+    trade_date: Date, tenor: Period, rule: DateGeneration
+) -> Date:
+    """Standard CDS maturity for a trade date and tenor.
+
+    # C++ parity: free function ``cdsMaturity`` (creditdefaultswap.hpp:361,
+    .cpp:479-503).
+
+    The maturity is the IMM/CDS twentieth on or before ``trade_date``, plus the
+    tenor, plus one quarter. Under ``CDS2015`` a 20-Dec or 20-Jun anchor rolls
+    back one quarter first (and a zero tenor then has no maturity at all, which
+    C++ signals with a null ``Date`` — reproduced here as ``Date()``).
+    """
+    qassert.require(
+        rule in _CDS_MATURITY_RULES,
+        "cdsMaturity should only be used with date generation rule "
+        "CDS2015, CDS or OldCDS",
+    )
+    qassert.require(
+        tenor.units == TimeUnit.Years
+        or (tenor.units == TimeUnit.Months and tenor.length % _MONTHS_PER_QUARTER == 0),
+        "cdsMaturity expects a tenor that is a multiple of 3 months.",
+    )
+    if rule == DateGeneration.OldCDS:
+        # C++ tests ``tenor != 0 * Months``; a C++ Period compares equal to any
+        # other zero-length Period regardless of unit, so test the length.
+        qassert.require(tenor.length != 0, "A tenor of 0M is not supported for OldCDS.")
+
+    anchor_date = previous_twentieth(trade_date, rule)
+    if rule == DateGeneration.CDS2015 and anchor_date in (
+        Date.from_ymd(_TWENTIETH, Month.December, anchor_date.year()),
+        Date.from_ymd(_TWENTIETH, Month.June, anchor_date.year()),
+    ):
+        if tenor.length == 0:
+            return _NULL_DATE
+        anchor_date = anchor_date - _QUARTER
+
+    maturity = anchor_date + tenor + _QUARTER
+    qassert.require(
+        maturity > trade_date,
+        f"error calculating CDS maturity. Tenor is {tenor}, trade date is "
+        f"{trade_date} generating a maturity of {maturity} <= trade date.",
+    )
+    return maturity
+
+
 __all__ = [
     "CreditDefaultSwap",
     "CreditDefaultSwapArguments",
     "CreditDefaultSwapResults",
     "PricingModel",
     "ProtectionSide",
+    "cds_maturity",
 ]
