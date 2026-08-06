@@ -14,8 +14,8 @@ Notation matches the C++ source:
 - ``size(i)`` — number of nodes at slice ``i``.
 - ``branchings_[i]`` — branching scheme that maps (index_at_i, branch)
   to (descendant_index_at_(i+1), probability). Stored as one
-  :class:`_Branching` per time slice in the C++ source; we keep the
-  same layout (a list ``branchings`` indexed by ``i`` in [0, n-1]).
+  :class:`TrinomialTree.Branching` per time slice in the C++ source; we
+  keep the same layout (a list ``branchings`` indexed by ``i`` in [0, n-1]).
 - ``underlying(i, index) = x0 + (jMin(i) + index) * dx[i]``.
 
 The branching is centred so that the **middle** branch lands at the
@@ -33,9 +33,9 @@ The ``is_positive`` flag (off by default) clamps the lowest branch so
 that ``x0 + (k-1)*dx[i+1] > 0`` — used by BlackKarasinski-style trees
 where the state is the log of a positive quantity.
 
-# C++ parity: nested ``TrinomialTree::Branching`` (trinomialtree.hpp:66-79)
-# is ported as a private ``_Branching`` dataclass-like helper. We use
-# lists + a single growing-bounds invariant; the C++ source uses
+# C++ parity: ``Branching`` is a private nested class of ``TrinomialTree``
+# (trinomialtree.hpp:42 + 66-79); it is nested here too. We use lists + a
+# single growing-bounds invariant; the C++ source uses
 # ``std::vector<Integer>`` and ``std::vector<std::vector<Real>>``.
 """
 
@@ -91,90 +91,6 @@ def _preflight(
     return dt_max, v2_cache, math.sqrt(3.0 * dx_floor_var)
 
 
-class _Branching:
-    """Branching scheme for a single time slice of a trinomial tree.
-
-    # C++ parity: nested ``TrinomialTree::Branching`` in
-    # trinomialtree.hpp:66-79 + trinomialtree.hpp:105-143 (inline impls).
-
-    Each call to :meth:`add` registers the central-branch index ``k``
-    for one parent node together with the three branching
-    probabilities ``(p1, p2, p3)``. ``add`` maintains the global
-    ``kMin/kMax`` over all parents, from which we derive
-    ``jMin/jMax = kMin - 1 / kMax + 1`` (the bounds of the *child*
-    slice indices).
-    """
-
-    __slots__ = ("_j_max", "_j_min", "_k", "_k_max", "_k_min", "_probs")
-
-    def __init__(self) -> None:
-        # C++ parity: trinomialtree.hpp:105-107 — initial invariants.
-        # ``probs_`` is ``std::vector<std::vector<Real>>(3)`` —
-        # three parallel arrays for p1, p2, p3.
-        self._k: list[int] = []
-        self._probs: list[list[float]] = [[], [], []]
-        self._k_min: int = _INTEGER_MAX
-        self._j_min: int = _INTEGER_MAX
-        self._k_max: int = _INTEGER_MIN
-        self._j_max: int = _INTEGER_MIN
-
-    def add(self, k: int, p1: float, p2: float, p3: float) -> None:
-        """Record a parent's central-branch index + three probabilities.
-
-        # C++ parity: ``TrinomialTree::Branching::add`` (trinomialtree.hpp:131-143).
-        """
-        self._k.append(k)
-        self._probs[0].append(p1)
-        self._probs[1].append(p2)
-        self._probs[2].append(p3)
-        # Invariants: kMin/kMax across all parents; jMin/jMax for
-        # the child slice (bounded by ``[kMin - 1, kMax + 1]``).
-        if k < self._k_min:
-            self._k_min = k
-            self._j_min = k - 1
-        if k > self._k_max:
-            self._k_max = k
-            self._j_max = k + 1
-
-    def descendant(self, index: int, branch: int) -> int:
-        """Child-slice index for parent ``index`` taking ``branch`` (0/1/2).
-
-        # C++ parity: ``Branching::descendant`` (trinomialtree.hpp:109-112).
-        """
-        return self._k[index] - self._j_min - 1 + branch
-
-    def probability(self, index: int, branch: int) -> float:
-        """Branch probability at parent ``index`` and branch ``branch``.
-
-        # C++ parity: ``Branching::probability`` (trinomialtree.hpp:114-117).
-        """
-        return self._probs[branch][index]
-
-    def size(self) -> int:
-        """Number of nodes at the *child* slice (one more on each end).
-
-        # C++ parity: ``Branching::size`` (trinomialtree.hpp:119-121) —
-        # ``jMax - jMin + 1``.
-        """
-        return self._j_max - self._j_min + 1
-
-    @property
-    def j_min(self) -> int:
-        """Minimum child-slice index (``kMin - 1``).
-
-        # C++ parity: ``Branching::jMin`` (trinomialtree.hpp:123-125).
-        """
-        return self._j_min
-
-    @property
-    def j_max(self) -> int:
-        """Maximum child-slice index (``kMax + 1``).
-
-        # C++ parity: ``Branching::jMax`` (trinomialtree.hpp:127-129).
-        """
-        return self._j_max
-
-
 class TrinomialTree(Tree[float]):
     """Recombining trinomial tree over a 1-D process.
 
@@ -187,6 +103,90 @@ class TrinomialTree(Tree[float]):
     """
 
     branches: int = 3
+
+    class Branching:
+        """Branching scheme for a single time slice of a trinomial tree.
+
+        # C++ parity: private nested ``TrinomialTree::Branching``
+        # (trinomialtree.hpp:66-79 + trinomialtree.hpp:105-143 inline impls).
+
+        Each node has three descendants, with the middle branch linked to
+        the node closest to the expectation of the variable. Each call to
+        :meth:`add` registers the central-branch index ``k`` for one parent
+        node together with the three branching probabilities
+        ``(p1, p2, p3)``. ``add`` maintains the global ``kMin/kMax`` over
+        all parents, from which we derive ``jMin/jMax = kMin - 1 / kMax + 1``
+        (the bounds of the *child* slice indices).
+        """
+
+        __slots__ = ("_j_max", "_j_min", "_k", "_k_max", "_k_min", "_probs")
+
+        def __init__(self) -> None:
+            # C++ parity: trinomialtree.hpp:105-107 — initial invariants.
+            # ``probs_`` is ``std::vector<std::vector<Real>>(3)`` —
+            # three parallel arrays for p1, p2, p3.
+            self._k: list[int] = []
+            self._probs: list[list[float]] = [[], [], []]
+            self._k_min: int = _INTEGER_MAX
+            self._j_min: int = _INTEGER_MAX
+            self._k_max: int = _INTEGER_MIN
+            self._j_max: int = _INTEGER_MIN
+
+        def add(self, k: int, p1: float, p2: float, p3: float) -> None:
+            """Record a parent's central-branch index + three probabilities.
+
+            # C++ parity: ``Branching::add`` (trinomialtree.hpp:131-143).
+            """
+            self._k.append(k)
+            self._probs[0].append(p1)
+            self._probs[1].append(p2)
+            self._probs[2].append(p3)
+            # Invariants: kMin/kMax across all parents; jMin/jMax for
+            # the child slice (bounded by ``[kMin - 1, kMax + 1]``).
+            if k < self._k_min:
+                self._k_min = k
+                self._j_min = k - 1
+            if k > self._k_max:
+                self._k_max = k
+                self._j_max = k + 1
+
+        def descendant(self, index: int, branch: int) -> int:
+            """Child-slice index for parent ``index`` taking ``branch`` (0/1/2).
+
+            # C++ parity: ``Branching::descendant`` (trinomialtree.hpp:109-112).
+            """
+            return self._k[index] - self._j_min - 1 + branch
+
+        def probability(self, index: int, branch: int) -> float:
+            """Branch probability at parent ``index`` and branch ``branch``.
+
+            # C++ parity: ``Branching::probability`` (trinomialtree.hpp:114-117).
+            """
+            return self._probs[branch][index]
+
+        def size(self) -> int:
+            """Number of nodes at the *child* slice (one more on each end).
+
+            # C++ parity: ``Branching::size`` (trinomialtree.hpp:119-121) —
+            # ``jMax - jMin + 1``.
+            """
+            return self._j_max - self._j_min + 1
+
+        @property
+        def j_min(self) -> int:
+            """Minimum child-slice index (``kMin - 1``).
+
+            # C++ parity: ``Branching::jMin`` (trinomialtree.hpp:123-125).
+            """
+            return self._j_min
+
+        @property
+        def j_max(self) -> int:
+            """Maximum child-slice index (``kMax + 1``).
+
+            # C++ parity: ``Branching::jMax`` (trinomialtree.hpp:127-129).
+            """
+            return self._j_max
 
     def __init__(
         self,
@@ -202,7 +202,7 @@ class TrinomialTree(Tree[float]):
         # dx[0] = 0.0 (root has no spacing yet); subsequent ``dx[i]``
         # are pushed by the loop below.
         self._dx: list[float] = [0.0]
-        self._branchings: list[_Branching] = []
+        self._branchings: list[TrinomialTree.Branching] = []
 
         n_time_steps = time_grid.size() - 1
         qassert.require(n_time_steps > 0, "null time steps for trinomial tree")
@@ -242,7 +242,7 @@ class TrinomialTree(Tree[float]):
             dx_is_floored = dx_next > dx_natural
             dx2 = dx_next * dx_next
 
-            branching = _Branching()
+            branching = TrinomialTree.Branching()
             for j in range(j_min, j_max + 1):
                 x = self._x0 + j * self._dx[i]
                 m = process.expectation_1d(t, x, dt)

@@ -34,7 +34,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from typing import Any
 
+import numpy as np
+
+from pquantlib.exceptions import LibraryException
+from pquantlib.methods.montecarlo.multi_path import MultiPath
+from pquantlib.methods.montecarlo.path import Path
 from pquantlib.methods.montecarlo.path_pricer import PathPricer
 
 
@@ -66,9 +72,50 @@ class EarlyExercisePathPricer[PathT, StateT](ABC):
         """Basis functions for the LSM regression."""
 
 
+class EarlyExerciseTraits:
+    """Path-shape traits used by the early-exercise machinery.
+
+    # C++ parity: ``template <class PathType> class EarlyExerciseTraits``
+    # (earlyexercisepathpricer.hpp:35-58) — a primary template with a
+    # deliberately unusable body plus two explicit specialisations, for
+    # ``Path`` and ``MultiPath``.
+
+    The two specialisations carry one behavioural difference each: the
+    ``StateType`` (``Real`` vs ``Array``) and how the path length is read
+    (``path.length()`` vs ``path.pathSize()``). Python folds the dispatch into
+    a single runtime lookup, and keeps the C++ "dummy definition, will not
+    work" arm as an explicit raise for an unrecognised path type.
+    """
+
+    @staticmethod
+    def path_length(path: object) -> int:
+        """# C++ parity: ``EarlyExerciseTraits<...>::pathLength``."""
+        if isinstance(path, MultiPath):
+            return path.path_size()
+        if isinstance(path, Path):
+            return path.length()
+        raise LibraryException(
+            f"EarlyExerciseTraits has no specialisation for {type(path).__name__}"
+        )
+
+    @staticmethod
+    def state_type(path: object) -> type[float] | type[np.ndarray[Any, Any]]:
+        """# C++ parity: ``EarlyExerciseTraits<...>::StateType``.
+
+        ``Real`` for a single ``Path``, ``Array`` for a ``MultiPath``.
+        """
+        if isinstance(path, MultiPath):
+            return np.ndarray
+        if isinstance(path, Path):
+            return float
+        raise LibraryException(
+            f"EarlyExerciseTraits has no specialisation for {type(path).__name__}"
+        )
+
+
 # ``PathPricer`` is re-exported here for convenience — the
 # ``LongstaffSchwartzPathPricer`` is *both* a ``PathPricer[PathT]`` (so the
 # MC simulation can drive it via the standard contract) *and* delegates
 # to an ``EarlyExercisePathPricer[PathT, StateT]`` internally.
 
-__all__ = ["EarlyExercisePathPricer", "PathPricer"]
+__all__ = ["EarlyExercisePathPricer", "EarlyExerciseTraits", "PathPricer"]

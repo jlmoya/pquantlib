@@ -1,35 +1,23 @@
-"""FdmBackwardSolver — back-propagate maturity payoff to t=0.
+"""FdmBackwardSolver — back-propagate a maturity payoff to t=0.
 
 # C++ parity: ql/methods/finitedifferences/solvers/fdmbackwardsolver.{hpp,cpp}
-# (v1.42.1).
+# (v1.43).
 
-The C++ implementation is a thin dispatcher over the
-``FiniteDifferenceModel<Evolver>`` template: for each scheme tag in
-``FdmSchemeDesc`` it instantiates the matching evolver and calls
-``rollback(rhs, from, to, steps, *condition)``.
+C++ is a dispatcher over ``FiniteDifferenceModel<Evolver>``: it picks the
+evolver named by the ``FdmSchemeDesc`` tag and rolls the array back. The
+``FiniteDifferenceModel`` template itself belongs to the retired pre-1.0
+framework (hosted in ``pquantlib-helpers``), which core must not depend on, so
+its ``rollback`` loop — including the stopping-time bisection — is inlined
+here as ``_rollback_with_scheme``.
 
-The Python port inlines the rollback logic since only four schemes
-are needed in L5-D:
+All nine scheme tags are dispatched. Earlier this file handled only the three
+Euler/Crank-Nicolson tags and raised ``NotImplementedError`` for the rest.
 
-* ``CrankNicolsonType`` / ``DouglasType`` — equivalent in 1-D,
-  routed via ``CrankNicolsonScheme(theta=0.5)``.
-* ``ImplicitEulerType`` — ``CrankNicolsonScheme(theta=1.0)`` is
-  equivalent to one implicit-Euler step (the implicit branch is
-  exercised, the explicit branch contributes nothing).
-* ``ExplicitEulerType`` — ``CrankNicolsonScheme(theta=0.0)``.
-* ``HundsdorferType`` — ``HundsdorferScheme(theta, mu)``, the
-  multi-direction ADI splitting used by the ZABR 2-D PDE.
-
-The Douglas routing is exact rather than approximate in 1-D: C++'s
-``DouglasScheme::step`` computes ``y = a + dt*L a``, then
-``rhs = y - theta*dt*L a`` and ``solve_splitting(0, rhs, -theta*dt)``,
-which for a single direction is algebraically the explicit-then-implicit
-pair that ``CrankNicolsonScheme`` performs with the same theta.
-
-The damping-steps branch (``dampingSteps != 0`` and scheme !=
-``ImplicitEulerType``) runs ``dampingSteps`` implicit-Euler steps
-at the start to smooth the kink in the payoff before switching to
-the requested scheme.
+Damping: when ``damping_steps != 0`` and the requested scheme is not already
+implicit Euler, C++ runs ``damping_steps`` implicit-Euler steps first to smooth
+the payoff kink, then switches. Reproduced, including the fact that the
+implicit-Euler branch instead rolls the *whole* ``steps + damping_steps`` in
+one go from ``from`` rather than from ``damping_to``.
 """
 
 from __future__ import annotations
@@ -38,13 +26,24 @@ import math
 from typing import Protocol, final
 
 from pquantlib import qassert
+from pquantlib.exceptions import LibraryException
 from pquantlib.math.array import Array
 from pquantlib.math.constants import QL_EPSILON
+from pquantlib.methods.finitedifferences.fdm_boundary_condition import (
+    FdmBoundaryConditionSet,
+)
 from pquantlib.methods.finitedifferences.operators.fdm_linear_op_composite import (
     FdmLinearOpComposite,
 )
+from pquantlib.methods.finitedifferences.schemes.craig_sneyd_scheme import (
+    CraigSneydScheme,
+)
 from pquantlib.methods.finitedifferences.schemes.crank_nicolson_scheme import (
     CrankNicolsonScheme,
+)
+from pquantlib.methods.finitedifferences.schemes.douglas_scheme import DouglasScheme
+from pquantlib.methods.finitedifferences.schemes.explicit_euler_scheme import (
+    ExplicitEulerScheme,
 )
 from pquantlib.methods.finitedifferences.schemes.fdm_scheme_desc import (
     FdmSchemeDesc,
@@ -53,21 +52,32 @@ from pquantlib.methods.finitedifferences.schemes.fdm_scheme_desc import (
 from pquantlib.methods.finitedifferences.schemes.hundsdorfer_scheme import (
     HundsdorferScheme,
 )
+from pquantlib.methods.finitedifferences.schemes.implicit_euler_scheme import (
+    ImplicitEulerScheme,
+)
+from pquantlib.methods.finitedifferences.schemes.method_of_lines_scheme import (
+    MethodOfLinesScheme,
+)
+from pquantlib.methods.finitedifferences.schemes.modified_craig_sneyd_scheme import (
+    ModifiedCraigSneydScheme,
+)
+from pquantlib.methods.finitedifferences.schemes.tr_bdf2_scheme import TrBDF2Scheme
 from pquantlib.methods.finitedifferences.step_conditions.fdm_step_condition_composite import (
     FdmStepConditionComposite,
 )
 
 
 class _Evolver(Protocol):
-    """One-step evolver surface used by the rollback loop.
+    """The one-step surface every FD scheme in this package exposes.
 
-    # C++ parity: the ``Evolver`` template parameter of
-    # ``FiniteDifferenceModel<Evolver>``.
+    Both arguments are positional-only: the schemes spell the array parameter
+    differently (``a`` in the Euler family, ``fn`` in ``TrBDF2Scheme``, as C++
+    does) and the protocol must not force them to agree on the name.
     """
 
-    def set_step(self, dt: float) -> None: ...
+    def set_step(self, dt: float, /) -> None: ...
 
-    def step(self, a: Array, t: float) -> Array: ...
+    def step(self, a: Array, t: float, /) -> Array: ...
 
 
 def _rollback_with_scheme(
@@ -127,14 +137,23 @@ class FdmBackwardSolver:
     def __init__(
         self,
         op: FdmLinearOpComposite,
-        condition: FdmStepConditionComposite | None,
-        scheme_desc: FdmSchemeDesc,
+        condition: FdmStepConditionComposite | None = None,
+        scheme_desc: FdmSchemeDesc | None = None,
+        bc_set: FdmBoundaryConditionSet = (),
     ) -> None:
+        """# C++ parity: ``FdmBackwardSolver(map, bcSet, condition, schemeDesc)``.
+
+        The argument order differs from C++: ``bc_set`` is last and defaults to
+        empty, so the pre-existing three-argument call sites keep working.
+        """
         self._op: FdmLinearOpComposite = op
         self._condition: FdmStepConditionComposite = (
             condition if condition is not None else FdmStepConditionComposite([], [])
         )
-        self._scheme_desc: FdmSchemeDesc = scheme_desc
+        self._scheme_desc: FdmSchemeDesc = (
+            scheme_desc if scheme_desc is not None else FdmSchemeDesc.douglas()
+        )
+        self._bc_set: FdmBoundaryConditionSet = bc_set
 
     def rollback(
         self,
@@ -152,34 +171,51 @@ class FdmBackwardSolver:
         all_steps = steps + damping_steps
         damping_to = from_t - (delta_t * damping_steps) / all_steps
 
-        # Damping branch: implicit-Euler smoothing at the start (only
-        # if the requested scheme is not already implicit-Euler).
+        # Damping branch: implicit-Euler smoothing at the start (only if the
+        # requested scheme is not already implicit Euler).
         if damping_steps > 0 and self._scheme_desc.type != FdmSchemeType.ImplicitEulerType:
-            implicit = CrankNicolsonScheme(theta=1.0, op=self._op)
-            rhs = _rollback_with_scheme(implicit, rhs, from_t, damping_to, damping_steps, self._condition)
-
-        # Main scheme.
-        scheme: _Evolver
-        if self._scheme_desc.type in (
-            FdmSchemeType.CrankNicolsonType,
-            FdmSchemeType.DouglasType,
-        ):
-            scheme = CrankNicolsonScheme(theta=self._scheme_desc.theta, op=self._op)
-            rhs = _rollback_with_scheme(scheme, rhs, damping_to, to_t, steps, self._condition)
-        elif self._scheme_desc.type == FdmSchemeType.HundsdorferType:
-            scheme = HundsdorferScheme(self._scheme_desc.theta, self._scheme_desc.mu, self._op)
-            rhs = _rollback_with_scheme(scheme, rhs, damping_to, to_t, steps, self._condition)
-        elif self._scheme_desc.type == FdmSchemeType.ImplicitEulerType:
-            scheme = CrankNicolsonScheme(theta=1.0, op=self._op)
-            rhs = _rollback_with_scheme(scheme, rhs, from_t, to_t, all_steps, self._condition)
-        elif self._scheme_desc.type == FdmSchemeType.ExplicitEulerType:
-            scheme = CrankNicolsonScheme(theta=0.0, op=self._op)
-            rhs = _rollback_with_scheme(scheme, rhs, damping_to, to_t, steps, self._condition)
-        else:
-            raise NotImplementedError(
-                f"FdmBackwardSolver: scheme {self._scheme_desc.type.name} not yet implemented "
-                "(deferred to Phase 6 — multi-asset operator splittings)"
+            damper = ImplicitEulerScheme(self._op, self._bc_set)
+            rhs = _rollback_with_scheme(
+                damper, rhs, from_t, damping_to, damping_steps, self._condition
             )
+
+        theta = self._scheme_desc.theta
+        mu = self._scheme_desc.mu
+        kind = self._scheme_desc.type
+        evolver: _Evolver
+
+        # C++ parity: the switch in FdmBackwardSolver::rollback. Note the
+        # ImplicitEulerType arm rolls all_steps from `from`, not steps from
+        # damping_to — every other arm rolls steps from damping_to.
+        if kind == FdmSchemeType.ImplicitEulerType:
+            evolver = ImplicitEulerScheme(self._op, self._bc_set)
+            return _rollback_with_scheme(
+                evolver, rhs, from_t, to_t, all_steps, self._condition
+            )
+
+        if kind == FdmSchemeType.HundsdorferType:
+            evolver = HundsdorferScheme(theta, mu, self._op, self._bc_set)
+        elif kind == FdmSchemeType.DouglasType:
+            evolver = DouglasScheme(theta, self._op, self._bc_set)
+        elif kind == FdmSchemeType.CrankNicolsonType:
+            evolver = CrankNicolsonScheme(theta, self._op, self._bc_set)
+        elif kind == FdmSchemeType.CraigSneydType:
+            evolver = CraigSneydScheme(theta, mu, self._op, self._bc_set)
+        elif kind == FdmSchemeType.ModifiedCraigSneydType:
+            evolver = ModifiedCraigSneydScheme(theta, mu, self._op, self._bc_set)
+        elif kind == FdmSchemeType.ExplicitEulerType:
+            evolver = ExplicitEulerScheme(self._op, self._bc_set)
+        elif kind == FdmSchemeType.MethodOfLinesType:
+            evolver = MethodOfLinesScheme(theta, mu, self._op, self._bc_set)
+        elif kind == FdmSchemeType.TrBDF2Type:
+            # C++ hard-codes the trapezoidal stage to CraigSneyd()'s (theta, mu).
+            tr_desc = FdmSchemeDesc.craig_sneyd()
+            trapezoidal = CraigSneydScheme(tr_desc.theta, tr_desc.mu, self._op, self._bc_set)
+            evolver = TrBDF2Scheme(theta, self._op, trapezoidal, self._bc_set, mu)
+        else:
+            raise LibraryException("Unknown scheme type")
+
+        rhs = _rollback_with_scheme(evolver, rhs, damping_to, to_t, steps, self._condition)
         return rhs
 
 

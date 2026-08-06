@@ -41,31 +41,34 @@ class FdmLinearOpComposite(Protocol):
     # override. Python uses a structural Protocol instead.
     """
 
+    # Every parameter is positional-only: the concrete operators keep the
+    # argument names their own C++ headers use (``r`` / ``u`` / ``fn``), and a
+    # structural Protocol must not force them to agree on a spelling.
     def size(self) -> int:
         """Number of directions (1 for 1-D ops; 2 for 2-D; etc.)."""
         ...
 
-    def set_time(self, t1: float, t2: float) -> None:
+    def set_time(self, t1: float, t2: float, /) -> None:
         """Update time-dependent coefficients over ``[t1, t2]``."""
         ...
 
-    def apply(self, r: Array) -> Array:
+    def apply(self, r: Array, /) -> Array:
         """Apply the operator: ``L @ r``."""
         ...
 
-    def apply_mixed(self, r: Array) -> Array:
+    def apply_mixed(self, r: Array, /) -> Array:
         """Apply only the mixed-derivative contribution."""
         ...
 
-    def apply_direction(self, direction: int, r: Array) -> Array:
+    def apply_direction(self, direction: int, r: Array, /) -> Array:
         """Apply only the contribution along ``direction``."""
         ...
 
-    def solve_splitting(self, direction: int, r: Array, dt: float) -> Array:
+    def solve_splitting(self, direction: int, r: Array, dt: float, /) -> Array:
         """Solve ``(I - dt * L_dir) x = r`` along ``direction``."""
         ...
 
-    def preconditioner(self, r: Array, dt: float) -> Array:
+    def preconditioner(self, r: Array, dt: float, /) -> Array:
         """Preconditioner application (default: solve along direction 0)."""
         ...
 

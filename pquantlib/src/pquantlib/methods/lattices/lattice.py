@@ -11,12 +11,10 @@ to delegate ``initialize`` / ``rollback`` / ``partialRollback`` /
 (CRTP) is the concrete generic implementation; binomial and trinomial
 pricers inherit from it.
 
-The Python port mirrors the abstract base only — concrete tree
-lattices (``BinomialTree``, ``TrinomialTree``, ``TFLattice``) are
-deferred. The class is built around a held ``TimeGrid`` and exposes
-the four pure-virtual methods plus ``grid(t) -> Array``.
-
-L5-A stage scope: the abstract base; concretes follow in later stages.
+This module is the abstract base: it holds a ``TimeGrid`` and declares
+the four pure-virtual methods plus ``grid(t) -> Array``. The concrete
+lattices — ``TreeLattice1D``, ``TreeLattice2D`` and the binomial /
+trinomial tree family — live in the sibling modules of this package.
 """
 
 from __future__ import annotations

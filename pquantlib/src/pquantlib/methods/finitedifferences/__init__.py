@@ -15,7 +15,10 @@ L5-D ports the **minimal 1-D Black-Scholes** subset:
 - ``solvers/`` — solver-desc DTO + ``FdmBackwardSolver`` that
   back-propagates from maturity to t=0.
 
-Multi-asset FD (Heston/G2/Bates/...), additional operator
-splittings, full BC support, and Concentrating/Exponential meshers
-are deferred to Phase 6.
+All of it is here at v1.43: the multi-asset operators
+(Heston / Bates / G2 / Hull-White / CIR / SABR / CEV and the forward
+equations), the full scheme set (Douglas, Craig-Sneyd, modified
+Craig-Sneyd, Hundsdorfer, method of lines, TR-BDF2), boundary
+conditions carried on ``FdmSolverDesc.bc_set``, and the concentrating,
+exponential-jump and predefined meshers.
 """

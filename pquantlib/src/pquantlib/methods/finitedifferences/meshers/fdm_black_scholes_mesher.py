@@ -1,7 +1,7 @@
 """FdmBlackScholesMesher — 1-D mesher for the BSM process in log-spot.
 
 # C++ parity: ql/methods/finitedifferences/meshers/fdmblackscholesmesher.{hpp,cpp}
-# (v1.42.1).
+# @ v1.43 (6b57206e0).
 
 Builds a 1-D mesh in ``log S`` over ``[xMin, xMax]`` where the bounds
 are derived from the underlying spot, the forward drift over the
@@ -11,16 +11,16 @@ intermediate time steps, and the Black-vol-scaled tail:
     xMax = log(max forward) + sigma * sqrt(T) * norminv(1-eps) * scale
 
 The strike enters via the at-the-money sigma lookup
-``blackVol(maturity, strike)`` and (in C++) via the ``cPoint``
-parameter that triggers a ``Concentrating1dMesher`` anchored at
-``log(strike)``.
+``blackVol(maturity, strike)`` and via ``c_point``, which switches the
+helper mesh to a ``Concentrating1dMesher`` anchored at ``log(c_point[0])``
+— but only when that log lies inside ``[x_min, x_max]``, exactly as the
+C++ guard requires.
 
-**Carve-out (L5-D):** The Python port supports the **Uniform1dMesher**
-path only. ``Concentrating1dMesher`` is deferred to Phase 6 — until
-it lands, ``cPoint`` is silently ignored and the mesher always falls
-back to the uniform mesh. This converges to the analytic European
-price (LOOSE 1e-4 at xGrid=200) — see ``cluster/l5d.json`` ←→
-``test_fd_black_scholes_vanilla_engine``.
+**Absent C++ parameters.** C++ also takes a ``DividendSchedule`` and an
+``FdmQuantoHelper``, which feed the forward walk and swap the dividend
+curve for a ``QuantoTermStructure`` respectively. pquantlib has neither
+type yet, so neither parameter exists on this signature — a caller cannot
+pass one and have it ignored.
 """
 
 from __future__ import annotations
@@ -33,6 +33,9 @@ import numpy as np
 from pquantlib import qassert
 from pquantlib.math.distributions.inverse_cumulative_normal import (
     InverseCumulativeNormal,
+)
+from pquantlib.methods.finitedifferences.meshers.concentrating_1d_mesher import (
+    Concentrating1dMesher,
 )
 from pquantlib.methods.finitedifferences.meshers.fdm_1d_mesher import Fdm1dMesher
 from pquantlib.methods.finitedifferences.meshers.uniform_1d_mesher import (
@@ -48,10 +51,6 @@ class FdmBlackScholesMesher(Fdm1dMesher):
     """1-D log-spot mesher anchored around log(spot).
 
     # C++ parity: ``class FdmBlackScholesMesher : public Fdm1dMesher``.
-
-    Python divergence: ``Concentrating1dMesher`` is deferred (Phase 6
-    carve-out) so the ``c_point`` parameter is accepted but ignored.
-    The uniform-mesh path matches C++'s fallback exactly.
     """
 
     def __init__(
@@ -113,9 +112,20 @@ class FdmBlackScholesMesher(Fdm1dMesher):
         if x_max_override is not None:
             x_max = x_max_override
 
-        # C++ branches to Concentrating1dMesher when c_point is given —
-        # Python defers that and falls back to uniform unconditionally.
-        helper = Uniform1dMesher(x_min, x_max, size)
+        # C++ parity: the helper is a Concentrating1dMesher iff a critical
+        # point was given *and* its log lies within the grid; otherwise
+        # uniform. The range guard is C++'s, not a defensive extra — a
+        # critical point outside the mesh silently falls back rather than
+        # raising (fdmblackscholesmesher.cpp, the `cPoint.first !=
+        # Null<Real>() && log(cPoint.first) >= xMin && <= xMax` test).
+        helper: Fdm1dMesher
+        c_location = c_point[0] if c_point is not None else None
+        if c_location is not None and x_min <= math.log(c_location) <= x_max:
+            helper = Concentrating1dMesher(
+                x_min, x_max, size, (math.log(c_location), c_point[1] if c_point else None)
+            )
+        else:
+            helper = Uniform1dMesher(x_min, x_max, size)
 
         # Copy locations + dplus/dminus arrays from the helper.
         self._locations = np.asarray(helper.locations(), dtype=np.float64).copy()

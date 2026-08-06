@@ -59,11 +59,19 @@ def test_layout_iter_2d_axis_0_fastest() -> None:
     assert coords == [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]
 
 
-def test_layout_neighbourhood_clamps_at_boundary() -> None:
+def test_layout_neighbourhood_reflects_at_boundary() -> None:
+    """C++ ``FdmLinearOpLayout::neighbourhood`` *reflects*, it does not clamp.
+
+    Pinned exactly by ``v143/methods/operators.json`` case
+    ``layout_neighbourhood``; kept here as the cheap local statement of the
+    same invariant. Before the v1.43 alignment PQuantLib clamped
+    (``-1 -> 0``), which silently disagreed with C++ on every boundary row
+    whose ``lower``/``upper`` band was non-zero.
+    """
     layout = FdmLinearOpLayout((5,))
     first = next(layout.iter())
-    # Going below 0 clamps to 0.
-    assert layout.neighbourhood(first, 0, -1) == 0
+    # Going below 0 reflects to +1, it does not clamp to 0.
+    assert layout.neighbourhood(first, 0, -1) == 1
     # Going up by 1 from index 0 is index 1.
     assert layout.neighbourhood(first, 0, +1) == 1
 

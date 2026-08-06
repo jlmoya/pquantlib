@@ -8,10 +8,13 @@ times at which any of the conditions wants to be invoked). The
 backward solver consults ``stopping_times()`` to refine the step
 schedule, then calls ``apply_to`` at each step.
 
-The L5-D scope uses the trivial composite (single American or empty)
-exclusively. ``vanilla_composite`` is a convenience builder that the
-C++ engine uses — Python keeps it for parity but populates only the
-American branch (dividends + Bermudan deferred).
+C++ declares two static builders on this class. ``join_conditions``
+(C++ ``joinConditions``) is ported below. The other, ``vanillaComposite``,
+is **not** ported yet: it needs ``Exercise``-type dispatch, a
+``DividendSchedule`` filter feeding ``FdmDividendHandler``, and an
+``FdmAmericanStepCondition`` whose second argument is an
+``FdmInnerValueCalculator`` rather than a bare ``Payoff`` — the Python
+``FdmAmericanStepCondition`` still takes the payoff.
 """
 
 from __future__ import annotations
@@ -19,6 +22,9 @@ from __future__ import annotations
 from typing import final
 
 from pquantlib.math.array import Array
+from pquantlib.methods.finitedifferences.step_conditions.fdm_snapshot_condition import (
+    FdmSnapshotCondition,
+)
 from pquantlib.methods.finitedifferences.step_conditions.step_condition import (
     StepCondition,
 )
@@ -52,6 +58,26 @@ class FdmStepConditionComposite(StepCondition):
     def apply_to(self, a: Array, t: float) -> None:
         for c in self._conditions:
             c.apply_to(a, t)
+
+    @staticmethod
+    def join_conditions(
+        c1: FdmSnapshotCondition,
+        c2: FdmStepConditionComposite,
+    ) -> FdmStepConditionComposite:
+        """Glue a snapshot condition onto an existing composite.
+
+        # C++ parity: ``FdmStepConditionComposite::joinConditions``.
+
+        The snapshot's own time joins the stopping times, so the solver is
+        forced to land exactly on it — which is what makes
+        ``FdmSnapshotCondition``'s exact ``t == t_`` test fire. Order matters:
+        ``c2`` runs first, then the snapshot, so the recorded values are the
+        *post-condition* ones.
+        """
+        return FdmStepConditionComposite(
+            [c2.stopping_times(), [c1.get_time()]],
+            [c2, c1],
+        )
 
 
 __all__ = ["FdmStepConditionComposite"]

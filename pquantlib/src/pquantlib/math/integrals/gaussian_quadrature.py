@@ -15,22 +15,25 @@ Golub-Welsch algorithm:
 (G.H. Golub & J.H. Welsch, "Calculation of Gauss quadrature rules",
 Math. Comput. 23 (1969), 221-230.)
 
-Eigen-decomposition delegation
-------------------------------
+Eigen-decomposition — QuantLib's own TQR, not scipy
+--------------------------------------------------
 
-The C++ class runs its own ``TqrEigenDecomposition`` (implicit-shift QL with
-the "over-relaxation" Wilkinson shift) on the Jacobi matrix; the Python port
-delegates the symmetric-tridiagonal eigenproblem to
-``scipy.linalg.eigh_tridiagonal``. That is a genuine linear-algebra
-delegation, not an algorithm substitution: both are backward-stable solvers
-for the *same* matrix, and the node/weight arrays are cross-validated
-element-by-element against the C++ probe.
+The C++ class runs ``TqrEigenDecomposition`` (implicit-shift QL with the
+"over-relaxation" Wilkinson shift, tracking only the first eigenvector row) on
+the Jacobi matrix. This module used to delegate that to
+``scipy.linalg.eigh_tridiagonal`` on the argument that "both are
+backward-stable solvers for the same matrix". They are — but backward
+stability is not the property the Golub-Welsch weight needs.
 
-What is **not** free is the ordering. ``TqrEigenDecomposition`` sorts
-``(eigenvalue, eigenvector)`` pairs with ``std::greater<>`` — nodes come out
-**descending** — whereas LAPACK returns them ascending. ``x()``/``weights()``
-are public API and ``operator()`` accumulates from the last index down, so the
-port reverses LAPACK's output to restore the C++ order.
+The weight is ``mu_0 * ev[0][i]^2 / w(x_i)``. For Laguerre that divides by
+``exp(-x_i)``, and at ``n = 128`` the largest node is ``x ~ 484``, so the first
+eigenvector component has to be accurate down to about ``1e-105``. LAPACK
+delivers eigenvectors to *absolute* accuracy ``eps * ||T||``: those components
+are noise. QuantLib's TQR accumulates the Givens rotations into the first row
+alone, starting from the identity, and preserves their relative accuracy.
+
+The port therefore uses the ported ``TqrEigenDecomposition``, which also fixes
+the ordering for free (it sorts descending, as C++ does).
 """
 
 from __future__ import annotations
@@ -39,9 +42,6 @@ import math
 from collections.abc import Callable, Sequence
 
 import numpy as np
-from scipy.linalg import (  # pyright: ignore[reportMissingTypeStubs]
-    eigh_tridiagonal,  # pyright: ignore[reportUnknownVariableType]
-)
 
 from pquantlib.math.array import Array
 from pquantlib.math.integrals.gaussian_orthogonal_polynomial import (
@@ -52,6 +52,11 @@ from pquantlib.math.integrals.gaussian_orthogonal_polynomial import (
     GaussLaguerrePolynomial,
 )
 from pquantlib.math.integrals.integrator import Integrator, RealFunction
+from pquantlib.math.matrixutilities.tqr_eigen_decomposition import (
+    EigenVectorCalculation,
+    ShiftStrategy,
+    TqrEigenDecomposition,
+)
 
 # C++ ``Null<Real>()`` — ql/utilities/null.hpp returns
 # ``std::numeric_limits<float>::max()`` for any floating-point type. Several
@@ -70,7 +75,31 @@ class GaussianQuadrature:
     __slots__ = ("_w", "_x")
 
     def __init__(self, n: int, orth_poly: GaussianOrthogonalPolynomial) -> None:
-        # C++ parity: gaussianquadratures.cpp:34-61 — Golub-Welsch.
+        """Golub-Welsch, via QuantLib's own TQR — not ``scipy.eigh_tridiagonal``.
+
+        # C++ parity: gaussianquadratures.cpp:34-61.
+
+        **Divergence fixed here.** This constructor used to call
+        ``scipy.linalg.eigh_tridiagonal``. That is not C++'s
+        ``TqrEigenDecomposition(..., OnlyFirstRowEigenVector, Overrelaxation)``,
+        and the difference is not cosmetic. The Golub-Welsch weight is
+        ``mu_0 * ev[0][i]^2 / w(x_i)``; for Laguerre that divides by
+        ``exp(-x_i)``, so at ``n = 128`` the largest node is ``x ~ 484`` and the
+        first eigenvector component must be accurate down to ``1e-105``. LAPACK
+        computes eigenvectors to *absolute* accuracy ``eps * ||T||``, so those
+        components are pure noise; QuantLib's TQR accumulates the Givens
+        rotations into the first row only, starting from the identity, and keeps
+        their *relative* accuracy.
+
+        Measured at ``GaussLaguerreIntegration(128)``: C++ weights span
+        ``[0.0289, 25.26]`` and sum to 498.1; the scipy-based version produced
+        weights up to ``2.8e109`` summing to ``2.8e109``. The error was invisible
+        for integrands that decay like the weight function — ``int exp(-x)``
+        returned 1.0 either way — and catastrophic otherwise:
+        ``int 1/(1+x^2)`` returned ``1.85e104`` against the true ``pi/2``.
+        It was found because ``HestonProcess.pdf`` integrates a
+        polynomially-decaying characteristic function with exactly this rule.
+        """
         diag = np.empty(n, dtype=np.float64)
         off = np.empty(n - 1, dtype=np.float64)
         diag[0] = orth_poly.alpha(0)
@@ -78,20 +107,17 @@ class GaussianQuadrature:
             diag[i] = orth_poly.alpha(i)
             off[i - 1] = math.sqrt(orth_poly.beta(i))
 
-        # scipy.linalg.eigh_tridiagonal is untyped; the ndarray results are
-        # immediately normalised into owned float64 arrays.
-        eigenvalues, eigenvectors = eigh_tridiagonal(diag, off)  # pyright: ignore[reportUnknownVariableType]
-        # C++ parity: tqreigendecomposition.cpp:124 sorts the (eigenvalue,
-        # eigenvector) pairs with std::greater<> — descending. LAPACK hands
-        # them back ascending, so undo that here; the sign normalisation the
-        # C++ applies afterwards is irrelevant because the weight squares the
-        # eigenvector component.
-        order = np.argsort(eigenvalues, kind="stable")[::-1]  # pyright: ignore[reportUnknownArgumentType]
-        self._x: Array = np.ascontiguousarray(eigenvalues[order], dtype=np.float64)  # pyright: ignore[reportUnknownArgumentType]
+        tqr = TqrEigenDecomposition(
+            diag,
+            off,
+            EigenVectorCalculation.ONLY_FIRST_ROW_EIGEN_VECTOR,
+            ShiftStrategy.OVERRELAXATION,
+        )
+        self._x: Array = np.ascontiguousarray(tqr.eigenvalues(), dtype=np.float64)
+        first_row = np.ascontiguousarray(tqr.eigenvectors()[0, :], dtype=np.float64)
 
         mu_0 = orth_poly.mu_0()
         w = np.empty(n, dtype=np.float64)
-        first_row = np.ascontiguousarray(eigenvectors[0, :][order], dtype=np.float64)  # pyright: ignore[reportUnknownArgumentType]
         for i in range(n):
             w[i] = mu_0 * first_row[i] * first_row[i] / orth_poly.w(float(self._x[i]))
         self._w: Array = w

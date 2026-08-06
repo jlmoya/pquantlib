@@ -1,21 +1,27 @@
-"""Concentrating1dMesher — 1-D grid clustered around critical points.
+"""Concentrating1dMesher — 1-D grid concentrated around critical points.
 
 # C++ parity: ql/methods/finitedifferences/meshers/concentrating1dmesher.{hpp,cpp}
 # (v1.43).
 
-Two constructions, matching the two C++ overloads:
+Two constructors, which are two different algorithms:
 
-**Single critical point** (``c_points=(c, density)``) — nodes are laid
-out as ``c + density*(end-start)*sinh(c1*(1-l) + c2*l)`` for ``l``
-uniform on ``[0, 1]``, which clusters them around ``c``. With
-``require_c_point=True`` a piecewise-linear reparameterisation of
-``l`` forces ``c`` to land exactly on a node.
+* **single critical point** — the classical ``sinh`` transform of Tavella-Randall.
+  ``locations[i] = cPoint + density*sinh(c1(1-l) + c2 l)`` with
+  ``c1 = asinh((start-cPoint)/density)``, ``c2 = asinh((end-cPoint)/density)``.
+  With ``require_c_point`` the uniform ``l = i*dx`` is first bent through a
+  three-knot linear map so that one grid node lands exactly on ``cPoint``.
 
-**Several critical points** (``critical_points=[(c, density, required),
-...]``) — the node positions solve
-``y'(x) = a / sqrt(sum_i 1/(beta_i + (y - c_i)^2))`` with ``y(0) =
-start``, the scale ``a`` being Brent-solved so that ``y(1) = end``.
-The ODE is integrated with :class:`AdaptiveRungeKutta`.
+* **several critical points** — solve
+  ``y'(x) = a / sqrt(sum_i 1/(beta_i + (y-p_i)^2))``
+  with adaptive Runge-Kutta, calibrating ``a`` by Brent so ``y(1) = end``, then
+  bend the uniform parameterisation through a linear map so that every point
+  flagged ``required`` lands on a node.
+
+Python spells the C++ ``std::pair<Real,Real>`` critical point as an optional
+``(c_point, density)`` tuple, and the ``std::tuple<Real,Real,bool>`` vector as
+a sequence of ``(point, density, required)`` tuples. The two constructors
+become ``__init__`` (single) and the ``from_critical_points`` classmethod
+(multiple), because Python cannot overload.
 """
 
 from __future__ import annotations
@@ -27,7 +33,6 @@ from typing import final
 import numpy as np
 
 from pquantlib import qassert
-from pquantlib.math.array import Array
 from pquantlib.math.closeness import close, close_enough
 from pquantlib.math.constants import QL_EPSILON
 from pquantlib.math.interpolations.linear import LinearInterpolation
@@ -36,37 +41,24 @@ from pquantlib.math.solvers1d.brent import Brent
 from pquantlib.methods.finitedifferences.meshers.fdm_1d_mesher import Fdm1dMesher
 
 
-def _lround(x: float) -> int:
-    """Round half away from zero, as C++ ``std::lround``.
-
-    Python's built-in ``round`` is round-half-to-even, which differs at
-    exact ``.5`` — reachable here because ``z0*(size-1)`` lands on a half
-    integer whenever the critical point sits midway between two nodes.
-    """
-    return math.floor(x + 0.5) if x >= 0.0 else math.ceil(x - 0.5)
-
-
 class _OdeIntegrationFct:
-    """ODE right-hand side + integrator for the multi-point construction.
+    """# C++ parity: the anonymous-namespace ``OdeIntegrationFct``."""
 
-    # C++ parity: the anonymous-namespace ``OdeIntegrationFct`` in
-    # concentrating1dmesher.cpp.
-    """
+    __slots__ = ("_betas", "_points", "_rk")
 
     def __init__(self, points: Sequence[float], betas: Sequence[float], tol: float) -> None:
-        # C++: AdaptiveRungeKutta<> rk_(tol) — eps = tol, h1 and hmin default.
-        self._rk: AdaptiveRungeKutta = AdaptiveRungeKutta(tol)
         self._points: Sequence[float] = points
         self._betas: Sequence[float] = betas
+        self._rk: AdaptiveRungeKutta = AdaptiveRungeKutta(tol)
+
+    def _jac(self, a: float, y: float) -> float:
+        s = 0.0
+        for p, b in zip(self._points, self._betas, strict=True):
+            s += 1.0 / (b + (y - p) ** 2)
+        return a / math.sqrt(s)
 
     def solve(self, a: float, y0: float, x0: float, x1: float) -> float:
-        return self._rk.solve_1d(lambda x, y: self._jac(a, x, y), y0, x0, x1)
-
-    def _jac(self, a: float, _x: float, y: float) -> float:
-        s = 0.0
-        for point, beta in zip(self._points, self._betas, strict=True):
-            s += 1.0 / (beta + (y - point) * (y - point))
-        return a / math.sqrt(s)
+        return self._rk.solve_1d(lambda _x, y: self._jac(a, y), y0, x0, x1)
 
 
 @final
@@ -74,22 +66,6 @@ class Concentrating1dMesher(Fdm1dMesher):
     """1-D mesher concentrating nodes around one or more critical points.
 
     # C++ parity: ``class Concentrating1dMesher : public Fdm1dMesher``.
-
-    Exactly one of ``c_points`` / ``critical_points`` may be supplied;
-    they select the two C++ constructor overloads.
-
-    Args:
-        start: leftmost location (always a node).
-        end: rightmost location (always a node); must exceed ``start``.
-        size: number of nodes.
-        c_points: ``(critical point, density)``; either element may be
-            ``None`` for C++'s ``Null<Real>``. ``None`` for the whole
-            pair means a uniform grid. The density is scaled by
-            ``end - start`` internally, exactly as C++ does.
-        require_c_point: force the critical point onto a node.
-        critical_points: ``[(point, density, required), ...]`` for the
-            multi-point overload.
-        tol: Brent / Runge-Kutta tolerance for the multi-point overload.
     """
 
     def __init__(
@@ -97,39 +73,41 @@ class Concentrating1dMesher(Fdm1dMesher):
         start: float,
         end: float,
         size: int,
-        c_points: tuple[float | None, float | None] | None = None,
+        c_points: tuple[float | None, float | None] = (None, None),
         require_c_point: bool = False,
-        *,
         critical_points: Sequence[tuple[float, float, bool]] | None = None,
         tol: float = 1e-8,
     ) -> None:
+        """# C++ parity: the single-critical-point constructor.
+
+        ``c_points`` is ``(cPoint, density)``; ``None`` stands for C++
+        ``Null<Real>()``. Note C++ rescales the density by ``(end - start)``.
+
+        C++ overloads this constructor: the fourth argument is either a
+        ``std::pair<Real, Real>`` (one critical point) or a
+        ``std::vector<std::tuple<Real, Real, bool>>`` (several, solved through
+        the ODE). Python cannot overload on argument type, so the multi-point
+        form is reachable two ways — ``critical_points=`` here, or the
+        :meth:`from_critical_points` classmethod. Both run the same code.
+
+        Supplying both forms at once is rejected rather than silently resolved:
+        in C++ the two are separate overloads, so no caller can express "both",
+        and a silent precedence rule would let a caller believe a single
+        critical point was honoured when it had been discarded.
+        """
+        if critical_points is not None:
+            qassert.require(
+                c_points == (None, None) and not require_c_point,
+                "give either c_points or critical_points, not both",
+            )
+            self._init_from_critical_points(start, end, size, critical_points, tol)
+            return
+
         super().__init__(size)
         qassert.require(end > start, "end must be larger than start")
-        qassert.require(
-            c_points is None or critical_points is None,
-            "pass either c_points (single critical point) or critical_points "
-            "(multiple), not both",
-        )
-        if critical_points is not None:
-            self._build_multi(start, end, size, critical_points, tol)
-        else:
-            self._build_single(start, end, size, c_points, require_c_point)
-        self._fill_spacings(size)
 
-    # --- single critical point ------------------------------------------
-
-    def _build_single(
-        self,
-        start: float,
-        end: float,
-        size: int,
-        c_points: tuple[float | None, float | None] | None,
-        require_c_point: bool,
-    ) -> None:
-        """# C++ parity: the ``std::pair<Real, Real> cPoints`` constructor."""
-        c_point = None if c_points is None else c_points[0]
-        raw_density = None if c_points is None else c_points[1]
-        density = None if raw_density is None else raw_density * (end - start)
+        c_point = c_points[0]
+        density = None if c_points[1] is None else c_points[1] * (end - start)
 
         qassert.require(
             c_point is None or (start <= c_point <= end),
@@ -149,22 +127,24 @@ class Concentrating1dMesher(Fdm1dMesher):
 
         if c_point is not None:
             assert density is not None
+            transform: LinearInterpolation | None = None
             c1 = math.asinh((start - c_point) / density)
             c2 = math.asinh((end - c_point) / density)
-            transform: LinearInterpolation | None = None
             if require_c_point:
-                u = [0.0]
-                z = [0.0]
+                u: list[float] = [0.0]
+                z: list[float] = [0.0]
                 if not close(c_point, start) and not close(c_point, end):
                     z0 = -c1 / (c2 - c1)
-                    u0 = max(min(_lround(z0 * (size - 1)), size - 2), 1) / (size - 1)
+                    # C++: max(min(lround(z0*(size-1)), size-2), 1) / (size-1).
+                    u0 = max(min(_lround(z0 * (size - 1)), size - 2), 1) / float(size - 1)
                     u.append(u0)
                     z.append(z0)
                 u.append(1.0)
                 z.append(1.0)
                 transform = LinearInterpolation(
-                    np.asarray(u, dtype=np.float64), np.asarray(z, dtype=np.float64)
+                    np.array(u, dtype=np.float64), np.array(z, dtype=np.float64)
                 )
+
             for i in range(1, size - 1):
                 li = transform(i * dx) if transform is not None else i * dx
                 self._locations[i] = c_point + density * math.sinh(c1 * (1.0 - li) + c2 * li)
@@ -172,12 +152,27 @@ class Concentrating1dMesher(Fdm1dMesher):
             for i in range(1, size - 1):
                 self._locations[i] = start + i * dx * (end - start)
 
-        self._locations[0] = start
-        self._locations[-1] = end
+        self._finalise(start, end, size)
 
-    # --- several critical points ----------------------------------------
+    @classmethod
+    def from_critical_points(
+        cls,
+        start: float,
+        end: float,
+        size: int,
+        c_points: Sequence[tuple[float, float, bool]],
+        tol: float = 1e-8,
+    ) -> Concentrating1dMesher:
+        """# C++ parity: the multi-critical-point (ODE) constructor.
 
-    def _build_multi(
+        ``c_points[i]`` is ``(point, density, required)``. Equivalent to
+        passing ``critical_points=`` to the constructor.
+        """
+        self = cls.__new__(cls)
+        self._init_from_critical_points(start, end, size, c_points, tol)
+        return self
+
+    def _init_from_critical_points(
         self,
         start: float,
         end: float,
@@ -185,80 +180,89 @@ class Concentrating1dMesher(Fdm1dMesher):
         c_points: Sequence[tuple[float, float, bool]],
         tol: float,
     ) -> None:
-        """# C++ parity: the ``vector<tuple<Real, Real, bool>> cPoints`` constructor."""
-        points = [float(p[0]) for p in c_points]
-        # NOTE: C++ squares density*(end-start) here but then feeds the SQUARED
-        # value to asinh's denominator below (rather than the un-squared one),
-        # so betas plays both roles. Reproduced verbatim.
-        betas = [(float(p[1]) * (end - start)) ** 2 for p in c_points]
+        """Shared body of the multi-critical-point construction."""
+        Fdm1dMesher.__init__(self, size)
+        qassert.require(end > start, "end must be larger than start")
 
-        # scaling factor a such that y(1) = end
+        points = [p for p, _, _ in c_points]
+        betas = [(d * (end - start)) ** 2 for _, d, _ in c_points]
+
+        # Initial guess for the scaling factor a so that y(1) = end.
         a_init = 0.0
-        for point, beta in zip(points, betas, strict=True):
-            c1 = math.asinh((start - point) / beta)
-            c2 = math.asinh((end - point) / beta)
+        for p, b in zip(points, betas, strict=True):
+            c1 = math.asinh((start - p) / b)
+            c2 = math.asinh((end - p) / b)
             a_init += (c2 - c1) / len(points)
 
         fct = _OdeIntegrationFct(points, betas, tol)
-        a = Brent().solve(lambda x: fct.solve(x, start, 0.0, 1.0) - end, tol, a_init, 0.1 * a_init)
+        a = Brent().solve(
+            lambda x: fct.solve(x, start, 0.0, 1.0) - end, tol, a_init, 0.1 * a_init
+        )
 
-        # solve the ODE for all grid points
-        xs = [0.0] * size
-        ys = [0.0] * size
-        ys[0] = start
+        # Solve the ODE for all grid points.
+        x = np.zeros(size, dtype=np.float64)
+        y = np.zeros(size, dtype=np.float64)
+        y[0] = start
         dx = 1.0 / (size - 1)
         for i in range(1, size):
-            xs[i] = i * dx
-            ys[i] = fct.solve(a, ys[i - 1], xs[i - 1], xs[i])
+            x[i] = i * dx
+            y[i] = fct.solve(a, float(y[i - 1]), float(x[i - 1]), float(x[i]))
 
-        # eliminate numerical noise and ensure y(1) = end
-        dy = ys[-1] - end
+        # Eliminate numerical noise and ensure y(1) = end.
+        dy = float(y[-1]) - end
         for i in range(1, size):
-            ys[i] -= i * dx * dy
+            y[i] -= i * dx * dy
 
-        xs_arr: Array = np.asarray(xs, dtype=np.float64)
-        ys_arr: Array = np.asarray(ys, dtype=np.float64)
-        ode_solution = LinearInterpolation(xs_arr, ys_arr)
+        ode_solution = LinearInterpolation(x, y)
 
-        # ensure required points are part of the grid
+        # Ensure required points are part of the grid.
         w: list[tuple[float, float]] = [(0.0, 0.0)]
-        for i, point in enumerate(points):
-            if c_points[i][2] and start < point < end:
-                j = int(np.searchsorted(ys_arr, point, side="left"))
+        for i, (p, _, required) in enumerate(c_points):
+            if required and start < points[i] < end:
+                j = int(np.searchsorted(y, p, side="left"))
                 e = Brent().solve(
-                    lambda x, _p=point: ode_solution(x, allow_extrapolation=True) - _p,
+                    lambda xx, _p=p: ode_solution(xx, allow_extrapolation=True) - _p,
                     QL_EPSILON,
-                    xs[j],
+                    float(x[j]),
                     0.5 / size,
                 )
-                w.append((min(xs[size - 2], xs[j]), e))
+                w.append((min(float(x[size - 2]), float(x[j])), e))
         w.append((1.0, 1.0))
         w.sort()
-        # C++ std::unique with equal_on_first — drops CONSECUTIVE entries whose
-        # first components are close_enough within 1000 epsilons.
-        deduped: list[tuple[float, float]] = [w[0]]
-        for entry in w[1:]:
-            if not close_enough(deduped[-1][0], entry[0], 1000):
-                deduped.append(entry)
+        # C++: std::unique with equal_on_first (close_enough on .first, n=1000).
+        uniq: list[tuple[float, float]] = []
+        for item in w:
+            if uniq and close_enough(uniq[-1][0], item[0], 1000):
+                continue
+            uniq.append(item)
 
-        u = np.asarray([p[0] for p in deduped], dtype=np.float64)
-        z = np.asarray([p[1] for p in deduped], dtype=np.float64)
-        transform = LinearInterpolation(u, z)
+        transform = LinearInterpolation(
+            np.array([p[0] for p in uniq], dtype=np.float64),
+            np.array([p[1] for p in uniq], dtype=np.float64),
+        )
 
         for i in range(size):
             self._locations[i] = ode_solution(transform(i * dx))
 
-    # --- shared tail ------------------------------------------------------
+        self._finalise(start, end, size, clamp_ends=False)
 
-    def _fill_spacings(self, size: int) -> None:
+    # --- shared tail ----------------------------------------------------
+
+    def _finalise(self, start: float, end: float, size: int, clamp_ends: bool = True) -> None:
+        if clamp_ends:
+            self._locations[0] = start
+            self._locations[-1] = end
         for i in range(size - 1):
-            d = float(self._locations[i + 1]) - float(self._locations[i])
-            self._dplus[i] = d
-            self._dminus[i + 1] = d
-        # C++ stores Null<Real> at the two boundary sentinels; the Python
-        # Fdm1dMesher convention is NaN (see its docstring).
+            self._dplus[i] = self._dminus[i + 1] = (
+                self._locations[i + 1] - self._locations[i]
+            )
         self._dplus[-1] = math.nan
         self._dminus[0] = math.nan
+
+
+def _lround(v: float) -> int:
+    """``std::lround`` — round half away from zero, not Python's banker's rounding."""
+    return math.floor(v + 0.5) if v >= 0.0 else -math.floor(-v + 0.5)
 
 
 __all__ = ["Concentrating1dMesher"]
