@@ -12,13 +12,8 @@ follow the C++ chain rule verbatim::
     delta(s) = V_x(log s) / s
     gamma(s) = (V_xx(log s) - V_x(log s)) / s^2
 
-**Divergence — local volatility and quanto adjustment.** C++ passes
-``localVol``, ``illegalLocalVolOverwrite`` and a ``FdmQuantoHelper`` into
-``FdmBlackScholesOp``. The Python ``FdmBlackScholesOp`` (owned by
-``operators/``) takes only ``(mesher, process, strike, direction)`` — its
-docstring records local vol and quanto as deferred. The two arguments are
-kept on this constructor for signature parity and validated: asking for
-either raises rather than silently pricing the wrong thing.
+``local_vol``, ``illegal_local_vol_overwrite`` and ``quanto_helper`` are
+forwarded to ``FdmBlackScholesOp``, which implements both branches.
 """
 
 from __future__ import annotations
@@ -57,16 +52,6 @@ class FdmBlackScholesSolver(LazyObject):
     ) -> None:
         super().__init__()
         # C++ parity: ``schemeDesc = FdmSchemeDesc::Douglas()`` default.
-        qassert.require(
-            not local_vol,
-            "FdmBlackScholesSolver(local_vol=True) needs the local-vol branch of "
-            "FdmBlackScholesOp, which the Python operator does not implement",
-        )
-        qassert.require(
-            quanto_helper is None,
-            "FdmBlackScholesSolver(quanto_helper=...) needs the quanto branch of "
-            "FdmBlackScholesOp, which the Python operator does not implement",
-        )
         self._process: GeneralizedBlackScholesProcess = process
         self._strike: float = strike
         self._solver_desc: FdmSolverDesc = solver_desc
@@ -78,10 +63,20 @@ class FdmBlackScholesSolver(LazyObject):
 
         # C++ parity: ``registerWith(process_)`` / ``registerWith(quantoHelper_)``.
         process.register_with(self)
+        if quanto_helper is not None:
+            quanto_helper.register_with(self)
 
     def _perform_calculations(self) -> None:
         """# C++ parity: ``FdmBlackScholesSolver::performCalculations``."""
-        op = FdmBlackScholesOp(self._solver_desc.mesher, self._process, self._strike, 0)
+        op = FdmBlackScholesOp(
+            self._solver_desc.mesher,
+            self._process,
+            self._strike,
+            self._local_vol,
+            self._illegal_local_vol_overwrite,
+            0,
+            self._quanto_helper,
+        )
         self._solver = Fdm1DimSolver(self._solver_desc, self._scheme_desc, op)
 
     def _inner(self) -> Fdm1DimSolver:

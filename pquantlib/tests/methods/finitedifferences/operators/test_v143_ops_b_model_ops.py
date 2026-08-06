@@ -48,6 +48,8 @@ from pquantlib.time.calendars.null_calendar import NullCalendar
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 
+from .test_v143_fdm_black_scholes_op_branches import RampLocalVol
+
 REF: dict[str, Any] = reference_reader.load("v143/methods/operators2")
 
 DC = Actual365Fixed()
@@ -223,16 +225,61 @@ def test_fdm_2d_black_scholes_op_rejects_third_direction() -> None:
         op.solve_splitting(2, _ramp(mesher), 0.1)
 
 
-def test_fdm_2d_black_scholes_op_local_vol_is_carved_out() -> None:
-    """``local_vol=True`` is blocked, not silently degraded to constant vol.
+@pytest.mark.parametrize("local_vol", [False, True])
+def test_fdm_2d_black_scholes_op_local_vol_branch_matches_cpp(local_vol: bool) -> None:
+    """The ``local_vol`` arm, cross-validated rather than refused.
 
-    See the class docstring: it needs the local-vol branch of the
-    pre-existing ``FdmBlackScholesOp``, which is a documented carve-out.
+    # C++ parity: migration-harness/cpp/probes/v143_methods_bsop/probe.cpp
+    # ``block2d`` (``op2d_plain_*`` / ``op2d_lv_*``) @ v1.43.
+
+    ``Fdm2dBlackScholesOp::setTime`` does not simply forward the flag: in
+    the local-vol arm it rescales the mixed-derivative template by the
+    product of the two *local vols* per node (the vols, not the variances)
+    instead of by the product of the two forward Black vols, and applies
+    ``illegalLocalVolOverwrite`` to each asset independently.
+
+    Both processes carry an external ``RampLocalVol`` so that the
+    comparison isolates the operator rather than a Dupire construction —
+    see the note in ``test_v143_fdm_black_scholes_op_branches``.
     """
+    cpp = reference_reader.load("v143/methods/bsop")
     mesher = _bs2d_mesher()
-    p1, p2 = _bs2d_processes()
-    with pytest.raises(LibraryException, match="local_vol"):
-        Fdm2dBlackScholesOp(mesher, p1, p2, 0.4, 1.0, True)
+    ramp = RampLocalVol()
+    p1 = GeneralizedBlackScholesProcess(
+        x0=SimpleQuote(100.0),
+        dividend_ts=_flat(0.02),
+        risk_free_ts=_flat(0.05),
+        black_vol_ts=BlackConstantVol(
+            reference_date=TODAY, calendar=CAL, day_counter=DC, volatility=0.25
+        ),
+        local_vol_ts=ramp,
+    )
+    p2 = GeneralizedBlackScholesProcess(
+        x0=SimpleQuote(90.0),
+        dividend_ts=_flat(0.01),
+        risk_free_ts=_flat(0.05),
+        black_vol_ts=BlackConstantVol(
+            reference_date=TODAY, calendar=CAL, day_counter=DC, volatility=0.30
+        ),
+        local_vol_ts=ramp,
+    )
+
+    op = Fdm2dBlackScholesOp(mesher, p1, p2, 0.4, 1.0, local_vol)
+    op.set_time(0.1, 0.35)
+
+    n = mesher.layout().size()
+    v = np.array([1.0 + 0.5 * i for i in range(n)], dtype=np.float64)
+    prefix = "op2d_lv_" if local_vol else "op2d_plain_"
+    applied = op.apply(v)
+    mixed = op.apply_mixed(v)
+    for i in range(n):
+        tight(float(applied[i]), cpp[f"{prefix}apply_{i}"])
+        tight(float(mixed[i]), cpp[f"{prefix}mixed_{i}"])
+    dir0 = op.apply_direction(0, v)
+    tight(float(dir0[0]), cpp[f"{prefix}dir0_0"])
+    tight(float(dir0[n - 1]), cpp[f"{prefix}dir0_last"])
+    # The two arms are genuinely different operators.
+    assert cpp["op2d_plain_apply_0"] != cpp["op2d_lv_apply_0"]
 
 
 # ===========================================================================

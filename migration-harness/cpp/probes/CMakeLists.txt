@@ -908,6 +908,7 @@ foreach(area
         meshers
         operators
         operators2
+        bsop
         schemes
         solvers
         stepconditions

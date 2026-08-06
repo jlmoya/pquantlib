@@ -25,6 +25,7 @@ from typing import final
 import numpy as np
 
 from pquantlib import qassert
+from pquantlib.exceptions import LibraryException
 from pquantlib.math.array import Array
 from pquantlib.methods.finitedifferences.meshers.fdm_mesher import FdmMesher
 from pquantlib.methods.finitedifferences.operators.fdm_black_scholes_op import (
@@ -39,6 +40,9 @@ from pquantlib.methods.finitedifferences.operators.second_order_mixed_derivative
 from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
 )
+from pquantlib.termstructures.volatility.equity_fx.local_vol_term_structure import (
+    LocalVolTermStructure,
+)
 from pquantlib.time.compounding import Compounding
 
 # C++ parity: the default ``-Null<Real>()`` sentinel, i.e. ``-QL_MAX_REAL``.
@@ -51,15 +55,11 @@ class Fdm2dBlackScholesOp:
 
     # C++ parity: ``class Fdm2dBlackScholesOp : public FdmLinearOpComposite``.
 
-    **Carve-out — ``local_vol=True``.** The C++ operator forwards the
-    ``localVol`` / ``illegalLocalVolOverwrite`` flags into the two
-    ``FdmBlackScholesOp`` sub-operators. PQuantLib's pre-existing
-    ``FdmBlackScholesOp`` (``fdm_black_scholes_op.py``) documents
-    ``local_vol`` as deferred and exposes no such parameter, so the
-    local-vol branch cannot be wired up from here without changing that
-    module. Constructing with ``local_vol=True`` therefore raises; the
-    constant-vol branch (the C++ default) is complete and
-    cross-validated.
+    ``local_vol`` / ``illegal_local_vol_overwrite`` are forwarded to the two
+    ``FdmBlackScholesOp`` sub-operators and, independently, drive the
+    correlation map: C++ scales the mixed-derivative template by the product
+    of the two *local* vols per node rather than by the product of the two
+    forward Black vols.
     """
 
     def __init__(
@@ -79,20 +79,33 @@ class Fdm2dBlackScholesOp:
         (fdm2dblackscholesop.cpp:38).
         """
         del maturity  # C++ parity: parameter accepted and discarded.
-        qassert.require(
-            not local_vol,
-            "Fdm2dBlackScholesOp(local_vol=True) needs the local-vol branch of "
-            "FdmBlackScholesOp, which is a documented carve-out of the pquantlib "
-            "port; use local_vol=False",
-        )
         self._mesher: FdmMesher = mesher
         self._p1: GeneralizedBlackScholesProcess = p1
         self._p2: GeneralizedBlackScholesProcess = p2
         self._illegal_local_vol_overwrite: float = illegal_local_vol_overwrite
         self._current_forward_rate: float = 0.0
 
-        self._op_x: FdmBlackScholesOp = FdmBlackScholesOp(mesher, p1, p1.x0(), 0)
-        self._op_y: FdmBlackScholesOp = FdmBlackScholesOp(mesher, p2, p2.x0(), 1)
+        # C++ parity: ``localVol1_`` / ``localVol2_`` and the ``x_`` / ``y_``
+        # spot grids, all empty unless ``localVol``.
+        self._local_vol_1: LocalVolTermStructure | None = (
+            p1.local_volatility() if local_vol else None
+        )
+        self._local_vol_2: LocalVolTermStructure | None = (
+            p2.local_volatility() if local_vol else None
+        )
+        self._x: Array | None = (
+            np.exp(np.asarray(mesher.locations(0), dtype=np.float64)) if local_vol else None
+        )
+        self._y: Array | None = (
+            np.exp(np.asarray(mesher.locations(1), dtype=np.float64)) if local_vol else None
+        )
+
+        self._op_x: FdmBlackScholesOp = FdmBlackScholesOp(
+            mesher, p1, p1.x0(), local_vol, illegal_local_vol_overwrite, 0
+        )
+        self._op_y: FdmBlackScholesOp = FdmBlackScholesOp(
+            mesher, p2, p2.x0(), local_vol, illegal_local_vol_overwrite, 1
+        )
 
         size = mesher.layout().size()
         self._corr_map_t: NinePointLinearOp = NinePointLinearOp(0, 1, mesher)
@@ -104,21 +117,57 @@ class Fdm2dBlackScholesOp:
         """# C++ parity: ``Fdm2dBlackScholesOp::size`` — always 2."""
         return 2
 
+    def _node_vols(self, t1: float, t2: float) -> Array:
+        """Per-node ``vol1 * vol2`` for the local-vol branch.
+
+        # C++ parity: the ``localVol1_ != nullptr`` loop in ``setTime`` —
+        # note it stores the vols themselves, not their squares, and applies
+        # ``illegalLocalVolOverwrite_`` per asset independently.
+        """
+        lv1, lv2 = self._local_vol_1, self._local_vol_2
+        x, y = self._x, self._y
+        assert lv1 is not None
+        assert lv2 is not None
+        assert x is not None
+        assert y is not None
+        t_mid = 0.5 * (t1 + t2)
+        overwrite = self._illegal_local_vol_overwrite
+        size = self._mesher.layout().size()
+        out: Array = np.empty(size, dtype=np.float64)
+        for i in range(size):
+            if overwrite < 0.0:
+                v1 = lv1.local_vol_at_time(t_mid, float(x[i]), extrapolate=True)
+                v2 = lv2.local_vol_at_time(t_mid, float(y[i]), extrapolate=True)
+            else:
+                try:
+                    v1 = lv1.local_vol_at_time(t_mid, float(x[i]), extrapolate=True)
+                except LibraryException:
+                    v1 = overwrite
+                try:
+                    v2 = lv2.local_vol_at_time(t_mid, float(y[i]), extrapolate=True)
+                except LibraryException:
+                    v2 = overwrite
+            out[i] = v1 * v2
+        return out
+
     def set_time(self, t1: float, t2: float) -> None:
-        """# C++ parity: ``Fdm2dBlackScholesOp::setTime`` (constant-vol branch)."""
+        """# C++ parity: ``Fdm2dBlackScholesOp::setTime``."""
         self._op_x.set_time(t1, t2)
         self._op_y.set_time(t1, t2)
 
-        vol1 = self._p1.black_volatility().black_forward_vol_at_time(
-            t1, t2, self._p1.x0()
-        )
-        vol2 = self._p2.black_volatility().black_forward_vol_at_time(
-            t1, t2, self._p2.x0()
-        )
         size = self._mesher.layout().size()
-        self._corr_map_t = self._corr_map_template.mult(
-            np.full(size, vol1 * vol2, dtype=np.float64)
-        )
+        if self._local_vol_1 is not None:
+            self._corr_map_t = self._corr_map_template.mult(self._node_vols(t1, t2))
+        else:
+            vol1 = self._p1.black_volatility().black_forward_vol_at_time(
+                t1, t2, self._p1.x0()
+            )
+            vol2 = self._p2.black_volatility().black_forward_vol_at_time(
+                t1, t2, self._p2.x0()
+            )
+            self._corr_map_t = self._corr_map_template.mult(
+                np.full(size, vol1 * vol2, dtype=np.float64)
+            )
 
         self._current_forward_rate = (
             self._p1.risk_free_rate().forward_rate(t1, t2, Compounding.Continuous).rate()

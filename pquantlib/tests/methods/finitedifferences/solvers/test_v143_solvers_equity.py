@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 
-from pquantlib.exceptions import LibraryException
 from pquantlib.methods.finitedifferences.solvers.fdm_2d_black_scholes_solver import (
     Fdm2dBlackScholesSolver,
 )
@@ -21,7 +20,6 @@ from pquantlib.methods.finitedifferences.solvers.fdm_black_scholes_solver import
 from pquantlib.methods.finitedifferences.solvers.fdm_simple_2d_bs_solver import (
     FdmSimple2dBSSolver,
 )
-from pquantlib.methods.finitedifferences.utilities.fdm_quanto_helper import FdmQuantoHelper
 
 from ._v143_fixtures import (
     SCHEME_NAMES,
@@ -31,12 +29,9 @@ from ._v143_fixtures import (
     bs_process,
     check_cancelling,
     check_tight,
-    q_ts,
-    r_ts,
     second_asset_process,
     simple_2d_bs_setup,
     two_asset_setup,
-    vol_ts,
 )
 
 # --- Block B: FdmBlackScholesSolver ---------------------------------------
@@ -71,25 +66,6 @@ def test_v143_fdm_black_scholes_solver_damping_steps() -> None:
     )
     check_tight("b_damped_value_100", solver.value_at(100.0))
     check_tight("b_damped_delta_100", solver.delta_at(100.0))
-
-
-def test_v143_fdm_black_scholes_solver_rejects_local_vol() -> None:
-    """``local_vol=True`` raises rather than silently pricing without it.
-
-    The Python ``FdmBlackScholesOp`` has no local-vol branch; see the
-    solver's module docstring.
-    """
-    with pytest.raises(LibraryException, match="local-vol branch"):
-        FdmBlackScholesSolver(bs_process(), 100.0, bs_1d_setup().desc, local_vol=True)
-
-
-def test_v143_fdm_black_scholes_solver_rejects_quanto_helper() -> None:
-    """A quanto helper raises rather than being silently dropped."""
-    helper = FdmQuantoHelper(r_ts(), q_ts(), vol_ts(), 0.0, 1.0)
-    with pytest.raises(LibraryException, match="quanto branch"):
-        FdmBlackScholesSolver(
-            bs_process(), 100.0, bs_1d_setup().desc, quanto_helper=helper
-        )
 
 
 # --- Block F: FdmSimple2dBSSolver -----------------------------------------
