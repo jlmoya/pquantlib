@@ -2,8 +2,8 @@
 //
 // ql/methods/finitedifferences/meshers/{concentrating1dmesher,
 // predefined1dmesher, exponentialjump1dmesher, fdmcev1dmesher,
-// fdmblackscholesmultistrikemesher, fdmhestonvariancemesher}.{hpp,cpp}
-// @ v1.43 (6b57206e0).
+// fdmblackscholesmesher, fdmblackscholesmultistrikemesher,
+// fdmhestonvariancemesher}.{hpp,cpp} @ v1.43 (6b57206e0).
 //
 // For every mesher the full locations / dplus / dminus triple is emitted, so
 // a wrong node placement cannot hide behind an aggregate. dplus at the last
@@ -22,6 +22,7 @@
 
 #include <ql/methods/finitedifferences/meshers/concentrating1dmesher.hpp>
 #include <ql/methods/finitedifferences/meshers/exponentialjump1dmesher.hpp>
+#include <ql/methods/finitedifferences/meshers/fdmblackscholesmesher.hpp>
 #include <ql/methods/finitedifferences/meshers/fdmblackscholesmultistrikemesher.hpp>
 #include <ql/methods/finitedifferences/meshers/fdmcev1dmesher.hpp>
 #include <ql/methods/finitedifferences/meshers/fdmhestonvariancemesher.hpp>
@@ -272,6 +273,58 @@ int main() {
             emit_mesher("hestonlv_flat", m1);
             emit1("hestonlv_flat_volaEstimate", m1.volaEstimate());
         }
+    }
+
+    // ------------------------------------------------------------------
+    // FdmBlackScholesMesher — the cPoint branch.
+    //
+    // fdmblackscholesmesher.cpp picks Concentrating1dMesher when
+    // cPoint.first is set AND log(cPoint.first) lies inside [xMin, xMax];
+    // otherwise Uniform1dMesher. Both arms are emitted here, plus the two
+    // ways the guard can reject a cPoint (Null, and out of range), because
+    // dropping the branch entirely still reproduces the uniform arm.
+    // ------------------------------------------------------------------
+    {
+        const auto spot = ext::make_shared<SimpleQuote>(100.0);
+        const auto vol = Handle<BlackVolTermStructure>(
+            ext::make_shared<BlackConstantVol>(REF_DATE, NullCalendar(), 0.25, DC));
+        const auto process = ext::make_shared<BlackScholesMertonProcess>(
+            Handle<Quote>(spot), flat(0.02), flat(0.05), vol);
+        const Real nullReal = Null<Real>();
+
+        // no cPoint at all -> uniform
+        emit_mesher("bsm_uniform",
+                    FdmBlackScholesMesher(11, process, 1.0, 100.0));
+        // cPoint at the strike, inside the range -> concentrating
+        emit_mesher("bsm_conc",
+                    FdmBlackScholesMesher(11, process, 1.0, 100.0,
+                                          nullReal, nullReal, 0.0001, 1.5,
+                                          std::make_pair(100.0, 0.1)));
+        // a much denser concentration, to separate the two arms further
+        emit_mesher("bsm_conc_dense",
+                    FdmBlackScholesMesher(15, process, 1.0, 100.0,
+                                          nullReal, nullReal, 0.0001, 1.5,
+                                          std::make_pair(90.0, 0.01)));
+        // cPoint outside [xMin, xMax] -> guard rejects it, uniform again
+        emit_mesher("bsm_conc_out_of_range",
+                    FdmBlackScholesMesher(11, process, 1.0, 100.0,
+                                          nullReal, nullReal, 0.0001, 1.5,
+                                          std::make_pair(1.0e-6, 0.1)));
+        // explicit x bounds + cPoint, so the guard is exercised against
+        // overridden bounds rather than the vol-derived ones
+        emit_mesher("bsm_conc_bounded",
+                    FdmBlackScholesMesher(11, process, 1.0, 100.0,
+                                          std::log(50.0), std::log(150.0),
+                                          0.0001, 1.5,
+                                          std::make_pair(120.0, 0.05)));
+        // spotAdjustment shifts the forward the bounds are built from
+        emit_mesher("bsm_spot_adj",
+                    FdmBlackScholesMesher(11, process, 1.0, 100.0,
+                                          nullReal, nullReal, 0.0001, 1.5,
+                                          std::make_pair(nullReal, nullReal),
+                                          DividendSchedule(),
+                                          ext::shared_ptr<FdmQuantoHelper>(),
+                                          -5.0));
     }
 
     std::cout << "\n}" << std::endl;

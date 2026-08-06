@@ -33,6 +33,7 @@ The parameter sets deliberately hit the branch structure:
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -45,6 +46,9 @@ from pquantlib.methods.finitedifferences.meshers.exponential_jump_1d_mesher impo
     ExponentialJump1dMesher,
 )
 from pquantlib.methods.finitedifferences.meshers.fdm_1d_mesher import Fdm1dMesher
+from pquantlib.methods.finitedifferences.meshers.fdm_black_scholes_mesher import (
+    FdmBlackScholesMesher,
+)
 from pquantlib.methods.finitedifferences.meshers.fdm_black_scholes_multi_strike_mesher import (
     FdmBlackScholesMultiStrikeMesher,
 )
@@ -277,6 +281,47 @@ def test_multi_strike_mesher_matches_cpp(cpp: dict[str, Any]) -> None:
     _assert_mesher(
         cpp, "bsmulti_wide", FdmBlackScholesMultiStrikeMesher(11, p, 2.0, [20.0, 100.0, 400.0])
     )
+
+
+# ---------------------------------------------------------------------------
+# FdmBlackScholesMesher — the cPoint branch
+# ---------------------------------------------------------------------------
+
+_BSM_CASES: dict[str, Callable[[BlackScholesMertonProcess], FdmBlackScholesMesher]] = {
+    # no critical point -> Uniform1dMesher
+    "bsm_uniform": lambda p: FdmBlackScholesMesher(11, p, 1.0, 100.0),
+    # critical point at the strike, inside the grid -> Concentrating1dMesher
+    "bsm_conc": lambda p: FdmBlackScholesMesher(11, p, 1.0, 100.0, c_point=(100.0, 0.1)),
+    # a much denser concentration, well away from the strike
+    "bsm_conc_dense": lambda p: FdmBlackScholesMesher(15, p, 1.0, 100.0, c_point=(90.0, 0.01)),
+    # log(c_point) below x_min -> C++'s range guard rejects it, uniform again
+    "bsm_conc_out_of_range": lambda p: FdmBlackScholesMesher(
+        11, p, 1.0, 100.0, c_point=(1.0e-6, 0.1)
+    ),
+    # overridden bounds, so the guard is tested against those and not the
+    # vol-derived ones
+    "bsm_conc_bounded": lambda p: FdmBlackScholesMesher(
+        11, p, 1.0, 100.0, math.log(50.0), math.log(150.0), c_point=(120.0, 0.05)
+    ),
+    # spot_adjustment shifts the forward the bounds are built from
+    "bsm_spot_adj": lambda p: FdmBlackScholesMesher(11, p, 1.0, 100.0, spot_adjustment=-5.0),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_BSM_CASES))
+def test_black_scholes_mesher_matches_cpp(cpp: dict[str, Any], name: str) -> None:
+    """``c_point`` selects a ``Concentrating1dMesher``, exactly as C++ does.
+
+    # C++ parity: fdmblackscholesmesher.cpp — the
+    # ``cPoint.first != Null<Real>() && log(cPoint.first) >= xMin &&
+    # log(cPoint.first) <= xMax`` guard around the helper choice.
+
+    ``bsm_uniform`` and ``bsm_conc`` share every other argument, so a port
+    that ignored ``c_point`` (as this one did until the branch was wired)
+    passes the first and fails the second: the concentrated node 1 sits at
+    3.740 against the uniform 3.492.
+    """
+    _assert_mesher(cpp, name, _BSM_CASES[name](_bs_process()))
 
 
 # ---------------------------------------------------------------------------
