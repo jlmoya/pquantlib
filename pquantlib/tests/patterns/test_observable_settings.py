@@ -22,19 +22,32 @@ def test_observable_settings_has_default_flags() -> None:
     # Defaults at first import (other tests may have mutated; assert
     # presence of attributes, not specific values).
     assert hasattr(s, "enforces_business_day_convention")
-    assert hasattr(s, "include_today_in_payments")
     assert hasattr(s, "include_reference_date_events")
+    assert hasattr(s, "include_todays_cash_flows")
+    assert hasattr(s, "enforces_todays_historic_fixings")
+
+
+def test_class_defaults_match_cpp() -> None:
+    """C++ ``Settings`` field initialisers (ql/settings.hpp:112-116).
+
+    ``includeReferenceDateEvents_ = false``, ``includeTodaysCashFlows_`` an UNSET
+    ``ext::optional<bool>`` and ``enforcesTodaysHistoricFixings_ = false``. Read
+    off the class, not an instance, so a mutating test cannot mask a regression.
+    """
+    assert ObservableSettings.include_reference_date_events is False
+    assert ObservableSettings.include_todays_cash_flows is None
+    assert ObservableSettings.enforces_todays_historic_fixings is False
 
 
 def test_observable_settings_mutation_visible_across_calls() -> None:
     a = ObservableSettings()
-    original = a.include_today_in_payments
+    original = a.enforces_todays_historic_fixings
     try:
-        a.include_today_in_payments = not original
+        a.enforces_todays_historic_fixings = not original
         b = ObservableSettings()
-        assert b.include_today_in_payments == (not original)
+        assert b.enforces_todays_historic_fixings == (not original)
     finally:
-        a.include_today_in_payments = original
+        a.enforces_todays_historic_fixings = original
 
 
 # --- evaluation_date observable wiring ---------------------------------

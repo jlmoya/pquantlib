@@ -11,10 +11,14 @@ asserted at LOOSE tier (1e-8).
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import numpy as np
+import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.indexes.ibor.euribor import Euribor
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.volatility.capfloor.cap_floor_term_vol_surface import (
     CapFloorTermVolSurface,
@@ -37,6 +41,27 @@ _S1 = _REF["optionlet_stripper_1"]
 
 def _eval_date() -> Date:
     return Date(_REF["setup"]["eval_date_serial"])
+
+
+@pytest.fixture(autouse=True)
+def _pinned_evaluation_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date to the probe's ``eval_date_serial``.
+
+    Stripping inverts cap NPVs, and ``CapFloor.is_expired()`` consults
+    ``ObservableSettings().evaluation_date`` through ``CashFlow.has_occurred()``
+    (ql/instruments/capfloor.cpp:172-177). Without this pin the module was
+    silently wall-clock dependent: once the caps mature every NPV is 0 and every
+    stripped vol comes back 0. The probe sets the same date — see
+    ``_REF["setup"]["eval_date_serial"]`` in
+    ``migration-harness/references/cluster/l8c.json``.
+    """
+    settings = ObservableSettings()
+    previous = settings.evaluation_date
+    settings.evaluation_date = _eval_date()
+    try:
+        yield
+    finally:
+        settings.evaluation_date = previous
 
 
 def _setup_stripper() -> OptionletStripper1:

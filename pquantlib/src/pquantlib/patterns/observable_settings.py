@@ -1,6 +1,6 @@
 """Global library settings (singleton + observable).
 
-# C++ parity: ql/settings.hpp (v1.42.1) — class Settings::instance().
+# C++ parity: ql/settings.{hpp,cpp} @ v1.43 — class Settings + SavedSettings.
 
 The C++ ``Settings`` singleton carries a handful of boolean flags that
 affect library-wide behavior (e.g. enforcement of business-day conventions
@@ -34,11 +34,31 @@ from pquantlib.time.date import Date
 
 
 class ObservableSettings(Singleton, Observable):
-    """Library-wide mutable flags + global evaluation date."""
+    """Library-wide mutable flags + global evaluation date.
+
+    # C++ parity: the mutable state of ``class Settings`` (ql/settings.hpp:112-116)
+    # is exactly four fields::
+    #
+    #     DateProxy evaluationDate_;
+    #     bool includeReferenceDateEvents_ = false;
+    #     ext::optional<bool> includeTodaysCashFlows_;
+    #     bool enforcesTodaysHistoricFixings_ = false;
+    #
+    # ``include_todays_cash_flows`` is ``bool | None`` because the C++ field is
+    # an ``ext::optional<bool>``: unset means "no override", which is NOT the
+    # same as ``False``. (It was previously spelled ``include_today_in_payments:
+    # bool = False`` — wrong name and wrong type, and never read by anything.)
+    #
+    # ``enforces_business_day_convention`` has no C++ counterpart in v1.43; it
+    # is a jquantlib-era carry-over kept only because an existing test asserts
+    # its presence. It is deliberately NOT part of the SavedSettings snapshot,
+    # which mirrors the C++ four fields.
+    """
 
     enforces_business_day_convention: bool = True
-    include_today_in_payments: bool = False
-    include_reference_date_events: bool = True
+    include_reference_date_events: bool = False
+    include_todays_cash_flows: bool | None = None
+    enforces_todays_historic_fixings: bool = False
 
     def __init__(self) -> None:
         if getattr(self, "_observable_settings_initialized", False):
@@ -94,3 +114,22 @@ class ObservableSettings(Singleton, Observable):
         if self._evaluation_date is None:
             return Date.todays_date()
         return self._evaluation_date
+
+    def anchor_evaluation_date(self) -> None:
+        """Pin the evaluation date to today if it is not already pinned.
+
+        # C++ parity: ``Settings::anchorEvaluationDate`` (ql/settings.cpp:38-43) —
+        # a no-op when a date is already set.
+        """
+        if self._evaluation_date is None:
+            self.evaluation_date = Date.todays_date()
+
+    def reset_evaluation_date(self) -> None:
+        """Un-pin the evaluation date, letting it track today again.
+
+        # C++ parity: ``Settings::resetEvaluationDate`` (ql/settings.cpp:45-47).
+        """
+        self.evaluation_date = None
+
+
+__all__ = ["ObservableSettings"]
