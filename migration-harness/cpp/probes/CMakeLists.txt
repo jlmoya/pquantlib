@@ -912,6 +912,7 @@ foreach(area
         solvers
         stepconditions
         utilities
+        greens
         rnd
         lattices)
     add_executable(v143_methods_${area}_probe v143_methods_${area}/probe.cpp)

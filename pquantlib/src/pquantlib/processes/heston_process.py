@@ -31,10 +31,11 @@ Divergences from C++:
   semantics are implemented. If MC-based engines ever land, the enum
   can be re-introduced as a parameter on the L5 MC engine, not on the
   process.
-* The internal exact-sampling characteristic function ``Phi`` and the
-  ``pdf`` method are not ported — they require modified Bessel
-  functions + Gauss-Laguerre quadrature + non-central chi-square
-  inversion. None of the calibration paths in L4-C need them.
+* The ``Discretization``-dependent exact-sampling *evolution* schemes
+  (Broadie-Kaya, quadratic-exponential) are still not ported. The
+  characteristic function ``Phi`` they share with ``pdf`` **is** ported,
+  because ``FdmHestonGreensFct``'s ``SemiAnalytical`` algorithm needs
+  ``pdf``.
 
 The diffusion matrix is the (lower-triangular) Cholesky factor of the
 correlation matrix, so that ``diffusion * dW`` produces correlated
@@ -49,11 +50,20 @@ preserve some correlation information; we mirror that.
 
 from __future__ import annotations
 
+import cmath
 import math
 
 import numpy as np
 import numpy.typing as npt
+from scipy.special import iv  # pyright: ignore[reportMissingTypeStubs, reportUnknownVariableType]
+from scipy.stats import ncx2  # pyright: ignore[reportMissingTypeStubs]
 
+from pquantlib.math.constants import QL_EPSILON
+from pquantlib.math.distributions.inverse_cumulative_normal import (
+    InverseCumulativeNormal,
+)
+from pquantlib.math.integrals.gaussian_quadrature import GaussLaguerreIntegration
+from pquantlib.math.integrals.segment import SegmentIntegral
 from pquantlib.processes.euler_discretization import EulerDiscretization
 from pquantlib.processes.stochastic_process import StochasticProcess
 from pquantlib.quotes.quote import Quote
@@ -276,6 +286,202 @@ class HestonProcess(StochasticProcess):
         return self._risk_free_rate.day_counter().year_fraction(
             self._risk_free_rate.reference_date(), date
         )
+
+
+    # --- exact-sampling characteristic function + terminal density -------
+    #
+    # # C++ parity: the anonymous-namespace helpers Phi / ph / int_ph /
+    # cornishFisherEps in ql/processes/hestonprocess.cpp, plus
+    # HestonProcess::pdf. Broadie-Kaya's continuous characteristic function in
+    # the branch-cut-free form of Roger Lord.
+
+    def _phi(self, a: complex, nu_0: float, nu_t: float, dt: float) -> complex:
+        """# C++ parity: the anonymous-namespace ``Phi``."""
+        theta = self._theta
+        kappa = self._kappa
+        sigma = self._sigma
+        sigma2 = sigma * sigma
+
+        ga = cmath.sqrt(kappa * kappa - 2.0 * sigma2 * a * 1j)
+        d = 4.0 * theta * kappa / sigma2
+        nu = 0.5 * d - 1.0
+
+        z = ga * cmath.exp(-0.5 * ga * dt) / (1.0 - cmath.exp(-ga * dt))
+        log_z = -0.5 * ga * dt + cmath.log(ga / (1.0 - cmath.exp(-ga * dt)))
+
+        alpha = 4.0 * ga * cmath.exp(-0.5 * ga * dt) / (sigma2 * (1.0 - cmath.exp(-ga * dt)))
+        beta = (
+            4.0
+            * kappa
+            * math.exp(-0.5 * kappa * dt)
+            / (sigma2 * (1.0 - math.exp(-kappa * dt)))
+        )
+
+        if nu_t > 1e-8:
+            root = math.sqrt(nu_0 * nu_t)
+            bessel_ratio = complex(iv(nu, root * alpha)) / complex(iv(nu, root * beta))
+        else:
+            bessel_ratio = (alpha / beta) ** nu
+
+        return (
+            ga
+            * cmath.exp(-0.5 * (ga - kappa) * dt)
+            * (1.0 - math.exp(-kappa * dt))
+            / (kappa * (1.0 - cmath.exp(-ga * dt)))
+            * cmath.exp(
+                (nu_0 + nu_t)
+                / sigma2
+                * (
+                    kappa * (1.0 + math.exp(-kappa * dt)) / (1.0 - math.exp(-kappa * dt))
+                    - ga * (1.0 + cmath.exp(-ga * dt)) / (1.0 - cmath.exp(-ga * dt))
+                )
+            )
+            * cmath.exp(nu * log_z)
+            / z**nu
+            * bessel_ratio
+        )
+
+    def _ph(self, x: float, u: float, nu_0: float, nu_t: float, dt: float) -> float:
+        """# C++ parity: the anonymous-namespace ``ph``."""
+        return 2.0 / math.pi * math.cos(u * x) * self._phi(complex(u, 0.0), nu_0, nu_t, dt).real
+
+    def _int_ph(
+        self, a: float, x: float, y: float, nu_0: float, nu_t: float, t: float
+    ) -> float:
+        """# C++ parity: the anonymous-namespace ``int_ph``.
+
+        ``y`` can be negative: the Cornish-Fisher bound that ``pdf`` uses as
+        the upper integration limit goes negative at short horizons, and C++
+        then integrates backwards. ``std::sqrt`` of a negative double is a
+        quiet NaN in C++ but a ``ValueError`` in Python, so the square root is
+        spelled out here to propagate NaN instead — that is what makes the
+        port reproduce C++'s NaN rather than raising where C++ returns.
+        """
+        rho = self._rho
+        kappa = self._kappa
+        sigma = self._sigma
+        x0 = math.log(self._s0.value())
+
+        radicand = 2.0 * math.pi * (1.0 - rho * rho) * y
+        if radicand < 0.0:
+            return math.nan
+
+        integral = _GAUSS_LAGUERRE_128(lambda u: self._ph(y, u, nu_0, nu_t, t))
+        return (
+            integral
+            / math.sqrt(radicand)
+            * math.exp(
+                -0.5
+                * (x - x0 - a + y * (0.5 - rho * kappa / sigma)) ** 2
+                / (y * (1.0 - rho * rho))
+            )
+        )
+
+    def _cornish_fisher_eps(self, nu_0: float, nu_t: float, dt: float, eps: float) -> float:
+        """# C++ parity: the anonymous-namespace ``cornishFisherEps``.
+
+        Four central differences of the moment-generating function at step
+        ``d = 1e-2`` give the first four moments; a Cornish-Fisher expansion
+        then estimates the ``1-eps`` quantile.
+        """
+        d = 1e-2
+        p2 = self._phi(complex(0.0, -2.0 * d), nu_0, nu_t, dt).real
+        p1 = self._phi(complex(0.0, -d), nu_0, nu_t, dt).real
+        p0 = self._phi(complex(0.0, 0.0), nu_0, nu_t, dt).real
+        pm1 = self._phi(complex(0.0, d), nu_0, nu_t, dt).real
+        pm2 = self._phi(complex(0.0, 2.0 * d), nu_0, nu_t, dt).real
+
+        avg = (pm2 - 8.0 * pm1 + 8.0 * p1 - p2) / (12.0 * d)
+        m2 = (-pm2 + 16.0 * pm1 - 30.0 * p0 + 16.0 * p1 - p2) / (12.0 * d * d)
+        var = m2 - avg * avg
+        std_dev = math.sqrt(var)
+
+        m3 = (-0.5 * pm2 + pm1 - p1 + 0.5 * p2) / (d * d * d)
+        skew = (m3 - 3.0 * var * avg - avg * avg * avg) / (var * std_dev)
+
+        m4 = (pm2 - 4.0 * pm1 + 6.0 * p0 - 4.0 * p1 + p2) / (d * d * d * d)
+        kurt = (m4 - 4.0 * m3 * avg + 6.0 * m2 * avg * avg - 3.0 * avg**4) / (var * var)
+
+        q = _INV_CUM_NORMAL(1.0 - eps)
+        w = (
+            q
+            + (q * q - 1.0) / 6.0 * skew
+            + (q * q * q - 3.0 * q) / 24.0 * (kurt - 3.0)
+            - (2.0 * q * q * q - 5.0 * q) / 36.0 * skew * skew
+        )
+        return avg + w * std_dev
+
+    def pdf(self, x: float, v: float, t: float, eps: float = 1e-3) -> float:
+        """Joint terminal density of ``(ln S, v)`` at horizon ``t``.
+
+        # C++ parity: ``HestonProcess::pdf``.
+
+        The first ``while`` loop in C++ widens ``upper`` until the integrand
+        decays, but its result is then immediately overwritten by the
+        Cornish-Fisher bound. It is reproduced anyway — it is not dead code in
+        the sense of being removable: it can throw or loop, and the number of
+        evaluations is observable.
+        """
+        sigma = self._sigma
+        kappa = self._kappa
+        rho = self._rho
+        theta = self._theta
+        v0 = self._v0
+
+        k = sigma * sigma * (1.0 - math.exp(-kappa * t)) / (4.0 * kappa)
+        a = math.log(
+            self._dividend_yield.discount(t) / self._risk_free_rate.discount(t)
+        ) + rho / sigma * (v - v0 - kappa * theta * t)
+
+        x0 = math.log(self._s0.value())
+        upper = max(0.1, -(x - x0 - a) / (0.5 - rho * kappa / sigma))
+        f = 0.0
+        df = 1.0
+
+        while df > 0.0 or f > 0.1 * eps:
+            f1 = x - x0 - a + upper * (0.5 - rho * kappa / sigma)
+            f2 = -0.5 * f1 * f1 / (upper * (1.0 - rho * rho))
+
+            df = (
+                1.0
+                / math.sqrt(2.0 * math.pi * (1.0 - rho * rho))
+                * (
+                    -0.5 / (upper * math.sqrt(upper)) * math.exp(f2)
+                    + 1.0
+                    / math.sqrt(upper)
+                    * math.exp(f2)
+                    * (-0.5 / (1.0 - rho * rho))
+                    * (
+                        -1.0 / (upper * upper) * f1 * f1
+                        + 2.0 / upper * f1 * (0.5 - rho * kappa / sigma)
+                    )
+                )
+            )
+            f = math.exp(f2) / math.sqrt(2.0 * math.pi * (1.0 - rho * rho) * upper)
+            upper *= 1.5
+
+        upper = 2.0 * self._cornish_fisher_eps(v0, v, t, 1e-3)
+
+        df_chi = 4.0 * theta * kappa / (sigma * sigma)
+        ncp = (
+            4.0
+            * kappa
+            * math.exp(-kappa * t)
+            / ((sigma * sigma) * (1.0 - math.exp(-kappa * t)))
+            * v0
+        )
+
+        return (
+            SegmentIntegral(100)(
+                lambda xi: self._int_ph(a, x, xi, v0, v, t), QL_EPSILON, upper
+            )
+            * float(ncx2.pdf(v / k, df_chi, ncp))  # pyright: ignore[reportUnknownMemberType]
+            / k
+        )
+
+
+_GAUSS_LAGUERRE_128 = GaussLaguerreIntegration(128)
+_INV_CUM_NORMAL = InverseCumulativeNormal()
 
 
 __all__ = ["HestonProcess"]
