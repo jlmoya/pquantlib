@@ -974,8 +974,25 @@ add_executable(v143_inst_etrs_probe v143_inst_etrs/probe.cpp)
 target_link_libraries(v143_inst_etrs_probe PRIVATE ${QUANTLIB_LIBRARY})
 
 # --- merged from wave 6 (methods) ---
+# One probe per methods area. Each emits references/v143/methods/<area>.json
+# (generate-references.sh turns every underscore in the target name into a
+# slash, so v143_methods_meshers_probe -> v143/methods/meshers.json).
+foreach(area
+        core
+        meshers
+        operators
+        operators2
+        bsop
+        schemes
+        solvers
+        stepconditions
+        utilities
+        greens
+        rnd
+        lattices)
     add_executable(v143_methods_${area}_probe v143_methods_${area}/probe.cpp)
     target_link_libraries(v143_methods_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
+endforeach()
 
 # --- merged from wave 9 (time + math) ---
 add_executable(v143_time_calmarkets_probe v143_time_calmarkets/probe.cpp)
