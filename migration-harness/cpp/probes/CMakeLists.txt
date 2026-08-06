@@ -882,6 +882,62 @@ target_link_libraries(v143_ts_discountcurve_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_ts_yieldadapters_probe v143_ts_yieldadapters/probe.cpp)
 target_link_libraries(v143_ts_yieldadapters_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# === termstructures/volatility: ZabrModel ===
+# Pins the transformed nu, the closed-form vs AdaptiveRungeKutta arms of x(K),
+# the scalar-vs-vector difference caused by x()'s incremental integration, the
+# strike-dependent fdPrice grid, and the 2-D Hundsdorfer fullFdPrice.
+# Emits references/v143/zabr/model.json.
+add_executable(v143_zabr_model_probe v143_zabr_model/probe.cpp)
+target_link_libraries(v143_zabr_model_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/volatility: SmileSectionUtils ===
+# Pins both hard-coded default moneyness tables, the normal vs shifted-lognormal
+# strike maps, the leading-zero prepend, the explicit-atm override, the
+# min/maxStrike endpoint insertion, and the arbitrage-free window with and
+# without deleteArbitragePoints.
+# Emits references/v143/zabr/smilesectionutils.json.
+add_executable(v143_zabr_smilesectionutils_probe v143_zabr_smilesectionutils/probe.cpp)
+target_link_libraries(v143_zabr_smilesectionutils_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/volatility: ZabrSmileSection FD evaluation modes ===
+# Pins all four evaluation tags, including the ShortMaturityNormal arm's
+# implied-lognormal back-solve and the LocalVolatility / FullFd spline plus
+# exponential right-tail extrapolation.
+# Emits references/v143/zabr/fdsection.json.
+add_executable(v143_zabr_fdsection_probe v143_zabr_fdsection/probe.cpp)
+target_link_libraries(v143_zabr_fdsection_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/volatility/equityfx: ImpliedVolTermStructure ===
+# The class is nothing but a date shift: variance(t, K) is the ORIGINAL
+# structure's forward variance between timeShift and timeShift + t. Probed at
+# shift == 0, shift on a pillar, shift between pillars and shift past the
+# original's max date (where maxTime() goes negative), each sampled inside and
+# outside the quoted strike range.
+# Emits references/v143/eqfx/impliedvol.json.
+add_executable(v143_eqfx_impliedvol_probe v143_eqfx_impliedvol/probe.cpp)
+target_link_libraries(v143_eqfx_impliedvol_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/volatility/equityfx: BlackVolTimeExtrapolation ===
+# All three policies (FlatVolatility / UseInterpolator / LinearVariance), both
+# C++ overloads (surface and ATM curve), inside and past the last node, on a
+# convex-variance curve that separates the three by 10-40%. Also pins
+# LinearVariance's refusal to run at times that are not past the last node,
+# and BlackVarianceCurve's end-to-end wiring of each policy.
+# Emits references/v143/eqfx/timeextrap.json.
+add_executable(v143_eqfx_timeextrap_probe v143_eqfx_timeextrap/probe.cpp)
+target_link_libraries(v143_eqfx_timeextrap_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/volatility/equityfx: LocalVolSurface + NoExcept variant ===
+# Dupire with NON-FLAT yield curves, which is the only regime that separates a
+# correct port from one that hard-codes zero rates: the curves set both the
+# forward (hence log-moneyness) and the strike drift K*exp(+-(r-q)dt) used by
+# the time derivative. Four (r, q) combinations incl. r < q, on a (t, S) grid
+# covering t == 0, dt == t/2 and levels outside the quoted strikes. The
+# NoExcept variant is probed over a surface with non-monotone variance in time.
+# Emits references/v143/eqfx/localvol.json.
+add_executable(v143_eqfx_localvol_probe v143_eqfx_localvol/probe.cpp)
+target_link_libraries(v143_eqfx_localvol_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # === termstructures/yield: BondHelper / FixedRateBondHelper ===
 # The two dates are the last CASHFLOW date and the next cashflow after
 # settlement (not the bond's maturity and issue dates), and the implied quote
@@ -902,6 +958,29 @@ target_link_libraries(v143_ts_bondhelper_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_ts_onfuture_probe v143_ts_onfuture/probe.cpp)
 target_link_libraries(v143_ts_onfuture_probe PRIVATE ${QUANTLIB_LIBRARY})
 
+# === methods/finitedifferences: Concentrating1dMesher (+ Glued1dMesher) ===
+# ZabrModel's fdPrice / fullFdPrice grids come from this mesher, so its
+# clustering, its lround-based required-point reparameterisation and its
+# multi-point ODE constructor are pinned separately from the PDE.
+# Emits references/v143/zabr/mesher.json.
+add_executable(v143_zabr_mesher_probe v143_zabr_mesher/probe.cpp)
+target_link_libraries(v143_zabr_mesher_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/volatility/equityfx: FixedLocalVolSurface + GridModel ===
+# Three FixedLocalVolSurface behaviours a reasonable port gets wrong:
+# min/maxStrike come from the LAST slice only; the strike-extrapolation policy
+# is bypassed ON a time node (the interpolator extrapolates linearly there
+# whatever the policy says); maxDate is an inverted day count via
+# yearFractionToDate. Probed with per-slice strike ranges that make "last
+# slice", "union" and "first slice" three different answers, at times on / just
+# off / between / outside the nodes, under all extrapolation policies.
+# GridModelLocalVolSurface adds the argument-layout question: arguments are
+# copied into the (n_strikes x n_times) matrix ROW-major, so an asymmetric
+# parameter vector pins it.
+# Emits references/v143/eqfx/gridlocalvol.json.
+add_executable(v143_eqfx_gridlocalvol_probe v143_eqfx_gridlocalvol/probe.cpp)
+target_link_libraries(v143_eqfx_gridlocalvol_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # === indexes: SwapIndex::clone(Period) ===
 # The tenor overload Gaussian1dSwaptionVolatility relies on. Pins the full
 # carried-over metadata plus the underlying swap's dates and fair rate, for
@@ -919,3 +998,13 @@ target_link_libraries(v143_ts_swapindexclone_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/ts/kerkhof.json.
 add_executable(v143_ts_kerkhof_probe v143_ts_kerkhof/probe.cpp)
 target_link_libraries(v143_ts_kerkhof_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/volatility/equityfx: HestonBlackVolSurface ===
+# Heston price -> Brent-inverted Black vol. Discriminates the OTM option-type
+# switch (Put below the FORWARD, Call above — with r != q the switch is not at
+# spot), the npv <= 0 fallback to sqrt(theta) in the far wing, and
+# blackVariance vs blackVol. Two parameter sets, one violating Feller, where
+# the Fourier integrand is hardest.
+# Emits references/v143/eqfx/hestonblackvol.json.
+add_executable(v143_eqfx_hestonblackvol_probe v143_eqfx_hestonblackvol/probe.cpp)
+target_link_libraries(v143_eqfx_hestonblackvol_probe PRIVATE ${QUANTLIB_LIBRARY})

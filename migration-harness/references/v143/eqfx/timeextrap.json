@@ -1,0 +1,169 @@
+{
+  "nodes": {
+    "times": [0, 0.25205479452054796, 0.50136986301369868, 1, 2.0027397260273974],
+    "variances": [0, 0.0042597260273972608, 0.012835068493150689, 0.040000000000000008, 0.12517123287671234]
+  },
+  "static_curve": {
+    "flat_volatility": {
+      "t0p5_inside": 0.03125,
+      "t1p8_inside": 0.1125,
+      "t2p0_last_node": 0.125,
+      "t2p5_past": 0.15625,
+      "t3p5_past": 0.21875,
+      "t10p0_far_past": 0.625
+    },
+    "use_interpolator": {
+      "t0p5_inside": 0.012787951226855339,
+      "t1p8_inside": 0.10795081967213116,
+      "t2p0_last_node": 0.12493852459016393,
+      "t2p5_past": 0.16740778688524588,
+      "t3p5_past": 0.25234631147540987,
+      "t10p0_far_past": 0.80444672131147543
+    },
+    "linear_variance": {
+      "t0p5_inside": {"raises": true},
+      "t1p8_inside": {"raises": true},
+      "t2p0_last_node": {"raises": true},
+      "t2p5_past": 0.16740778688524588,
+      "t3p5_past": 0.25234631147540987,
+      "t10p0_far_past": 0.80444672131147543
+    }
+  },
+  "static_surface": {
+    "flat_volatility": {
+      "t0p5_inside": 0.03125,
+      "t1p8_inside": 0.1125,
+      "t2p0_last_node": 0.125,
+      "t2p5_past": 0.15625,
+      "t3p5_past": 0.21875,
+      "t10p0_far_past": 0.625
+    },
+    "use_interpolator": {
+      "t0p5_inside": 0.012787951226855339,
+      "t1p8_inside": 0.10795081967213116,
+      "t2p0_last_node": 0.12493852459016393,
+      "t2p5_past": 0.16740778688524588,
+      "t3p5_past": 0.25234631147540987,
+      "t10p0_far_past": 0.80444672131147543
+    },
+    "linear_variance": {
+      "t0p5_inside": {"raises": true},
+      "t1p8_inside": {"raises": true},
+      "t2p0_last_node": {"raises": true},
+      "t2p5_past": 0.16740778688524588,
+      "t3p5_past": 0.25234631147540987,
+      "t10p0_far_past": 0.80444672131147543
+    }
+  },
+  "static_curve_quadratic": {
+    "flat_volatility": {
+      "t0p5_inside": 0.035027397260273978,
+      "t1p8_inside": 0.12609863013698633,
+      "t2p0_last_node": 0.14010958904109591,
+      "t2p5_past": 0.1751369863013699,
+      "t3p5_past": 0.24519178082191784,
+      "t10p0_far_past": 0.70054794520547958
+    },
+    "use_interpolator": {
+      "t0p5_inside": 0.02,
+      "t1p8_inside": 0.1188,
+      "t2p0_last_node": 0.14000000000000001,
+      "t2p5_past": 0.20000000000000001,
+      "t3p5_past": 0.35000000000000003,
+      "t10p0_far_past": 2.3000000000000003
+    },
+    "linear_variance": {
+      "t0p5_inside": {"raises": true},
+      "t1p8_inside": {"raises": true},
+      "t2p0_last_node": {"raises": true},
+      "t2p5_past": 0.18508219178082197,
+      "t3p5_past": 0.2751369863013699,
+      "t10p0_far_past": 0.8604931506849316
+    }
+  },
+  "static_surface_quadratic": {
+    "flat_volatility": {
+      "t0p5_inside": 0.035027397260273978,
+      "t1p8_inside": 0.12609863013698633,
+      "t2p0_last_node": 0.14010958904109591,
+      "t2p5_past": 0.1751369863013699,
+      "t3p5_past": 0.24519178082191784,
+      "t10p0_far_past": 0.70054794520547958
+    },
+    "use_interpolator": {
+      "t0p5_inside": 0.02,
+      "t1p8_inside": 0.1188,
+      "t2p0_last_node": 0.14000000000000001,
+      "t2p5_past": 0.20000000000000001,
+      "t3p5_past": 0.35000000000000003,
+      "t10p0_far_past": 2.3000000000000003
+    },
+    "linear_variance": {
+      "t0p5_inside": {"raises": true},
+      "t1p8_inside": {"raises": true},
+      "t2p0_last_node": {"raises": true},
+      "t2p5_past": 0.18508219178082197,
+      "t3p5_past": 0.2751369863013699,
+      "t10p0_far_past": 0.8604931506849316
+    }
+  },
+  "curve": {
+    "flat_volatility": {
+      "max_date": 46919,
+      "variance": {
+        "t0p5_inside": 0.012787951226855339,
+        "t1p8_inside": 0.10795081967213115,
+        "t2p0_last_node": 0.12493852459016393,
+        "t2p5_past": 0.15625,
+        "t3p5_past": 0.21875,
+        "t10p0_far_past": 0.625
+      },
+      "vol": {
+        "t0p5_inside": 0.15992467743819488,
+        "t1p8_inside": 0.24489319630326281,
+        "t2p0_last_node": 0.2499385170298527,
+        "t2p5_past": 0.25,
+        "t3p5_past": 0.25,
+        "t10p0_far_past": 0.25
+      }
+    },
+    "use_interpolator": {
+      "max_date": 46919,
+      "variance": {
+        "t0p5_inside": 0.012787951226855339,
+        "t1p8_inside": 0.10795081967213115,
+        "t2p0_last_node": 0.12493852459016393,
+        "t2p5_past": 0.16740778688524588,
+        "t3p5_past": 0.25234631147540981,
+        "t10p0_far_past": 0.80444672131147532
+      },
+      "vol": {
+        "t0p5_inside": 0.15992467743819488,
+        "t1p8_inside": 0.24489319630326281,
+        "t2p0_last_node": 0.2499385170298527,
+        "t2p5_past": 0.25877232223346136,
+        "t3p5_past": 0.26851246923714989,
+        "t10p0_far_past": 0.28362769986577041
+      }
+    },
+    "linear_variance": {
+      "max_date": 46919,
+      "variance": {
+        "t0p5_inside": 0.012787951226855339,
+        "t1p8_inside": 0.10795081967213115,
+        "t2p0_last_node": 0.12493852459016393,
+        "t2p5_past": 0.16740778688524588,
+        "t3p5_past": 0.25234631147540987,
+        "t10p0_far_past": 0.80444672131147543
+      },
+      "vol": {
+        "t0p5_inside": 0.15992467743819488,
+        "t1p8_inside": 0.24489319630326281,
+        "t2p0_last_node": 0.2499385170298527,
+        "t2p5_past": 0.25877232223346136,
+        "t3p5_past": 0.26851246923714994,
+        "t10p0_far_past": 0.28362769986577041
+      }
+    }
+  }
+}
