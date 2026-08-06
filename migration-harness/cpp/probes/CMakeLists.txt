@@ -337,7 +337,7 @@ target_link_libraries(cluster_w1c_probe PRIVATE ${QUANTLIB_LIBRARY})
 # === Phase 11 W1-D cluster: Heston SLV + GjrGarch + time-dep Heston
 #     (GJRGARCHProcess + GJRGARCHModel + AnalyticGJRGARCHEngine +
 #     PiecewiseTimeDependentHestonModel + AnalyticPTDHestonEngine).
-#     Batch C HestonSlvFdmModel + batch D HestonSlvMcModel land as
+#     Batch C HestonSLVFDMModel + batch D HestonSLVMCModel land as
 #     structural scaffolds; their full Fokker-Planck FDM / bucketed-MC
 #     calibration is documented as a Phase-11 W5 follow-up. ===
 add_executable(cluster_w1d_probe cluster_w1d/probe.cpp)
@@ -972,3 +972,21 @@ add_executable(v143_inst_makeoptions_probe v143_inst_makeoptions/probe.cpp)
 target_link_libraries(v143_inst_makeoptions_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_inst_etrs_probe v143_inst_etrs/probe.cpp)
 target_link_libraries(v143_inst_etrs_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_root_tail_probe v143_root_tail/probe.cpp)
+target_link_libraries(v143_root_tail_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_models_volatility_probe v143_models_volatility/probe.cpp)
+target_link_libraries(v143_models_volatility_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_quotes_tail_probe v143_quotes_tail/probe.cpp)
+target_link_libraries(v143_quotes_tail_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_processes_tail_probe v143_processes_tail/probe.cpp)
+target_link_libraries(v143_processes_tail_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_legacy_lmm_probe v143_legacy_lmm/probe.cpp)
+target_link_libraries(v143_legacy_lmm_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_legacy_lmmswaption_probe v143_legacy_lmmswaption/probe.cpp)
+target_link_libraries(v143_legacy_lmmswaption_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_models_markovfunctional_probe v143_models_markovfunctional/probe.cpp)
+target_link_libraries(v143_models_markovfunctional_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_models_marketmodels_probe v143_models_marketmodels/probe.cpp)
+target_link_libraries(v143_models_marketmodels_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_models_gsr_quotes_probe v143_models_gsr_quotes/probe.cpp)
+target_link_libraries(v143_models_gsr_quotes_probe PRIVATE ${QUANTLIB_LIBRARY})
