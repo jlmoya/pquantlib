@@ -92,22 +92,31 @@ def test_markov_functional_numeraire_time(reference_data: dict[str, Any]) -> Non
         abs_tol=1.5e-2,
         rel_tol=1.5e-3,
         reason=(
-            "TARGET calendar's holiday calendar differs ~1-3 days "
-            "between QL's compile-time-pinned + PQuantLib's runtime "
-            "holiday set (Easter handling at the 13Y horizon). The "
-            "absolute discrepancy is at most a few days = ~0.01 years."
+            "MarkovFunctional._initialize omits the C++ back-fill loop "
+        "(markovfunctional.cpp:169-203), which keeps adding calibration points at "
+        "intermediate payment dates until the numeraire date is covered. The probe "
+        "v143_models_markovfunctional measures the gap directly: C++ ends up with 12 "
+        "calibration points against this port's 3, and a numeraire date 3 days later "
+        "(serial 50909 vs 50906, 13.021918y vs 13.013699y). This tier is the envelope "
+        "of THAT, not of numerical noise. It cannot be tightened until the back-fill "
+        "is ported, which needs the ctor to take a swaption volatility STRUCTURE "
+        "rather than one Quote per input expiry — a back-filled expiry has no quote. "
+        "Pinned by test_markov_functional_smiles.test_backfill_gap_is_exactly_this_big."
         ),
     )
 
 
 _BOOTSTRAP_REASON = (
-    "MarkovFunctional bootstrap involves cubic-spline interpolation of "
-    "the deflated-annuity array, Gauss-Hermite quadrature over future "
-    "states, and Brent inversion of the digital-price smile function. "
-    "Cumulative numerical noise is ~0.5% even before TARGET calendar "
-    "discrepancies (~3 days at the 13Y horizon, propagating into both "
-    "numeraire_time and curve-discount values). custom tier 5e-3 is "
-    "the empirical envelope."
+    "MarkovFunctional._initialize omits the C++ back-fill loop "
+        "(markovfunctional.cpp:169-203), which keeps adding calibration points at "
+        "intermediate payment dates until the numeraire date is covered. The probe "
+        "v143_models_markovfunctional measures the gap directly: C++ ends up with 12 "
+        "calibration points against this port's 3, and a numeraire date 3 days later "
+        "(serial 50909 vs 50906, 13.021918y vs 13.013699y). This tier is the envelope "
+        "of THAT, not of numerical noise. It cannot be tightened until the back-fill "
+        "is ported, which needs the ctor to take a swaption volatility STRUCTURE "
+        "rather than one Quote per input expiry — a back-filled expiry has no quote. "
+        "Pinned by test_markov_functional_smiles.test_backfill_gap_is_exactly_this_big."
 )
 
 
