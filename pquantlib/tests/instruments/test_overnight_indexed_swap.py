@@ -129,3 +129,28 @@ def test_ois_inspectors() -> None:
     # Helper aliases mirror the C++ overnight*-named accessors.
     assert swap.overnight_nominals() == swap.floating_nominals()
     assert swap.overnight_leg() is swap.floating_leg()
+
+
+def test_is_expired_tracks_the_evaluation_date() -> None:
+    """Regression: ``Swap.is_expired()`` must consult the evaluation date.
+
+    C++ ``Swap::isExpired`` (ql/instruments/swap.cpp:68-75) loops
+    ``hasOccurred()`` over every flow of every leg, and ``hasOccurred()`` with
+    no arguments falls back to ``Settings::instance().evaluationDate()``
+    (ql/event.cpp:29). This port's ``CashFlow.has_occurred()`` used to return
+    ``False`` unconditionally, so ``is_expired()`` could never be True and
+    ``Instrument`` never took its expired short-circuit — which is what let this
+    module pass while being wall-clock dependent.
+    """
+    swap, _ = _build_2y_ois(0.04)
+    settings = ObservableSettings()
+
+    assert swap.is_expired() is False  # pinned at 2024-01-17 by the fixture
+
+    settings.evaluation_date = Date.from_ymd(1, Month.January, 2030)
+    swap.update()
+    assert swap.is_expired() is True
+
+    settings.evaluation_date = _EVAL_DATE
+    swap.update()
+    assert swap.is_expired() is False
