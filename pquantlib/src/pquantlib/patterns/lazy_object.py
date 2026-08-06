@@ -41,6 +41,25 @@ class LazyObject(Observable):
                 self._calculated = False
                 raise
 
+    def recalculate(self) -> None:
+        """Force a recalculation and notify observers.
+
+        # C++ parity: ``LazyObject::recalculate`` (lazyobject.hpp:139-152).
+        # C++ additionally saves and restores ``frozen_`` around the call and
+        # re-raises after notifying; this port has no ``freeze()`` /
+        # ``unfreeze()`` (the ``frozen_`` flag is not modelled), so only the
+        # invalidate-calculate-notify part has an analogue. The C++ order is
+        # preserved: observers are notified after the calculation, and also
+        # when it throws.
+        """
+        self._calculated = False
+        try:
+            self.calculate()
+        except BaseException:
+            self.notify_observers()
+            raise
+        self.notify_observers()
+
     def update(self) -> None:
         """Invalidate the cache and notify downstream observers."""
         self._calculated = False
