@@ -1,4 +1,4 @@
-"""HestonSlvFdmModel — Heston stochastic-local-vol model (Fokker-Planck FDM).
+"""HestonSLVFDMModel — Heston stochastic-local-vol model (Fokker-Planck FDM).
 
 # C++ parity: ql/models/equity/hestonslvfdmmodel.{hpp,cpp} (v1.42.1).
 
@@ -90,7 +90,7 @@ from pquantlib.time.date import Date
 
 
 @dataclass(frozen=True, slots=True)
-class HestonSlvFokkerPlanckFdmParams:
+class HestonSLVFokkerPlanckFdmParams:
     """Parameter pack for the Fokker-Planck FDM SLV calibration.
 
     # C++ parity: ``struct HestonSLVFokkerPlanckFdmParams`` in
@@ -122,7 +122,7 @@ class HestonSlvFokkerPlanckFdmParams:
     leverage_fct_prop_eps: float = 1e-8
 
 
-class HestonSlvFdmModel:
+class HestonSLVFDMModel:
     """Scaffold for the Heston-SLV FDM-calibrated model.
 
     # C++ parity: ``class HestonSLVFDMModel : public LazyObject`` in
@@ -151,7 +151,7 @@ class HestonSlvFdmModel:
         local_vol: LocalVolTermStructure,
         heston_model: HestonModel,
         end_date: Date,
-        params: HestonSlvFokkerPlanckFdmParams | None = None,
+        params: HestonSLVFokkerPlanckFdmParams | None = None,
         mixing_factor: float = 1.0,
     ) -> None:
         """Construct the model.
@@ -179,8 +179,8 @@ class HestonSlvFdmModel:
         self._heston_model: HestonModel = heston_model
         self._end_date: Date = end_date
         self._mixing_factor: float = mixing_factor
-        self._params: HestonSlvFokkerPlanckFdmParams = (
-            params if params is not None else HestonSlvFokkerPlanckFdmParams()
+        self._params: HestonSLVFokkerPlanckFdmParams = (
+            params if params is not None else HestonSLVFokkerPlanckFdmParams()
         )
         self._leverage_function: FixedLocalVolSurface | None = None
 
@@ -216,7 +216,7 @@ class HestonSlvFdmModel:
             self._leverage_function = self._build_unit_leverage()
         return self._leverage_function
 
-    def params(self) -> HestonSlvFokkerPlanckFdmParams:
+    def params(self) -> HestonSLVFokkerPlanckFdmParams:
         """The FDM parameter pack used for calibration."""
         return self._params
 
@@ -260,4 +260,4 @@ class HestonSlvFdmModel:
         )
 
 
-__all__ = ["HestonSlvFdmModel", "HestonSlvFokkerPlanckFdmParams"]
+__all__ = ["HestonSLVFDMModel", "HestonSLVFokkerPlanckFdmParams"]

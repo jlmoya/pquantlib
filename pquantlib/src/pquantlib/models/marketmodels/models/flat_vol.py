@@ -1,6 +1,6 @@
-"""FlatVol — flat-per-rate volatility MarketModel.
+"""FlatVol / FlatVolFactory — flat-per-rate volatility MarketModel.
 
-# C++ parity: ql/models/marketmodels/models/flatvol.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/models/marketmodels/models/flatvol.{hpp,cpp} (v1.43).
 
 The workhorse concrete ``MarketModel``: each forward rate has a single flat
 instantaneous volatility ``vols[i]``, and the per-step covariance matrix is
@@ -8,10 +8,10 @@ built by integrating the flat-vol covariance over each correlation sub-interval
 (weighted by a ``PiecewiseConstantCorrelation``), then taking the spectral
 rank-reduced pseudo-square-root.
 
-``FlatVolFactory`` (the C++ ``YieldTermStructure``-driven factory that derives
-displaced vols from a curve) is **not** ported in W10-A — the W10-B evolvers
-and W10-C calibration construct ``FlatVol`` via the direct constructor. The
-factory is a thin curve-wiring convenience and is deferred (carve-out).
+``FlatVolFactory`` is the ``YieldTermStructure``-driven factory: it reads the
+initial forward rates off the curve, displaces the linearly-interpolated
+volatility term structure to match, builds an exponential time-homogeneous
+forward correlation, and hands the lot to ``FlatVol``.
 """
 
 from __future__ import annotations
@@ -21,18 +21,28 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pquantlib import qassert
+from pquantlib.math.interpolations.linear import LinearInterpolation
 from pquantlib.math.matrix import Matrix
-from pquantlib.models.marketmodels.market_model import MarketModel
+from pquantlib.models.marketmodels.correlations.exp_correlations import (
+    exponential_correlations,
+)
+from pquantlib.models.marketmodels.correlations.time_homogeneous_forward_correlation import (
+    TimeHomogeneousForwardCorrelation,
+)
+from pquantlib.models.marketmodels.market_model import MarketModel, MarketModelFactory
 from pquantlib.models.marketmodels.models.pseudo_sqrt import (
     SalvagingAlgorithm,
     rank_reduced_sqrt,
 )
+from pquantlib.patterns.observer import Observable
+from pquantlib.time.compounding import Compounding
 
 if TYPE_CHECKING:
     from pquantlib.models.marketmodels.evolution_description import EvolutionDescription
     from pquantlib.models.marketmodels.piecewise_constant_correlation import (
         PiecewiseConstantCorrelation,
     )
+    from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 
 
 def flat_vol_covariance(
@@ -223,3 +233,92 @@ class FlatVol(MarketModel):
             f"({self._number_of_steps})",
         )
         return self._pseudo_roots[i]
+
+
+class FlatVolFactory(MarketModelFactory, Observable):
+    """Builds ``FlatVol`` models off a yield curve + a volatility term structure.
+
+    # C++ parity: flatvol.hpp/.cpp FlatVolFactory.
+
+    ``times`` / ``vols`` define a linearly-interpolated volatility curve (the
+    C++ comment marks this as a stand-in for a real volatility structure);
+    ``displacement`` is applied uniformly to every rate, and the raw vols are
+    rescaled to displaced vols by ``f * vol / (f + displacement)``.
+
+    # C++ parity divergence: C++ takes ``Handle<YieldTermStructure>``. PQuantLib
+    does not implement ``Handle``/``RelinkableHandle`` (see
+    ``cashflows/cms_coupon_pricer.py``), so the term structure is threaded
+    directly. The observer wiring is kept: the factory registers with the curve
+    and re-broadcasts its ``update()``.
+    """
+
+    def __init__(
+        self,
+        long_term_correlation: float,
+        beta: float,
+        times: list[float],
+        vols: list[float],
+        yield_curve: YieldTermStructure,
+        displacement: float,
+    ) -> None:
+        # C++ parity: FlatVolFactory ctor.
+        Observable.__init__(self)
+        self._long_term_correlation = long_term_correlation
+        self._beta = beta
+        self._times = list(times)
+        self._vols = list(vols)
+        self._yield_curve = yield_curve
+        self._displacement = displacement
+        # C++ builds a LinearInterpolation over (times_, vols_) then calls
+        # update(); the pquantlib ctor already runs update().
+        self._volatility = LinearInterpolation(
+            np.asarray(self._times, dtype=np.float64),
+            np.asarray(self._vols, dtype=np.float64),
+        )
+        yield_curve.register_with(self)
+
+    def create(
+        self, evolution: EvolutionDescription, number_of_factors: int
+    ) -> MarketModel:
+        """Build a ``FlatVol`` for the given evolution + factor count.
+
+        # C++ parity: FlatVolFactory::create.
+        """
+        rate_times = evolution.rate_times()
+        number_of_rates = len(rate_times) - 1
+
+        initial_rates = [
+            self._yield_curve.forward_rate(
+                rate_times[i], rate_times[i + 1], Compounding.Simple
+            ).rate()
+            for i in range(number_of_rates)
+        ]
+
+        displaced_volatilities = [
+            initial_rates[i]
+            * self._volatility(rate_times[i])
+            / (initial_rates[i] + self._displacement)
+            for i in range(number_of_rates)
+        ]
+
+        displacements = [self._displacement] * number_of_rates
+
+        correlations = exponential_correlations(
+            evolution.rate_times(), self._long_term_correlation, self._beta
+        )
+        corr = TimeHomogeneousForwardCorrelation(correlations, rate_times)
+        return FlatVol(
+            displaced_volatilities,
+            corr,
+            evolution,
+            number_of_factors,
+            initial_rates,
+            displacements,
+        )
+
+    def update(self) -> None:
+        """Re-broadcast the yield curve's notification.
+
+        # C++ parity: FlatVolFactory::update -> notifyObservers().
+        """
+        self.notify_observers()

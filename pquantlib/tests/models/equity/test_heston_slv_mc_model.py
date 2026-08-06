@@ -1,4 +1,4 @@
-"""HestonSlvMcModel behavioral tests.
+"""HestonSLVMCModel behavioral tests.
 
 C++ parity: ql/models/equity/hestonslvmcmodel.{hpp,cpp}.
 
@@ -26,7 +26,7 @@ import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.models.equity.heston_model import HestonModel
-from pquantlib.models.equity.heston_slv_mc_model import HestonSlvMcModel
+from pquantlib.models.equity.heston_slv_mc_model import HestonSLVMCModel
 from pquantlib.processes.heston_process import HestonProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.volatility.equity_fx.black_constant_vol import (
@@ -42,7 +42,7 @@ from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 
 
-def _build_model(*, n_paths: int = 2048, n_bins: int = 21) -> HestonSlvMcModel:
+def _build_model(*, n_paths: int = 2048, n_bins: int = 21) -> HestonSLVMCModel:
     """Build a small-scale SLV MC model for testing."""
     dc = Actual365Fixed()
     ref = Date.from_ymd(15, Month.June, 2026)
@@ -71,7 +71,7 @@ def _build_model(*, n_paths: int = 2048, n_bins: int = 21) -> HestonSlvMcModel:
     local_vol = LocalVolSurface(
         black_ts=bvol, risk_free_ts=rf, dividend_ts=div, underlying=spot
     )
-    return HestonSlvMcModel(
+    return HestonSLVMCModel(
         local_vol=local_vol,
         heston_model=heston_model,
         end_date=ref + 365,
@@ -83,18 +83,18 @@ def _build_model(*, n_paths: int = 2048, n_bins: int = 21) -> HestonSlvMcModel:
 
 
 @pytest.fixture
-def mc_model() -> HestonSlvMcModel:
+def mc_model() -> HestonSLVMCModel:
     return _build_model()
 
 
-def test_heston_process_passthrough(mc_model: HestonSlvMcModel) -> None:
+def test_heston_process_passthrough(mc_model: HestonSLVMCModel) -> None:
     """``heston_process()`` returns the model's underlying process."""
     proc = mc_model.heston_process()
     exact(proc.v0, 0.04)
     exact(proc.theta, 0.04)
 
 
-def test_local_vol_passthrough(mc_model: HestonSlvMcModel) -> None:
+def test_local_vol_passthrough(mc_model: HestonSLVMCModel) -> None:
     """``local_vol()`` returns the input local-vol surface."""
     lv = mc_model.local_vol()
     v = lv.local_vol_at_time(0.5, 100.0, extrapolate=True)
@@ -103,7 +103,7 @@ def test_local_vol_passthrough(mc_model: HestonSlvMcModel) -> None:
     tight(v, 0.20, reason="Dupire FD float64 round-off")
 
 
-def test_time_grid_length(mc_model: HestonSlvMcModel) -> None:
+def test_time_grid_length(mc_model: HestonSLVMCModel) -> None:
     """time_grid has time_steps_per_year * end_time + 1 nodes (approx)."""
     n = len(mc_model.time_grid())
     # 1 year * 20 steps/year + 1 = 21 (or close).
@@ -111,7 +111,7 @@ def test_time_grid_length(mc_model: HestonSlvMcModel) -> None:
     assert n <= 30
 
 
-def test_mixing_factor_default_is_one(mc_model: HestonSlvMcModel) -> None:
+def test_mixing_factor_default_is_one(mc_model: HestonSLVMCModel) -> None:
     exact(mc_model.mixing_factor(), 1.0)
 
 
@@ -138,7 +138,7 @@ def test_leverage_function_calibrates_near_one_at_atm() -> None:
     assert l_atm > 0.0
 
 
-def test_leverage_function_is_cached(mc_model: HestonSlvMcModel) -> None:
+def test_leverage_function_is_cached(mc_model: HestonSLVMCModel) -> None:
     """Repeated calls return the same surface object (lazy cache)."""
     lev1 = mc_model.leverage_function()
     lev2 = mc_model.leverage_function()

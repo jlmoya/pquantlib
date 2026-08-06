@@ -17,7 +17,7 @@ LMM forward-rate evolvers:
   (terminal measure).
 - ``lognormal_fwd_rate_balland.LogNormalFwdRateBalland`` — Balland drift
   approximation.
-- ``lognormal_fwd_rate_iballand.LogNormalFwdRateIBalland`` — interpolated
+- ``lognormal_fwd_rate_iballand.LogNormalFwdRateiBalland`` — interpolated
   Balland (terminal measure).
 
 Other parameterizations:

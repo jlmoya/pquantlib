@@ -7,11 +7,15 @@ replaced by a roundtrip test against the cluster_l3c probe.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.indexes.ibor.sofr import Sofr
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.protocols import YieldTermStructureProtocol
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -27,8 +31,33 @@ from pquantlib.time.time_unit import TimeUnit
 _REF_PATH = Path(__file__).resolve().parents[4] / "migration-harness/references/cluster/l3c.json"
 
 
+_EVAL_DATE = Date.from_ymd(17, Month.January, 2024)
+
+
+@pytest.fixture(autouse=True)
+def _pinned_evaluation_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date to the one the C++ probe used.
+
+    ``OISRateHelper.implied_quote`` builds an ``OvernightIndexedSwap`` and reads
+    its ``fair_rate()``; ``Swap.is_expired()`` consults
+    ``ObservableSettings().evaluation_date`` through ``CashFlow.has_occurred()``
+    (ql/instruments/swap.cpp:68-75). Without this pin the module was silently
+    wall-clock dependent: past 2026-01 the 2024-2026 swap reports expired and
+    ``fair_rate()`` raises "result not available". The probe
+    (``migration-harness/cpp/probes/cluster_l3c/probe.cpp``) builds everything at
+    2024-01-17, the same date passed to ``FlatForward.from_rate`` below.
+    """
+    settings = ObservableSettings()
+    previous = settings.evaluation_date
+    settings.evaluation_date = _EVAL_DATE
+    try:
+        yield
+    finally:
+        settings.evaluation_date = previous
+
+
 def test_ois_rate_helper_constructs_with_dates() -> None:
-    eval_date = Date.from_ymd(17, Month.January, 2024)
+    eval_date = _EVAL_DATE
     helper = OISRateHelper(
         settlement_days=2,
         tenor=Period(5, TimeUnit.Years),
@@ -50,7 +79,7 @@ def test_ois_rate_helper_implied_quote_roundtrip() -> None:
     refs = json.loads(_REF_PATH.read_text())
     expected_implied = refs["ois_rate_helper"]["implied_quote"]
 
-    eval_date = Date.from_ymd(17, Month.January, 2024)
+    eval_date = _EVAL_DATE
     curve = cast(
         YieldTermStructureProtocol,
         FlatForward.from_rate(

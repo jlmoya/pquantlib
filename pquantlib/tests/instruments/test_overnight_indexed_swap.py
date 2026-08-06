@@ -6,6 +6,7 @@ Reference values: ``migration-harness/references/cluster/l3c.json`` → ``ois_2y
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
 
@@ -15,6 +16,7 @@ from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.indexes.ibor.sofr import Sofr
 from pquantlib.instruments.overnight_indexed_swap import OvernightIndexedSwap
 from pquantlib.instruments.swap import SwapType
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.swap.discounting_swap_engine import DiscountingSwapEngine
 from pquantlib.termstructures.protocols import YieldTermStructureProtocol
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -31,15 +33,38 @@ from pquantlib.time.time_unit import TimeUnit
 
 _REF_PATH = Path(__file__).resolve().parents[3] / "migration-harness/references/cluster/l3c.json"
 
+_EVAL_DATE = Date.from_ymd(17, Month.January, 2024)
+
 
 @pytest.fixture(scope="module")
 def cluster_refs() -> dict[str, dict[str, float]]:
     return json.loads(_REF_PATH.read_text())
 
 
+@pytest.fixture(autouse=True)
+def _pinned_evaluation_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date to the one the C++ probe used.
+
+    ``Swap.is_expired()`` reads ``ObservableSettings().evaluation_date`` through
+    ``CashFlow.has_occurred()`` (ql/instruments/swap.cpp:68-75), so without this
+    pin the module was silently wall-clock dependent: after 2026-01 every flow
+    of the 2024-2026 swap has occurred, the instrument reports expired and every
+    result collapses to 0. The probe sets the same date —
+    ``migration-harness/cpp/probes/cluster_l3c/probe.cpp`` builds the curve at
+    2024-01-17, which ``_build_2y_ois`` mirrors.
+    """
+    settings = ObservableSettings()
+    previous = settings.evaluation_date
+    settings.evaluation_date = _EVAL_DATE
+    try:
+        yield
+    finally:
+        settings.evaluation_date = previous
+
+
 def _build_2y_ois(fixed_rate: float) -> tuple[OvernightIndexedSwap, YieldTermStructureProtocol]:
     """Build the 2y OIS from the probe: Sofr vs 4% fixed, FlatForward(4%)."""
-    eval_date = Date.from_ymd(17, Month.January, 2024)
+    eval_date = _EVAL_DATE
     curve = cast(
         YieldTermStructureProtocol,
         FlatForward.from_rate(
@@ -104,3 +129,28 @@ def test_ois_inspectors() -> None:
     # Helper aliases mirror the C++ overnight*-named accessors.
     assert swap.overnight_nominals() == swap.floating_nominals()
     assert swap.overnight_leg() is swap.floating_leg()
+
+
+def test_is_expired_tracks_the_evaluation_date() -> None:
+    """Regression: ``Swap.is_expired()`` must consult the evaluation date.
+
+    C++ ``Swap::isExpired`` (ql/instruments/swap.cpp:68-75) loops
+    ``hasOccurred()`` over every flow of every leg, and ``hasOccurred()`` with
+    no arguments falls back to ``Settings::instance().evaluationDate()``
+    (ql/event.cpp:29). This port's ``CashFlow.has_occurred()`` used to return
+    ``False`` unconditionally, so ``is_expired()`` could never be True and
+    ``Instrument`` never took its expired short-circuit — which is what let this
+    module pass while being wall-clock dependent.
+    """
+    swap, _ = _build_2y_ois(0.04)
+    settings = ObservableSettings()
+
+    assert swap.is_expired() is False  # pinned at 2024-01-17 by the fixture
+
+    settings.evaluation_date = Date.from_ymd(1, Month.January, 2030)
+    swap.update()
+    assert swap.is_expired() is True
+
+    settings.evaluation_date = _EVAL_DATE
+    swap.update()
+    assert swap.is_expired() is False

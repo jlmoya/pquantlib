@@ -1,4 +1,4 @@
-"""GjrGarchModel behavioral + cross-validation tests.
+"""GJRGARCHModel behavioral + cross-validation tests.
 
 Cross-validates against ``migration-harness/references/cluster/w1d.json``.
 
@@ -20,11 +20,11 @@ import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.models.equity.gjr_garch_model import (
-    GjrGarchModel,
+    GJRGARCHModel,
     VolatilityConstraint,
 )
 from pquantlib.models.parameter import ConstantParameter
-from pquantlib.processes.gjr_garch_process import GjrGarchProcess
+from pquantlib.processes.gjr_garch_process import GJRGARCHProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.reference_reader import load as load_reference
@@ -39,12 +39,12 @@ def cpp_refs() -> dict[str, Any]:
 
 
 @pytest.fixture
-def gjr_process() -> GjrGarchProcess:
+def gjr_process() -> GJRGARCHProcess:
     dc = Actual365Fixed()
     ref = Date.from_ymd(15, Month.June, 2026)
     rf = FlatForward.from_rate(reference_date=ref, forward_rate=0.05, day_counter=dc)
     div = FlatForward.from_rate(reference_date=ref, forward_rate=0.0, day_counter=dc)
-    return GjrGarchProcess(
+    return GJRGARCHProcess(
         risk_free_rate=rf,
         dividend_yield=div,
         s0=SimpleQuote(100.0),
@@ -59,9 +59,9 @@ def gjr_process() -> GjrGarchProcess:
 
 
 def test_parameter_accessors(
-    gjr_process: GjrGarchProcess, cpp_refs: dict[str, Any]
+    gjr_process: GJRGARCHProcess, cpp_refs: dict[str, Any]
 ) -> None:
-    model = GjrGarchModel(gjr_process)
+    model = GJRGARCHModel(gjr_process)
     m = cpp_refs["gjr_garch_model"]
     exact(model.omega(), m["omega"])
     exact(model.alpha(), m["alpha"])
@@ -71,21 +71,21 @@ def test_parameter_accessors(
     exact(model.v0(), m["v0"])
 
 
-def test_arguments_have_six_slots(gjr_process: GjrGarchProcess) -> None:
-    model = GjrGarchModel(gjr_process)
+def test_arguments_have_six_slots(gjr_process: GJRGARCHProcess) -> None:
+    model = GJRGARCHModel(gjr_process)
     assert len(model.arguments) == 6
     for arg in model.arguments:
         assert isinstance(arg, ConstantParameter)
 
 
 def test_params_vector_order_matches_cpp_layout(
-    gjr_process: GjrGarchProcess,
+    gjr_process: GJRGARCHProcess,
 ) -> None:
     """params() returns [omega, alpha, beta, gamma, lambda, v0].
 
     # C++ parity: gjrgarchmodel.cpp:46-56.
     """
-    model = GjrGarchModel(gjr_process)
+    model = GJRGARCHModel(gjr_process)
     p = model.params()
     assert p.shape == (6,)
     exact(float(p[0]), 0.000002)
@@ -96,9 +96,9 @@ def test_params_vector_order_matches_cpp_layout(
     exact(float(p[5]), 0.000160)
 
 
-def test_set_params_rebuilds_process(gjr_process: GjrGarchProcess) -> None:
+def test_set_params_rebuilds_process(gjr_process: GJRGARCHProcess) -> None:
     """set_params triggers generate_arguments which rebuilds the process."""
-    model = GjrGarchModel(gjr_process)
+    model = GJRGARCHModel(gjr_process)
     original = model.process()
     new_params = np.array(
         [3e-6, 0.05, 0.90, 0.02, 0.15, 0.00018], dtype=np.float64
@@ -133,10 +133,10 @@ def test_volatility_constraint_rejects_out_of_region() -> None:
 
 
 def test_default_constraint_passes_canonical_params(
-    gjr_process: GjrGarchProcess,
+    gjr_process: GJRGARCHProcess,
 ) -> None:
     """Composite constraint accepts canonical params."""
-    model = GjrGarchModel(gjr_process)
+    model = GJRGARCHModel(gjr_process)
     c = model.constraint
     p = np.array(
         [2e-6, 0.024, 0.93, 0.059, 0.2, 0.00016], dtype=np.float64
@@ -145,20 +145,20 @@ def test_default_constraint_passes_canonical_params(
 
 
 def test_default_constraint_rejects_alpha_above_one(
-    gjr_process: GjrGarchProcess,
+    gjr_process: GJRGARCHProcess,
 ) -> None:
     """alpha > 1 → reject (BoundaryConstraint(0, 1))."""
-    model = GjrGarchModel(gjr_process)
+    model = GJRGARCHModel(gjr_process)
     c = model.constraint
     p = np.array([2e-6, 1.5, 0.93, 0.059, 0.2, 0.00016], dtype=np.float64)
     assert c.test(p) is False
 
 
 def test_default_constraint_rejects_negative_v0(
-    gjr_process: GjrGarchProcess,
+    gjr_process: GJRGARCHProcess,
 ) -> None:
     """v0 < 0 → reject (PositiveConstraint)."""
-    model = GjrGarchModel(gjr_process)
+    model = GJRGARCHModel(gjr_process)
     c = model.constraint
     p = np.array(
         [2e-6, 0.024, 0.93, 0.059, 0.2, -0.0001], dtype=np.float64

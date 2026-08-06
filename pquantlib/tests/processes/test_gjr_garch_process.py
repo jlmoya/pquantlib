@@ -1,4 +1,4 @@
-"""GjrGarchProcess behavioral + cross-validation tests.
+"""GJRGARCHProcess behavioral + cross-validation tests.
 
 Cross-validates against ``migration-harness/references/cluster/w1d.json``.
 
@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
-from pquantlib.processes.gjr_garch_process import Discretization, GjrGarchProcess
+from pquantlib.processes.gjr_garch_process import Discretization, GJRGARCHProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.reference_reader import load as load_reference
@@ -34,13 +34,13 @@ def cpp_refs() -> dict[str, Any]:
 
 
 @pytest.fixture
-def process() -> GjrGarchProcess:
+def process() -> GJRGARCHProcess:
     """Duan et al. (2006) testbed with daily constants."""
     dc = Actual365Fixed()
     ref = Date.from_ymd(15, Month.June, 2026)
     rf = FlatForward.from_rate(reference_date=ref, forward_rate=0.05, day_counter=dc)
     div = FlatForward.from_rate(reference_date=ref, forward_rate=0.0, day_counter=dc)
-    return GjrGarchProcess(
+    return GJRGARCHProcess(
         risk_free_rate=rf,
         dividend_yield=div,
         s0=SimpleQuote(100.0),
@@ -55,13 +55,13 @@ def process() -> GjrGarchProcess:
     )
 
 
-def test_size_and_factors(process: GjrGarchProcess) -> None:
+def test_size_and_factors(process: GJRGARCHProcess) -> None:
     assert process.size() == 2
     assert process.factors() == 2
 
 
 def test_parameter_accessors(
-    process: GjrGarchProcess, cpp_refs: dict[str, Any]
+    process: GJRGARCHProcess, cpp_refs: dict[str, Any]
 ) -> None:
     p = cpp_refs["gjr_garch_process"]
     exact(process.v0, p["v0"])
@@ -74,7 +74,7 @@ def test_parameter_accessors(
 
 
 def test_initial_values(
-    process: GjrGarchProcess, cpp_refs: dict[str, Any]
+    process: GJRGARCHProcess, cpp_refs: dict[str, Any]
 ) -> None:
     """initial_values = (S0, daysPerYear * v0).
 
@@ -87,7 +87,7 @@ def test_initial_values(
 
 
 def test_drift_at_t_half_year(
-    process: GjrGarchProcess, cpp_refs: dict[str, Any]
+    process: GJRGARCHProcess, cpp_refs: dict[str, Any]
 ) -> None:
     """drift at t=0.5y with x=(100, daysPerYear*v0).
 
@@ -109,7 +109,7 @@ def test_drift_at_t_half_year(
 
 
 def test_diffusion_at_t_half_year(
-    process: GjrGarchProcess, cpp_refs: dict[str, Any]
+    process: GJRGARCHProcess, cpp_refs: dict[str, Any]
 ) -> None:
     """diffusion at t=0.5y with x=(100, daysPerYear*v0).
 
@@ -147,7 +147,7 @@ def test_apply_log_step_on_spot() -> None:
     ref = Date.from_ymd(15, Month.June, 2026)
     rf = FlatForward.from_rate(reference_date=ref, forward_rate=0.05, day_counter=dc)
     div = FlatForward.from_rate(reference_date=ref, forward_rate=0.0, day_counter=dc)
-    proc = GjrGarchProcess(
+    proc = GJRGARCHProcess(
         risk_free_rate=rf,
         dividend_yield=div,
         s0=SimpleQuote(100.0),
@@ -174,7 +174,7 @@ def test_discretization_default_is_full_truncation() -> None:
     ref = Date.from_ymd(15, Month.June, 2026)
     rf = FlatForward.from_rate(reference_date=ref, forward_rate=0.05, day_counter=dc)
     div = FlatForward.from_rate(reference_date=ref, forward_rate=0.0, day_counter=dc)
-    proc = GjrGarchProcess(
+    proc = GJRGARCHProcess(
         risk_free_rate=rf,
         dividend_yield=div,
         s0=SimpleQuote(100.0),

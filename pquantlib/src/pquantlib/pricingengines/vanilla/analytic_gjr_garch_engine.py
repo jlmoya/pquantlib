@@ -48,7 +48,7 @@ from pquantlib.instruments.one_asset_option import OneAssetOptionResults
 from pquantlib.math.distributions.cumulative_normal_distribution import (
     CumulativeNormalDistribution,
 )
-from pquantlib.models.equity.gjr_garch_model import GjrGarchModel
+from pquantlib.models.equity.gjr_garch_model import GJRGARCHModel
 from pquantlib.option import OptionArguments
 from pquantlib.payoffs import OptionType, StrikedTypePayoff
 from pquantlib.pricingengines.generic_engine import GenericEngine
@@ -63,10 +63,10 @@ class AnalyticGjrGarchEngine(GenericEngine[OptionArguments, OneAssetOptionResult
 
     def __init__(
         self,
-        model: GjrGarchModel,
+        model: GJRGARCHModel,
         integration_order: int = 144,
     ) -> None:
-        """Construct from a ``GjrGarchModel``.
+        """Construct from a ``GJRGARCHModel``.
 
         # C++ parity: ``AnalyticGJRGARCHEngine`` ctor in
         # analyticgjrgarchengine.cpp:32-36.
@@ -83,15 +83,15 @@ class AnalyticGjrGarchEngine(GenericEngine[OptionArguments, OneAssetOptionResult
             ``AnalyticHestonEngine`` / ``AnalyticPTDHestonEngine``.
         """
         super().__init__(OptionArguments(), OneAssetOptionResults())
-        self._model: GjrGarchModel = model
+        self._model: GJRGARCHModel = model
         # C++ parity: analyticgjrgarchengine.hpp:65 — register with
         # model so the engine invalidates when parameters change.
         model.register_with(self)
 
     # --- inspectors -----------------------------------------------------
 
-    def model(self) -> GjrGarchModel:
-        """The underlying GjrGarchModel."""
+    def model(self) -> GJRGARCHModel:
+        """The underlying GJRGARCHModel."""
         return self._model
 
     # --- helpers --------------------------------------------------------

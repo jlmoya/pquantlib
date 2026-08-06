@@ -38,7 +38,7 @@ from pquantlib.models.marketmodels.evolvers.lognormal_fwd_rate_balland import (
     LogNormalFwdRateBalland,
 )
 from pquantlib.models.marketmodels.evolvers.lognormal_fwd_rate_iballand import (
-    LogNormalFwdRateIBalland,
+    LogNormalFwdRateiBalland,
 )
 from pquantlib.models.marketmodels.evolvers.normal_fwd_rate_pc import NormalFwdRatePc
 from pquantlib.models.marketmodels.evolvers.svdd_fwd_rate_pc import SVDDFwdRatePc
@@ -90,7 +90,7 @@ def test_iballand_evolved_forwards(ref: dict[str, Any]) -> None:
     mm = make_facade(ref, "pr5", 5, 5)
     gf = MTBrownianGeneratorFactory(42)
     num = terminal_measure(mm.evolution())
-    evolver = LogNormalFwdRateIBalland(mm, gf, num, 0)
+    evolver = LogNormalFwdRateiBalland(mm, gf, num, 0)
     evolver.start_new_path()
     for _ in range(len(num)):
         evolver.advance_step()

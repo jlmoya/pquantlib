@@ -27,6 +27,7 @@ from pquantlib.daycounters.thirty_360 import Thirty360
 from pquantlib.indexes.ibor.euribor import Euribor
 from pquantlib.indexes.ibor_index import IborIndex
 from pquantlib.indexes.index_manager import IndexManager
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.bootstrap_helper import PillarChoice
 from pquantlib.termstructures.protocols import YieldTermStructureProtocol
@@ -71,6 +72,33 @@ _PAST_FIXINGS = {
 @pytest.fixture(scope="module")
 def refs() -> dict[str, dict[str, float]]:
     return json.loads(_REF_PATH.read_text())
+
+
+@pytest.fixture(autouse=True)
+def _pinned_evaluation_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date so no case is treated as expired.
+
+    ``SwapRateHelper.implied_quote`` prices a ``VanillaSwap``, and
+    ``Swap.is_expired()`` consults ``ObservableSettings().evaluation_date``
+    through ``CashFlow.has_occurred()`` (ql/instruments/swap.cpp:68-75). Without
+    this pin the module was silently wall-clock dependent: past 2028 every case
+    reports expired and ``implied_quote()`` collapses.
+
+    Each case carries its OWN ``evaluation_date`` argument (the probe sets
+    ``Settings::instance().evaluationDate()`` per case in
+    ``migration-harness/cpp/probes/cluster_l4b/probe.cpp``), and the port threads
+    that date explicitly through every date computation — the global is read
+    only by ``is_expired()``. Pinning it to the EARLIEST of the three case dates
+    therefore leaves every case live, exactly as it was in its own C++ run,
+    without perturbing any date arithmetic.
+    """
+    settings = ObservableSettings()
+    previous = settings.evaluation_date
+    settings.evaluation_date = min(_EVAL, _EVAL_EOM, _EVAL_MAY)
+    try:
+        yield
+    finally:
+        settings.evaluation_date = previous
 
 
 def _curve(eval_date: Date) -> YieldTermStructureProtocol:

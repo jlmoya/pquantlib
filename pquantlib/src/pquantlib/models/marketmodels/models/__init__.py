@@ -6,7 +6,9 @@ The concrete ``MarketModel`` volatility structures that the W10 evolvers and
 caplet-coterminal calibration build against:
 
 - ``flat_vol.FlatVol`` — flat-per-rate vol model; pseudo-roots from a flat vol
-  vector + a ``PiecewiseConstantCorrelation`` (the workhorse concrete model).
+  vector + a ``PiecewiseConstantCorrelation`` (the workhorse concrete model),
+  plus ``flat_vol.FlatVolFactory``, which derives the displaced vols and
+  initial rates from a yield curve + a linearly-interpolated vol grid.
 - ``abcd_vol.AbcdVol`` — Abcd-parametric vol model.
 - ``piecewise_constant_variance.PiecewiseConstantVariance`` — abstract
   piecewise-constant variance.

@@ -25,12 +25,12 @@ from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.exceptions import LibraryException
 from pquantlib.exercise import AmericanExercise, EuropeanExercise
 from pquantlib.instruments.vanilla_option import VanillaOption
-from pquantlib.models.equity.gjr_garch_model import GjrGarchModel
+from pquantlib.models.equity.gjr_garch_model import GJRGARCHModel
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.pricingengines.vanilla.analytic_gjr_garch_engine import (
     AnalyticGjrGarchEngine,
 )
-from pquantlib.processes.gjr_garch_process import GjrGarchProcess
+from pquantlib.processes.gjr_garch_process import GJRGARCHProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.reference_reader import load as load_reference
@@ -49,14 +49,14 @@ def cpp_refs() -> dict[str, Any]:
 
 
 @pytest.fixture
-def setup() -> tuple[GjrGarchModel, Date]:
+def setup() -> tuple[GJRGARCHModel, Date]:
     """Build the canonical GJR-GARCH model + 1y expiry date."""
     dc = Actual365Fixed()
     ref = Date.from_ymd(15, Month.June, 2026)
     expiry = ref + 365
     rf = FlatForward.from_rate(reference_date=ref, forward_rate=_R, day_counter=dc)
     div = FlatForward.from_rate(reference_date=ref, forward_rate=_Q, day_counter=dc)
-    process = GjrGarchProcess(
+    process = GJRGARCHProcess(
         risk_free_rate=rf,
         dividend_yield=div,
         s0=SimpleQuote(_S),
@@ -68,11 +68,11 @@ def setup() -> tuple[GjrGarchModel, Date]:
         lambda_=0.2,
         days_per_year=252.0,
     )
-    return GjrGarchModel(process), expiry
+    return GJRGARCHModel(process), expiry
 
 
 def test_atm_call_matches_cpp(
-    setup: tuple[GjrGarchModel, Date], cpp_refs: dict[str, Any]
+    setup: tuple[GJRGARCHModel, Date], cpp_refs: dict[str, Any]
 ) -> None:
     """ATM 1y call NPV matches the C++ AnalyticGJRGARCHEngine.
 
@@ -93,7 +93,7 @@ def test_atm_call_matches_cpp(
 
 
 def test_atm_put_matches_cpp(
-    setup: tuple[GjrGarchModel, Date], cpp_refs: dict[str, Any]
+    setup: tuple[GJRGARCHModel, Date], cpp_refs: dict[str, Any]
 ) -> None:
     """ATM 1y put NPV matches the C++ AnalyticGJRGARCHEngine.
 
@@ -109,7 +109,7 @@ def test_atm_put_matches_cpp(
     loose(option.npv(), expected, reason="put via parity → same precision as call")
 
 
-def test_put_call_parity(setup: tuple[GjrGarchModel, Date]) -> None:
+def test_put_call_parity(setup: tuple[GJRGARCHModel, Date]) -> None:
     """Put-call parity: C - P ~ S * Df_div - K * Df_rf.
 
     # C++ parity: implicit in the put branch using
@@ -139,7 +139,7 @@ def test_put_call_parity(setup: tuple[GjrGarchModel, Date]) -> None:
 
 
 def test_engine_rejects_non_european_exercise(
-    setup: tuple[GjrGarchModel, Date],
+    setup: tuple[GJRGARCHModel, Date],
 ) -> None:
     """The Edgeworth engine is European-only.
 
@@ -157,9 +157,9 @@ def test_engine_rejects_non_european_exercise(
 
 
 def test_engine_inspector_returns_model(
-    setup: tuple[GjrGarchModel, Date],
+    setup: tuple[GJRGARCHModel, Date],
 ) -> None:
-    """``engine.model()`` returns the supplied GjrGarchModel."""
+    """``engine.model()`` returns the supplied GJRGARCHModel."""
     model, _ = setup
     engine = AnalyticGjrGarchEngine(model)
     assert engine.model() is model

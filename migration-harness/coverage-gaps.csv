@@ -1,7 +1,21 @@
 subsystem,class,status,rationale
 (root),BaseCurrencyProxy,ALLOWLISTED,"private assignment-proxy struct inside C++ Money, exists only so `settings.conversionType() = X` compiles; Python properties give that syntax natively"
 (root),ConversionTypeProxy,ALLOWLISTED,"private assignment-proxy struct inside C++ Money; see BaseCurrencyProxy"
+(root),DateProxy,ALLOWLISTED,"private nested `Settings::DateProxy : public ObservableValue<Date>` (ql/settings.hpp:41) existing only so `Settings::instance().evaluationDate() = d` compiles and so an unset date reads as today; both are the ObservableSettings.evaluation_date property plus evaluation_date_or_today() (patterns/observable_settings.py)"
+(root),Error,ALLOWLISTED,"`class Error : public std::exception` (ql/errors.hpp:39) — QuantLib's single exception type. Python spells it pquantlib/exceptions.py:9 LibraryException, deriving from RuntimeError so `except RuntimeError` and `except Exception` behave as a Python caller expects; every qassert.require/fail raises it"
+(root),Handle,ALLOWLISTED,"`template <class T> class Handle` (ql/handle.hpp:41) — the observable smart-pointer indirection that lets a curve/quote be swapped under its holders. This port threads the pointed-to object DIRECTLY and re-registers observers explicitly; the decision is documented at cashflows/cms_coupon_pricer.py:16 and implemented in every setTermStructure equivalent (e.g. termstructures/yield_/bond_helper.py:73)"
+(root),Link,ALLOWLISTED,"private nested `Handle::Link : public Observable, public Observer` (ql/handle.hpp:43) — the shared observable cell a Handle points at; it has no meaning without Handle, see the Handle entry"
+(root),Position,ALLOWLISTED,"`struct Position { enum Type { Long, Short }; }` (ql/position.hpp:32) — a pure enum holder, C++'s way of namespacing an enum before enum class. Flattened to pquantlib/position.py:19 PositionType, with the C++ integer values"
+(root),Protection,ALLOWLISTED,"`struct Protection { enum Side { Buyer, Seller }; }` (ql/default.hpp:32) — pure enum holder; flattened to instruments/credit_default_swap.py:58 ProtectionSide (re-exported by experimental/credit/synthetic_cdo.py:47)"
+(root),RelinkableHandle,ALLOWLISTED,"`template <class T> class RelinkableHandle : public Handle<T>` (ql/handle.hpp:117) — adds linkTo() to Handle; see the Handle entry. Relinking is modelled by re-assigning the object and re-registering, e.g. termstructures/yield_/overnight_index_future_rate_helper.py:111"
 indexes,CaseInsensitiveCompare,ALLOWLISTED,"nested comparator inside C++ IndexManager; Python normalises with name.lower() (pinned by the IndexManager tests)"
+instruments,Average,ALLOWLISTED,"`struct Average { enum Type { Arithmetic, Geometric }; }` (ql/instruments/averagetype.hpp:34) — a pure enum holder, C++'s way of namespacing an enum before enum class. Flattened to instruments/average_type.py:17 AverageType"
+instruments,Barrier,ALLOWLISTED,"`struct Barrier { enum Type { DownIn, UpIn, DownOut, UpOut }; }` (ql/instruments/barriertype.hpp:35) — pure enum holder; flattened to instruments/barrier_option.py:29 BarrierType"
+instruments,DoubleBarrier,ALLOWLISTED,"`struct DoubleBarrier { enum Type { KnockIn, KnockOut, KIKO, KOKI }; }` (ql/instruments/doublebarriertype.hpp:33) — pure enum holder; flattened to instruments/double_barrier_option.py:32 DoubleBarrierType"
+instruments,Futures,ALLOWLISTED,"`struct Futures { enum Type { IMM, ASX, Custom }; }` (ql/instruments/futures.hpp:33) — pure enum holder; flattened to termstructures/yield_/futures_rate_helper.py:35 FuturesType"
+instruments,PartialBarrier,ALLOWLISTED,"`struct PartialBarrier { enum Range { Start, EndB1, EndB2 }; }` (ql/instruments/partialtimebarrieroption.hpp:36) — pure enum holder; flattened to experimental/barrieroption/partial_time_barrier_option.py:38 PartialBarrierRange"
+instruments,Price,ALLOWLISTED,"nested `class Bond::Price` (ql/instruments/bond.hpp:68) — amount + Dirty/Clean tag. Flattened to instruments/bond.py:71 BondPrice with instruments/bond.py:64 BondPriceType, since a module-scope `Price` would collide with the unrelated free `enum PriceType` of ql/prices.hpp"
+instruments,Settlement,ALLOWLISTED,"`struct Settlement` (ql/instruments/swaption.hpp:41) holds two enums plus one static validator. Flattened to instruments/swaption.py:54 SettlementType, :64 SettlementMethod and :76 check_settlement_type_and_method_consistency, which reproduces Settlement::checkTypeAndMethodConsistency (swaption.cpp:207-220)"
 math,AbcdInterpolationImpl,ALLOWLISTED,"nested detail:: Impl (abcdinterpolation.hpp:78); Python AbcdInterpolation (math/interpolations/abcd_interpolation.py), pinned in tests/math/interpolations/test_abcd_interpolation.py"
 math,Array,ALLOWLISTED,"hand-rolled rank-1 container (array.hpp:52); pquantlib/math/array.py makes Array a type ALIAS for numpy.typing.NDArray[float64]. Every operation the C++ class provides (indexing, unary minus, elementwise and scalar arithmetic, DotProduct, Norm2, Abs, Sqrt, Log, Exp, Pow) is diffed against C++ v1.43 in tests/math/test_v143_array_matrix.py"
 math,BackwardFlatInterpolationImpl,ALLOWLISTED,"nested detail:: Impl (backwardflatinterpolation.hpp:71); Python BackwardFlatInterpolation (math/interpolations/backward_flat.py), pinned in tests/math/interpolations/test_interpolation_factories.py and test_interpolations.py"
@@ -30,6 +44,14 @@ math,Point,ALLOWLISTED,"recursive head/tail template pair for an n-d evaluation 
 math,XABRCoeffHolder,ALLOWLISTED,"detail:: template mixin holding calibration state - params_, error_, maxError_, XABREndCriteria_ (xabrinterpolation.hpp:51); in Python that state lives directly on the fitter and is read through alpha()/beta()/nu()/rho()/gamma()/rms_error()/max_error(), asserted in tests/math/interpolations/test_sabr_interpolation.py and test_zabr_interpolation.py"
 math,XABRError,ALLOWLISTED,"private nested CostFunction inside XABRInterpolationImpl (xabrinterpolation.hpp:288), reachable only during calibration; Python passes residuals straight to scipy.optimize.least_squares, and the resulting fits are cross-validated in tests/math/interpolations/test_sabr_interpolation.py and test_zabr_interpolation.py"
 math,XABRInterpolationImpl,ALLOWLISTED,"nested detail:: template combining Interpolation::templateImpl with XABRCoeffHolder (xabrinterpolation.hpp:101); Python folds it into each concrete fitter - SABRInterpolation, ZabrInterpolation, NoArbSabrInterpolation - each cross-validated in tests/math/interpolations/test_sabr_interpolation.py, test_zabr_interpolation.py and tests/experimental/volatility/test_no_arb_sabr_interpolation.py"
+models,CachedSwapKey,ALLOWLISTED,"nested `Gaussian1dModel::CachedSwapKey` (ql/models/shortrate/onefactormodels/gaussian1dmodel.hpp:156) — a 3-field struct used only as an unordered_map key; the Python cache is keyed by a plain tuple, models/shortrate/gaussian1d_model.py:132"
+models,CachedSwapKeyHasher,ALLOWLISTED,"nested `Gaussian1dModel::CachedSwapKeyHasher` (ql/models/shortrate/onefactormodels/gaussian1dmodel.hpp:166) — the std::hash functor CachedSwapKey needs; Python tuples are hashable without one, see CachedSwapKey"
+models,Impl,ALLOWLISTED,"the pimpl base nested in ~50 unrelated C++ types (ql/time/calendar.hpp:64, ql/time/daycounter.hpp:47, ql/models/parameter.hpp:41, ...), so one name cannot map to one Python class. Calendar/DayCounter drop the pimpl and are subclassed directly (time/calendar.py:34, daycounters/day_counter.py:25); Parameter keeps the strategy and names it models/parameter.py:58 ParameterImpl"
+models,ModelSettings,ALLOWLISTED,"nested `MarkovFunctional::ModelSettings` (ql/models/shortrate/onefactormodels/markovfunctional.hpp:115); flattened to module scope it needs the owner in the name, so it is models/shortrate/onefactor/markov_functional.py:105 MarkovFunctionalSettings"
+models,NumericalImpl,ALLOWLISTED,"nested `TermStructureFittingParameter::NumericalImpl` (ql/models/parameter.hpp:147); flattening it to module scope needs the owner in the name, so it is models/parameter.py:292 TermStructureFittingParameterImpl (which carries that C++ parity note in situ)"
+patterns,AcyclicVisitor,ALLOWLISTED,"`class AcyclicVisitor` (ql/patterns/visitor.hpp:33) is a DEGENERATE empty base — its only member is a virtual destructor — existing so C++ can dynamic_cast a visitor to Visitor<T>*; pquantlib.patterns.visitor.Visitor is a runtime_checkable Protocol and Event.accept isinstance-checks it (pquantlib/event.py), which is the same check without the tag base"
+patterns,CuriouslyRecurringTemplate,ALLOWLISTED,"`template <class Impl> class CuriouslyRecurringTemplate` (ql/patterns/curiouslyrecurring.hpp:39) — a CRTP static-dispatch helper whose entire body is `static_cast<Impl&>(*this)`; Python resolves self.method() on the runtime class, so the idiom has no expression"
+patterns,Proxy,ALLOWLISTED,"private nested `Observer::Proxy` (ql/patterns/observable.hpp:330) holding a mutex plus an `active_` flag so a dying Observer can be detached mid-notification; pquantlib.patterns.observer.Observable stores observers in a weakref.WeakSet (observer.py:27), which gives the same lifetime guarantee without the proxy"
 time,AFB_Impl,ALLOWLISTED,"private nested Impl for ActualActual AFB/Euro (actualactual.hpp:84); ActualActual(Convention.AFB/.Euro), pinned in tests/daycounters/test_actualactual.py::test_afb_family_matches_cpp"
 time,AsxImpl,ALLOWLISTED,"nested Impl (australia.hpp:59); Python Australia(Market.ASX), pinned in test_v143_calendar_markets.py"
 time,AucklandImpl,ALLOWLISTED,"nested Impl (newzealand.hpp:77); Python NewZealand(Market.Auckland), pinned in test_v143_calendar_markets.py"
@@ -85,19 +107,12 @@ time,WesternImpl,ALLOWLISTED,"nested Calendar::Impl base fixing Sat+Sun weekends
 time,WseImpl,ALLOWLISTED,"nested Impl (poland.hpp:58); Python Poland(PolandMarket.WSE), pinned in test_v143_calendar_markets.py"
 time,XetraImpl,ALLOWLISTED,"nested Impl (germany.hpp:124); Python Germany(GermanyMarket.Xetra), pinned in test_v143_calendar_markets.py"
 time,ZseImpl,ALLOWLISTED,"nested Impl (croatia.hpp:57); Python Croatia(CroatiaMarket.ZSE), pinned in test_v143_calendar_markets.py"
-(root),DateProxy,UNFLAGGED,
-(root),Error,UNFLAGGED,
-(root),Event,UNFLAGGED,
-(root),Handle,UNFLAGGED,
-(root),IntervalPrice,UNFLAGGED,
-(root),Link,UNFLAGGED,
-(root),LocalVolatilityEstimator,UNFLAGGED,
-(root),Position,UNFLAGGED,
-(root),Protection,UNFLAGGED,
-(root),RebatedExercise,UNFLAGGED,
-(root),RelinkableHandle,UNFLAGGED,
-(root),SavedSettings,UNFLAGGED,
-(root),VolatilityCompositor,UNFLAGGED,
+utilities,Clone,ALLOWLISTED,"`template <class T> class Clone` (ql/utilities/clone.hpp:40) — a deep-copying smart pointer giving polymorphic VALUE semantics to a unique_ptr; Python names are already reference handles, so the port calls each product's own clone() directly (models/marketmodels/products/composite_product.py:153)"
+utilities,DateParser,ALLOWLISTED,"`class DateParser` (ql/utilities/dataparsers.hpp:43) has no state and no instances — every member is a `static Date`. The Python module IS that namespace: pquantlib.time.date_parser.parse_iso (date_parser.py:27) and .parse_formatted (date_parser.py:48)"
+utilities,Null,ALLOWLISTED,"`template <class Type> class Null` (ql/utilities/null.hpp:59) — a type-parameterised sentinel that implicitly converts to numeric_limits<float>::max(); this port spells the same sentinel `None` (pquantlib/prices.py, cashflows/dividend.py) and, where a float is structurally required, the NULL_REAL constant (math/statistics/general_statistics.py:32)"
+utilities,ObservableValue,ALLOWLISTED,"`template <class T> class ObservableValue` (ql/utilities/observablevalue.hpp:42) — a value wrapper whose operator= notifies. QuantLib instantiates it in exactly ONE place, Settings::DateProxy (settings.hpp:41); the Python counterpart is the ObservableSettings.evaluation_date property setter, which notifies on change (patterns/observable_settings.py)"
+utilities,PeriodParser,ALLOWLISTED,"`class PeriodParser` (ql/utilities/dataparsers.hpp:36) has no state and no instances — its single member is a `static Period parse`. The Python module IS that namespace: pquantlib.time.period_parser.parse (period_parser.py:55)"
+utilities,Tracing,ALLOWLISTED,"`QuantLib::detail::Tracing` (ql/utilities/tracing.hpp:35) — a detail::-namespace singleton that exists ONLY to back the QL_TRACE* preprocessor macros, and whose enable() QL_FAILs unless the library was compiled with QL_ENABLE_TRACING. Python has no preprocessor; the stdlib `logging` module is the counterpart"
 experimental,AdaptiveInertia,UNFLAGGED,
 experimental,AffineHazardRate,UNFLAGGED,
 experimental,AssetSwapHelper,UNFLAGGED,
@@ -173,67 +188,7 @@ experimental,VannaVolga,UNFLAGGED,
 experimental,VannaVolgaInterpolationImpl,UNFLAGGED,
 experimental,VectorIntegrator,UNFLAGGED,
 experimental,Ziggurat,UNFLAGGED,
-instruments,Average,UNFLAGGED,
-instruments,Barrier,UNFLAGGED,
-instruments,DoubleBarrier,UNFLAGGED,
-instruments,Futures,UNFLAGGED,
-instruments,PartialBarrier,UNFLAGGED,
-instruments,Price,UNFLAGGED,
-instruments,Settlement,UNFLAGGED,
-legacy,LfmCovarianceParameterization,UNFLAGGED,
-legacy,LfmCovarianceProxy,UNFLAGGED,
-legacy,LfmHullWhiteParameterization,UNFLAGGED,
-legacy,LfmSwaptionEngine,UNFLAGGED,
-legacy,LiborForwardModel,UNFLAGGED,
-legacy,LiborForwardModelProcess,UNFLAGGED,
-legacy,LmConstWrapperCorrelationModel,UNFLAGGED,
-legacy,LmConstWrapperVolatilityModel,UNFLAGGED,
-legacy,LmCorrelationModel,UNFLAGGED,
-legacy,LmExponentialCorrelationModel,UNFLAGGED,
-legacy,LmExtLinearExponentialVolModel,UNFLAGGED,
-legacy,LmFixedVolatilityModel,UNFLAGGED,
-legacy,LmLinearExponentialCorrelationModel,UNFLAGGED,
-legacy,LmLinearExponentialVolatilityModel,UNFLAGGED,
-legacy,LmVolatilityModel,UNFLAGGED,
-models,CachedSwapKey,UNFLAGGED,
-models,CachedSwapKeyHasher,UNFLAGGED,
-models,CalibrationPoint,UNFLAGGED,
-models,ConstantEstimator,UNFLAGGED,
-models,CustomSmileFactory,UNFLAGGED,
-models,CustomSmileSection,UNFLAGGED,
-models,FlatVolFactory,UNFLAGGED,
-models,GJRGARCHModel,UNFLAGGED,
-models,Garch11,UNFLAGGED,
-models,GarmanKlassAbstract,UNFLAGGED,
-models,GarmanKlassOpenClose,UNFLAGGED,
-models,GarmanKlassSigma1,UNFLAGGED,
-models,GarmanKlassSigma3,UNFLAGGED,
-models,GarmanKlassSigma4,UNFLAGGED,
-models,GarmanKlassSigma5,UNFLAGGED,
-models,GarmanKlassSigma6,UNFLAGGED,
-models,GarmanKlassSimpleSigma,UNFLAGGED,
-models,HestonSLVFDMModel,UNFLAGGED,
-models,HestonSLVFokkerPlanckFdmParams,UNFLAGGED,
-models,HestonSLVMCModel,UNFLAGGED,
-models,HistoricalForwardRatesAnalysisImpl,UNFLAGGED,
-models,Impl,UNFLAGGED,
 models,LogEntry,UNFLAGGED,
-models,LogNormalFwdRateiBalland,UNFLAGGED,
-models,ModelOutputs,UNFLAGGED,
-models,ModelSettings,UNFLAGGED,
-models,NumericalImpl,UNFLAGGED,
-models,ParkinsonSigma,UNFLAGGED,
-models,PathwiseVegasAccountingEngine,UNFLAGGED,
-models,PathwiseVegasOuterAccountingEngine,UNFLAGGED,
-models,ReversionObserver,UNFLAGGED,
-models,SimpleLocalEstimator,UNFLAGGED,
-models,SubProduct,UNFLAGGED,
-models,VolatilityObserver,UNFLAGGED,
-models,ZeroHelper,UNFLAGGED,
-patterns,AcyclicVisitor,UNFLAGGED,
-patterns,CuriouslyRecurringTemplate,UNFLAGGED,
-patterns,Proxy,UNFLAGGED,
-patterns,UpdateChecker,UNFLAGGED,
 pricingengines,AmericanBasketPathPricer,UNFLAGGED,
 pricingengines,AmericanPayoffAtExpiry,UNFLAGGED,
 pricingengines,AmericanPayoffAtHit,UNFLAGGED,
@@ -382,25 +337,6 @@ pricingengines,TreeVanillaSwapEngine,UNFLAGGED,
 pricingengines,TurnbullWakemanAsianEngine,UNFLAGGED,
 pricingengines,VariancePathPricer,UNFLAGGED,
 pricingengines,VectorBsmProcessExtractor,UNFLAGGED,
-processes,CachingKey,UNFLAGGED,
-processes,EndEulerDiscretization,UNFLAGGED,
-processes,GJRGARCHProcess,UNFLAGGED,
-processes,GarmanKohlagenProcess,UNFLAGGED,
-processes,GeometricBrownianMotionProcess,UNFLAGGED,
-processes,GsrProcessCore,UNFLAGGED,
-processes,HestonSLVProcess,UNFLAGGED,
-processes,HullWhiteProcess,UNFLAGGED,
-processes,HybridHestonHullWhiteProcess,UNFLAGGED,
-processes,JointStochasticProcess,UNFLAGGED,
-processes,Merton76Process,UNFLAGGED,
-processes,MfStateProcess,UNFLAGGED,
-quotes,EurodollarFuturesImpliedStdDevQuote,UNFLAGGED,
-quotes,ForwardSwapQuote,UNFLAGGED,
-quotes,ForwardValueQuote,UNFLAGGED,
-quotes,FuturesConvAdjustmentQuote,UNFLAGGED,
-quotes,ImpliedStdDevQuote,UNFLAGGED,
-quotes,LastFixingQuote,UNFLAGGED,
-quotes,MultiCompositeQuote,UNFLAGGED,
 termstructures,AbcdError,UNFLAGGED,
 termstructures,AbcdParametersTransformation,UNFLAGGED,
 termstructures,AbcdSquared,UNFLAGGED,
@@ -443,9 +379,3 @@ termstructures,ZabrFullFd,UNFLAGGED,
 termstructures,ZabrLocalVolatility,UNFLAGGED,
 termstructures,ZabrShortMaturityLognormal,UNFLAGGED,
 termstructures,ZabrShortMaturityNormal,UNFLAGGED,
-utilities,Clone,UNFLAGGED,
-utilities,DateParser,UNFLAGGED,
-utilities,Null,UNFLAGGED,
-utilities,ObservableValue,UNFLAGGED,
-utilities,PeriodParser,UNFLAGGED,
-utilities,Tracing,UNFLAGGED,

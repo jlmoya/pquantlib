@@ -29,12 +29,14 @@ Documented divergences from C++:
   ``SymmetricSchurDecomposition`` (cyclic Jacobi rotations); we use
   ``numpy.linalg.eigh`` (LAPACK ``?syevd``, divide-and-conquer). Both compute
   the exact spectral decomposition of a symmetric matrix; ``eigh`` returns
-  eigenvalues in **ascending** order, so we reverse to match the C++
-  decreasing convention. Eigenvectors of *degenerate* eigenvalues can still
-  differ by an orthogonal rotation within the eigenspace, so the raw
-  pseudo-root ``B`` is not guaranteed bit-identical to C++ in that case — but
-  ``B @ B.T`` (the covariance it reconstructs) always is, and the diagonal is
-  additionally pinned exactly by ``normalizePseudoRoot``.
+  eigenvalues in **ascending** order, so we re-sort with the C++ ordering
+  predicate (``std::greater<>`` on ``pair<Real, vector<Real>>``: eigenvalue
+  descending, then eigenvector lexicographic descending — see
+  ``rank_reduced_sqrt``). Eigenvectors of a *degenerate* eigenvalue span a
+  subspace whose basis is not unique, so when the two solvers pick different
+  bases for the same eigenspace the raw pseudo-root ``B`` still differs — but
+  ``B @ B.T`` (the covariance it reconstructs) always agrees, and the diagonal
+  is additionally pinned exactly by ``normalizePseudoRoot``.
 * **Sign convention (matched to C++).** ``SymmetricSchurDecomposition`` pins
   each eigenvector's sign so its first component is non-negative; we apply the
   same rule to the ``eigh`` output. For the distinct-eigenvalue covariance
@@ -110,12 +112,37 @@ def rank_reduced_sqrt(
     )
     qassert.require(max_rank >= 1, "max rank required < 1")
 
-    # spectral (Principal Component) analysis. numpy.linalg.eigh returns
-    # eigenvalues ascending; reverse to C++ decreasing order and reorder
-    # the eigenvector columns to match.
+    # spectral (Principal Component) analysis.
+    #
+    # C++ parity: symmetricschurdecomposition.cpp:116-124 collects the
+    # (eigenvalue, eigenvector) pairs into ``std::vector<std::pair<Real,
+    # std::vector<Real> > >`` and sorts them with ``std::greater<>``. Because
+    # ``std::pair``'s comparison is lexicographic, that is DESCENDING by
+    # eigenvalue and, on an eigenvalue TIE, descending lexicographic by the
+    # (raw, pre-sign-fix) eigenvector — not merely descending by eigenvalue.
+    #
+    # ALIGN(models/marketmodels): this used to reverse ``eigh``'s ascending
+    # output unconditionally, which reproduces the first sort key only and gets
+    # every tie wrong. Proof: for the 2x2 identity C++ ``rankReducedSqrt``
+    # returns the identity (the Jacobi loop exits immediately, and the tie is
+    # broken by (1,0) > (0,1)), while the reversal returned [[0,1],[1,0]].
     eig_vals_asc, eig_vecs_asc = np.linalg.eigh(m)
-    eigen_values = eig_vals_asc[::-1].copy()
-    eigen_vectors = eig_vecs_asc[:, ::-1].copy()
+    order = sorted(
+        range(size),
+        key=lambda c: (float(eig_vals_asc[c]), tuple(eig_vecs_asc[:, c].tolist())),
+        reverse=True,
+    )
+    eigen_values = eig_vals_asc[order].copy()
+    eigen_vectors = eig_vecs_asc[:, order].copy()
+
+    # C++ parity: symmetricschurdecomposition.cpp:125-130 zeroes any eigenvalue
+    # that is round-off small relative to the largest one
+    # (``fabs(temp[col].first/maxEv) < 1e-16 ? 0.0 : temp[col].first``). A zero
+    # maxEv makes the C++ ratio NaN, and ``NaN < 1e-16`` is false, so the
+    # eigenvalue survives — ``np.where`` on a NaN ratio does the same.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        _ratios = np.abs(eigen_values / eigen_values[0])
+    eigen_values = np.where(_ratios < 1e-16, 0.0, eigen_values)
 
     # C++ parity: symmetricschurdecomposition.cpp pins each eigenvector's sign
     # so that its first component is non-negative

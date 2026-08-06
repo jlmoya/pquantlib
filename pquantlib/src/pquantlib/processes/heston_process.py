@@ -215,18 +215,25 @@ class HestonProcess(StochasticProcess):
         """
         v = float(x[1])
         vol = math.sqrt(v) if v > 0.0 else 0.0
-        # C++ uses ``forwardRate(t, t, Continuous)`` — the instantaneous
-        # forward rate at ``t``. Python's ``forward_rate(t, t, ...)`` has
-        # a year-fraction bug at the t1==t2 branch (passes 0.0 to
-        # implied_rate, which rejects non-positive times). Sidestep by
-        # passing an explicit small finite window — matches the L3-D
-        # ``GeneralizedBlackScholesProcess`` workaround.
-        dt = 0.0001
+        # ALIGN(processes): C++ parity fix. This used to call
+        # ``forward_rate(t, t + 1e-4, Continuous, NoFrequency, True)``, on the
+        # premise that "Python's forward_rate(t, t, ...) has a year-fraction
+        # bug at the t1==t2 branch (passes 0.0 to implied_rate)". That premise
+        # is stale: ``YieldTermStructure.forward_rate`` handles ``t2 == t1`` by
+        # centring a ``_DT`` window on ``t`` and passing the reassigned
+        # ``t2 - t1``, exactly as yieldtermstructure.cpp:169-171 does. C++
+        # ``HestonProcess::drift`` (hestonprocess.cpp:70-81) really does use
+        # the INSTANTANEOUS forward ``forwardRate(t, t, Continuous)``; the
+        # 1e-4 window belongs to ``GeneralizedBlackScholesProcess::drift``,
+        # which is a different formula. On a flat curve the two agree exactly,
+        # which is why the divergence survived; on the non-flat curve pinned by
+        # ``migration-harness/references/v143/processes/tail.json`` they differ
+        # by ~3e-7 in the drift, far outside any tolerance tier.
         r = self._risk_free_rate.forward_rate(
-            t, t + dt, Compounding.Continuous, Frequency.NoFrequency, True
+            t, t, Compounding.Continuous, Frequency.Annual
         ).rate()
         q = self._dividend_yield.forward_rate(
-            t, t + dt, Compounding.Continuous, Frequency.NoFrequency, True
+            t, t, Compounding.Continuous, Frequency.Annual
         ).rate()
         return np.array(
             [

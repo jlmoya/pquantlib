@@ -26,6 +26,7 @@ from pquantlib.indexes.ibor_index import IborIndex
 from pquantlib.math.statistics.sequence_statistics import SequenceStatistics
 from pquantlib.models.marketmodels.historical_forward_rates_analysis import (
     HistoricalForwardRatesAnalysis,
+    HistoricalForwardRatesAnalysisImpl,
     historical_forward_rates_analysis,
 )
 from pquantlib.models.marketmodels.historical_rates_analysis import (
@@ -33,6 +34,7 @@ from pquantlib.models.marketmodels.historical_rates_analysis import (
     historical_rates_analysis,
 )
 from pquantlib.patterns.observable_settings import ObservableSettings
+from pquantlib.termstructures.yield_.yield_traits import Discount, ZeroYield
 from pquantlib.testing.reference_reader import load as load_reference
 from pquantlib.testing.tolerance import exact, tight
 from pquantlib.time.business_day_convention import BusinessDayConvention
@@ -359,7 +361,7 @@ def test_historical_forward_rates_analysis_class_and_restores_eval_date() -> Non
     eval_before = settings.evaluation_date
 
     stats = SequenceStatistics()
-    analysis = HistoricalForwardRatesAnalysis(
+    analysis = HistoricalForwardRatesAnalysisImpl(
         stats,
         start,
         end,
@@ -371,9 +373,56 @@ def test_historical_forward_rates_analysis_class_and_restores_eval_date() -> Non
         [],
         Actual360(),
     )
+    # C++ parity: the Impl is the concrete arm of the pure-virtual
+    # HistoricalForwardRatesAnalysis interface.
+    assert isinstance(analysis, HistoricalForwardRatesAnalysis)
     assert analysis.failed_dates() == []
     assert analysis.skipped_dates() == []
     assert len(analysis.fixing_periods()) == 2
     assert analysis.stats().samples() == len(visited) - 1
     # The evaluation date must be restored (SavedSettings substitute).
     assert settings.evaluation_date == eval_before
+
+
+def test_historical_forward_rates_analysis_base_is_abstract() -> None:
+    # C++ parity: HistoricalForwardRatesAnalysis is pure-virtual; only
+    # HistoricalForwardRatesAnalysisImpl<Traits, Interpolator> is concrete.
+    with pytest.raises(TypeError):
+        HistoricalForwardRatesAnalysis()  # type: ignore[abstract]
+
+
+def test_historical_forward_rates_analysis_traits_are_threaded() -> None:
+    # The C++ free function is templated on <Traits, Interpolator> and the
+    # Impl forwards its own template parameters to it. A previous version of
+    # this port hard-coded Discount and claimed the analysis was
+    # "trait-agnostic for the forward rates it reads" — it is not: the traits
+    # class IS the bootstrap state variable, so it determines the curve
+    # between pillars and therefore the time-to-go forwards. Running the same
+    # dataset under Discount and under ZeroYield must give different moves.
+    start = Date.from_ymd(5, Month.January, 2009)
+    end = Date.from_ymd(2, Month.March, 2009)
+    step = Period(1, TimeUnit.Weeks)
+
+    covariances: list[Any] = []
+    for traits in (Discount, ZeroYield):
+        ibors, fwd, _ = _seeded_forward_curve_indexes()
+        stats = SequenceStatistics()
+        analysis = HistoricalForwardRatesAnalysisImpl(
+            stats,
+            start,
+            end,
+            step,
+            fwd,
+            Period(1, TimeUnit.Months),
+            Period(6, TimeUnit.Months),
+            ibors,
+            [],
+            Actual360(),
+            1.0e-12,
+            None,
+            traits,
+        )
+        assert analysis.failed_dates() == []
+        covariances.append(stats.covariance().copy())
+
+    assert not np.allclose(covariances[0], covariances[1], rtol=0.0, atol=1e-12)

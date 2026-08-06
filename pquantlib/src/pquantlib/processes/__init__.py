@@ -9,6 +9,7 @@ from pquantlib.processes.black_process import BlackProcess
 from pquantlib.processes.black_scholes_merton_process import BlackScholesMertonProcess
 from pquantlib.processes.black_scholes_process import BlackScholesProcess
 from pquantlib.processes.cox_ingersoll_ross_process import CoxIngersollRossProcess
+from pquantlib.processes.end_euler_discretization import EndEulerDiscretization
 from pquantlib.processes.euler_discretization import EulerDiscretization
 from pquantlib.processes.forward_measure_process import (
     ForwardMeasureProcess,
@@ -16,10 +17,26 @@ from pquantlib.processes.forward_measure_process import (
 )
 from pquantlib.processes.g2_forward_process import G2ForwardProcess
 from pquantlib.processes.g2_process import G2Process
+from pquantlib.processes.garman_kohlagen_process import GarmanKohlagenProcess
 from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
 )
+from pquantlib.processes.geometric_brownian_motion_process import (
+    GeometricBrownianMotionProcess,
+)
+from pquantlib.processes.heston_process import HestonProcess
+from pquantlib.processes.heston_slv_process import HestonSLVProcess
 from pquantlib.processes.hull_white_forward_process import HullWhiteForwardProcess
+from pquantlib.processes.hull_white_process import HullWhiteProcess
+from pquantlib.processes.hybrid_heston_hull_white_process import (
+    HybridHestonHullWhiteProcess,
+)
+from pquantlib.processes.joint_stochastic_process import (
+    CachingKey,
+    JointStochasticProcess,
+)
+from pquantlib.processes.merton76_process import Merton76Process
+from pquantlib.processes.mf_state_process import MfStateProcess
 from pquantlib.processes.ornstein_uhlenbeck_process import OrnsteinUhlenbeckProcess
 from pquantlib.processes.stochastic_process import (
     StochasticProcess,
@@ -34,14 +51,25 @@ __all__ = [
     "BlackProcess",
     "BlackScholesMertonProcess",
     "BlackScholesProcess",
+    "CachingKey",
     "CoxIngersollRossProcess",
+    "EndEulerDiscretization",
     "EulerDiscretization",
     "ForwardMeasureProcess",
     "ForwardMeasureProcess1D",
     "G2ForwardProcess",
     "G2Process",
+    "GarmanKohlagenProcess",
     "GeneralizedBlackScholesProcess",
+    "GeometricBrownianMotionProcess",
+    "HestonProcess",
+    "HestonSLVProcess",
     "HullWhiteForwardProcess",
+    "HullWhiteProcess",
+    "HybridHestonHullWhiteProcess",
+    "JointStochasticProcess",
+    "Merton76Process",
+    "MfStateProcess",
     "OrnsteinUhlenbeckProcess",
     "StochasticProcess",
     "StochasticProcess1D",

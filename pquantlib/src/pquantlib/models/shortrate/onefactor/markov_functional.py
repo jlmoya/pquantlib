@@ -56,7 +56,7 @@ Carve-outs (documented inline below):
   here. Re-add by selecting the smile-section factory in
   ``_update_smiles`` based on ``settings.adjustments``.
 - ``ModelOutputs`` (the C++ trace + diagnostic struct) — Python omits
-  the diagnostic surface entirely; ``_ModelOutputs`` here is a lightweight
+  the diagnostic surface entirely; ``ModelOutputs`` here is a lightweight
   dict that records the per-expiry atm / annuity / adjustment factors
   needed by the engine.
 - ``arbitrageIndices`` / ``forceArbitrageIndices`` — only meaningful
@@ -70,6 +70,7 @@ Carve-outs (documented inline below):
 from __future__ import annotations
 
 import math
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -78,21 +79,26 @@ import numpy as np
 import numpy.typing as npt
 
 from pquantlib import qassert
-from pquantlib.math.interpolations.cubic_interpolation import CubicNaturalSpline
+from pquantlib.math.interpolations.cubic_interpolation import (
+    BoundaryCondition,
+    CubicInterpolation,
+    DerivativeApprox,
+)
 from pquantlib.math.optimization.constraint import PositiveConstraint
 from pquantlib.math.solvers1d.brent import Brent
 from pquantlib.models.model import CalibratedModel
 from pquantlib.models.parameter import PiecewiseConstantParameter
 from pquantlib.models.shortrate.gaussian1d_model import Gaussian1dModel
-from pquantlib.processes.gaussian1d_gsr_process import Gaussian1dGsrProcess
+from pquantlib.processes.mf_state_process import MfStateProcess
 from pquantlib.termstructures.volatility.atm_smile_section import AtmSmileSection
 from pquantlib.termstructures.volatility.flat_smile_section import FlatSmileSection
+from pquantlib.termstructures.volatility.smile_section import SmileSection
+from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 
 if TYPE_CHECKING:
     from pquantlib.indexes.swap_index import SwapIndex
     from pquantlib.quotes.quote import Quote
     from pquantlib.termstructures.protocols import YieldTermStructureProtocol
-    from pquantlib.termstructures.volatility.smile_section import SmileSection
     from pquantlib.termstructures.yield_term_structure import YieldTermStructure
     from pquantlib.time.date import Date
 
@@ -101,6 +107,69 @@ if TYPE_CHECKING:
 # dataclass. Several flag-style bit-or settings collapse to plain bool
 # fields; the rarely-used ``smileMoneynessCheckpoints_`` field is
 # omitted since no pretreatment path is wired here.
+class ZeroHelper:
+    """Brent objective: model digital price at ``strike`` minus the target.
+
+    # C++ parity: nested ``MarkovFunctional::ZeroHelper``
+    # (markovfunctional.hpp:480-495) — a function object whose ``operator()``
+    # is ``marketDigitalPrice(expiry, p, Option::Call, strike) - marketPrice``.
+    # It is the callable ``marketSwapRate`` hands to ``Brent::solve``.
+    """
+
+    __slots__ = ("_cp", "_expiry", "_market_price", "_model")
+
+    def __init__(
+        self,
+        model: MarkovFunctional,
+        expiry: Date,
+        cp: CalibrationPoint,
+        market_price: float,
+    ) -> None:
+        self._model = model
+        self._expiry = expiry
+        self._cp = cp
+        self._market_price = market_price
+
+    def __call__(self, strike: float) -> float:
+        # C++ Option::Call == 1.
+        return (
+            self._model.market_digital_price(self._expiry, self._cp, 1, strike)
+            - self._market_price
+        )
+
+
+class CustomSmileSection(SmileSection, ABC):
+    """A smile section that can invert its own digital-call price.
+
+    # C++ parity: nested ``MarkovFunctional::CustomSmileSection : public
+    # SmileSection`` (markovfunctional.hpp:103-106). Its single addition to
+    # SmileSection is ``inverseDigitalCall``, which the calibration uses in
+    # place of the Brent inversion when ModelSettings::CustomSmile is set —
+    # a custom smile is arbitrage-free by assumption, so it is expected to
+    # know its own inverse in closed form.
+    """
+
+    @abstractmethod
+    def inverse_digital_call(self, price: float, discount: float = 1.0) -> float:
+        """Strike whose digital-call price is ``price`` (times ``discount``).
+
+        # C++ parity: ``virtual Real inverseDigitalCall(Real price,
+        # Real discount = 1.0) const = 0`` (markovfunctional.hpp:105).
+        """
+
+
+class CustomSmileFactory(ABC):
+    """Builds a :class:`CustomSmileSection` from a raw smile section.
+
+    # C++ parity: nested ``MarkovFunctional::CustomSmileFactory``
+    # (markovfunctional.hpp:108-113).
+    """
+
+    @abstractmethod
+    def smile_section(self, source: SmileSection, atm: float) -> CustomSmileSection:
+        """# C++ parity: ``CustomSmileFactory::smileSection`` (markovfunctional.hpp:111-112)."""
+
+
 @dataclass(frozen=True, slots=True)
 class MarkovFunctionalSettings:
     """Numerical/grid settings for the MarkovFunctional model.
@@ -122,20 +191,22 @@ class MarkovFunctionalSettings:
     extrapolate_payoff_flat: bool = False
     adjust_digitals: bool = False
     adjust_yts: bool = False
-    # KahaleSmile / SabrSmile / CustomSmile — all carve-outs in the
-    # Python port. Settings struct accepts them as bool flags for
-    # forward compatibility but the calibration path raises
-    # NotImplementedError if any is True.
+    # KahaleSmile / SabrSmile remain carve-outs in the Python port: the
+    # calibration path rejects them. CustomSmile IS supported — set
+    # ``custom_smile=True`` and supply ``custom_smile_factory``
+    # (C++ ModelSettings::CustomSmile + customSmileFactory_,
+    # markovfunctional.hpp:256).
     kahale_smile: bool = False
     sabr_smile: bool = False
     custom_smile: bool = False
+    custom_smile_factory: CustomSmileFactory | None = None
 
 
 # C++ parity: markovfunctional.hpp:260-271 — internal calibration-point
 # record. PQuantLib stores it as a mutable dataclass keyed by expiry
 # in the model's ``_calibration_points`` dict.
 @dataclass(slots=True)
-class _CalibrationPoint:
+class CalibrationPoint:
     is_caplet: bool
     tenor: Any  # Period
     payment_dates: list[Any] = field(default_factory=lambda: [])  # list[Date]
@@ -230,10 +301,38 @@ def _gaussian_shifted_polynomial_integral(
     return a * poly4 + b * poly3 + c * poly2 + d * poly1 + e * poly0
 
 
+def _mf_cubic(x: npt.NDArray[np.float64], y: npt.NDArray[np.float64]) -> CubicInterpolation:
+    """The exact cubic MarkovFunctional uses, in both places C++ builds one.
+
+    # C++ parity: markovfunctional.cpp:221-223 (the per-time numeraire
+    # interpolation) and :478-482 (the deflated-annuity interpolation), which
+    # are the same configuration::
+    #
+    #     CubicInterpolation(..., CubicInterpolation::Spline, true,
+    #                        CubicInterpolation::Lagrange, 0.0,
+    #                        CubicInterpolation::Lagrange, 0.0)
+    #
+    # i.e. spline slopes with the Hyman MONOTONICITY filter on and LAGRANGE end
+    # conditions at both ends. This port previously used a natural spline at
+    # both sites — monotonic off, second-derivative-zero ends — which differs
+    # most in the outermost segments, exactly where the y-grid tails live.
+    """
+    return CubicInterpolation(
+        x_seq=x,  # type: ignore[arg-type]
+        y_seq=y,  # type: ignore[arg-type]
+        derivative_approx=DerivativeApprox.Spline,
+        monotonic=True,
+        left_condition=BoundaryCondition.Lagrange,
+        left_value=0.0,
+        right_condition=BoundaryCondition.Lagrange,
+        right_value=0.0,
+    )
+
+
 # C++ parity: ``ModelOutputs`` (markovfunctional.hpp:282-302) collapsed
 # to a tiny per-expiry diagnostics holder.
 @dataclass(slots=True)
-class _ModelOutputs:
+class ModelOutputs:
     expiries: list[Any] = field(default_factory=lambda: [])  # list[Date]
     times: list[float] = field(default_factory=lambda: [])
     atm: list[float] = field(default_factory=lambda: [])
@@ -255,7 +354,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
 
     The discrete numeraire is stored as a ``Matrix`` shaped
     ``(num_calibration_times + 2, 2 * y_grid_points + 1)`` plus a list
-    of ``CubicNaturalSpline`` interpolators (one per row).
+    of ``CubicInterpolation`` interpolators (one per row).
     """
 
     def __init__(
@@ -267,6 +366,8 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         swap_indexes: Sequence[SwapIndex],
         cap_volatilities: Sequence[Quote] | None = None,
         swaption_volatilities: Sequence[Quote] | None = None,
+        swaption_volatility_type: VolatilityType = VolatilityType.ShiftedLognormal,
+        swaption_shift: float = 0.0,
         settings: MarkovFunctionalSettings | None = None,
     ) -> None:
         # Parent ctors. Gaussian1dModel sets up the LazyObject + curve
@@ -277,8 +378,13 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         self._settings: MarkovFunctionalSettings = settings or MarkovFunctionalSettings()
         # Forward-compatibility: smile pretreatment carve-outs.
         qassert.require(
-            not (self._settings.kahale_smile or self._settings.sabr_smile or self._settings.custom_smile),
-            "Kahale / SABR / Custom smile pretreatment is deferred in the Python port",
+            not (self._settings.kahale_smile or self._settings.sabr_smile),
+            "Kahale / SABR smile pretreatment is deferred in the Python port",
+        )
+        qassert.require(
+            not self._settings.custom_smile or self._settings.custom_smile_factory is not None,
+            "custom_smile requires a custom_smile_factory "
+            "(C++ markovfunctional.cpp:413-417 dereferences customSmileFactory_)",
         )
         # Caplet calibration branch — also deferred for now.
         if cap_volatilities is not None:
@@ -323,6 +429,14 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         )
         self._swap_indexes: list[SwapIndex] = list(swap_indexes)
         self._swaption_volatilities: list[Quote] = list(swaption_volatilities)
+        # C++ reads the volatility type and the shift off the input
+        # SwaptionVolatilityStructure's smile section (markovfunctional.cpp:340-352).
+        # This port collapsed that structure into a list of Quotes, so both come
+        # in as constructor arguments instead. A non-zero shift is what makes
+        # lowerRateBound_ - shift() differ from lowerRateBound_ throughout the
+        # calibration.
+        self._swaption_volatility_type: VolatilityType = swaption_volatility_type
+        self._swaption_shift: float = swaption_shift
         self._swaption_expiries: list[Date] = list(smile_step_dates)[: len(swap_indexes)]
 
         # Mutable state populated by the calibration bootstrap.
@@ -330,10 +444,10 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         self._volsteptimes_array: npt.NDArray[np.float64] = np.zeros(
             len(self._volstepdates), dtype=np.float64
         )
-        # Sorted dict-equivalent: list of (expiry_date, _CalibrationPoint)
+        # Sorted dict-equivalent: list of (expiry_date, CalibrationPoint)
         # tuples ordered by expiry. Python uses a dict and re-sorts on
         # iteration; matches C++ ``std::map``'s ordering semantics.
-        self._calibration_points: dict[Any, _CalibrationPoint] = {}
+        self._calibration_points: dict[Any, CalibrationPoint] = {}
         self._times: list[float] = []
         self._numeraire_date: Date | None = None
         self._numeraire_time: float = 0.0
@@ -342,7 +456,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         # Discrete numeraire matrix [time_idx, y_idx].
         self._discrete_numeraire: npt.NDArray[np.float64] = np.zeros((0, 0), dtype=np.float64)
         # Cubic interpolators along y, one per time row.
-        self._numeraire_interp: list[CubicNaturalSpline] = []
+        self._numeraire_interp: list[CubicInterpolation] = []
         # Gauss-Hermite nodes + weights normalized for integration
         # against the standard normal density:
         #   E[g(Y)] = (1 / sqrt(pi)) * sum w_i * g(x_i * sqrt(2))
@@ -360,7 +474,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         self._gauss_hermite_x: npt.NDArray[np.float64] = nodes_scaled
         self._gauss_hermite_w: npt.NDArray[np.float64] = weights_scaled
         # Diagnostic outputs.
-        self._model_outputs: _ModelOutputs = _ModelOutputs()
+        self._model_outputs: ModelOutputs = ModelOutputs()
 
         # Initialize the model — builds the state process, calibration
         # points, and the numeraire tabulation. Runs the full bootstrap.
@@ -407,15 +521,30 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
             sigma_param.set_param(i, v)
         self._arguments[0] = sigma_param
 
-        # State process — Gaussian1dGsrProcess with the same vol grid
-        # and reversion. The forward measure horizon is the numeraire
-        # time. C++ parity: markovfunctional.cpp:213-214.
-        self._state_process = Gaussian1dGsrProcess(
-            term_structure=self._term_structure,  # type: ignore[arg-type]
-            volstepdates=self._volstepdates,
-            volatilities=self._volatilities_init,
+        # State process. C++ parity: markovfunctional.cpp:214-215 —
+        #
+        #     stateProcess_ = ext::make_shared<MfStateProcess>(
+        #         reversion_(0.0), volsteptimesArray_, sigma_.params());
+        #
+        # MfStateProcess, NOT a GSR/Ornstein-Uhlenbeck process. The two are
+        # different processes and the difference is not a reparametrisation
+        # that cancels: MfStateProcess is the driftless
+        # ``dx = sigma(t) e^{a t} dW`` whose variance over [t, t+dt] is
+        # ``\int sigma(u)^2 e^{2 a u} du`` (mfstateprocess.cpp:76-114), while
+        # GsrProcess is the OU process whose variance is
+        # ``\int sigma(u)^2 e^{-2 a (t+dt-u)} du``. Writing
+        # ``A(t) = \int_0^t sigma^2 e^{2 a u} du``, the ratio of the two
+        # standard deviations is ``e^{a (t+dt)}``, so in the only place the
+        # model reads the process — the three std devs of
+        # ``_deflated_zerobond_array`` — the y-coefficient
+        # ``stdDev(0,t) / stdDev(0,T)`` comes out as ``sqrt(A(t)/A(T))`` for
+        # MfStateProcess but ``e^{a (T - t)} sqrt(A(t)/A(T))`` for the GSR
+        # one. The x-coefficient ``stdDev(t,T) / stdDev(0,T)`` is the same in
+        # both, so the error is a pure stretch of the conditioning state.
+        self._state_process = MfStateProcess(
             reversion=self._reversion_value,
-            T=self._numeraire_time,
+            times=self._volsteptimes_array,
+            vols=self._arguments[0].params,
         )
 
         # Build the standardized y-grid (state grid).
@@ -432,10 +561,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         self._numeraire_interp = []
         for _ in range(n_times):
             self._numeraire_interp.append(
-                CubicNaturalSpline(
-                    x_seq=self._y_grid_array,  # type: ignore[arg-type]
-                    y_seq=np.ones(n_y, dtype=np.float64),  # type: ignore[arg-type]
-                )
+                _mf_cubic(self._y_grid_array, np.ones(n_y, dtype=np.float64))
             )
 
         # Update smile sections + numeraire tabulation — this is the
@@ -505,7 +631,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         dc: Any = swap_idx.day_counter()
         dates: list[Any] = list(sched.dates)
 
-        cp = _CalibrationPoint(is_caplet=False, tenor=swap_idx.tenor())
+        cp = CalibrationPoint(is_caplet=False, tenor=swap_idx.tenor())
         for k in range(1, len(dates)):
             prev_d = expiry if k == 1 else dates[k - 1]
             curr_d = dates[k]
@@ -542,21 +668,39 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
                 day_counter=ts.day_counter(),
                 reference_date=ts.reference_date(),
                 atm_level=cp.atm,
+                volatility_type=self._swaption_volatility_type,
+                shift=self._swaption_shift,
             )
             cp.raw_smile_section = raw
-            cp.smile_section = AtmSmileSection(base=raw, atm=cp.atm)
-            cp.min_rate_digital = cp.smile_section.digital_option_price(
-                self._settings.lower_rate_bound,
-                1,
-                cp.annuity,
-                self._settings.digital_gap,
-            )
-            cp.max_rate_digital = cp.smile_section.digital_option_price(
-                self._settings.upper_rate_bound,
-                1,
-                cp.annuity,
-                self._settings.digital_gap,
-            )
+            if self._settings.custom_smile:
+                # C++ parity: markovfunctional.cpp:411-417 — a custom smile is
+                # arbitrage-free by assumption, so it replaces the section
+                # outright and min/max rate digitals are left unset: C++ skips
+                # them entirely (markovfunctional.cpp:424-425, "custom smile
+                # will take care of this itself") because the CustomSmile
+                # branch of the calibration loop never reads them.
+                assert self._settings.custom_smile_factory is not None
+                cp.smile_section = self._settings.custom_smile_factory.smile_section(
+                    raw, cp.atm
+                )
+            else:
+                cp.smile_section = AtmSmileSection(base=raw, atm=cp.atm)
+                # C++ parity: markovfunctional.cpp:426-437 — the rate bounds are
+                # measured relative to the smile's own shift, so a shifted-
+                # lognormal input prices its digitals at the same MONEYNESS.
+                shift = cp.smile_section.shift()
+                cp.min_rate_digital = cp.smile_section.digital_option_price(
+                    self._settings.lower_rate_bound - shift,
+                    1,
+                    cp.annuity,
+                    self._settings.digital_gap,
+                )
+                cp.max_rate_digital = cp.smile_section.digital_option_price(
+                    self._settings.upper_rate_bound - shift,
+                    1,
+                    cp.annuity,
+                    self._settings.digital_gap,
+                )
             self._model_outputs.atm.append(cp.atm)
             self._model_outputs.annuity.append(cp.annuity)
 
@@ -598,9 +742,8 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
             # 2) Build the cubic spline of deflated_annuities in y.
             # Used by the digital-price integration loop below.
             try:
-                deflated_annuities_interp = CubicNaturalSpline(
-                    x_seq=self._y_grid_array,  # type: ignore[arg-type]
-                    y_seq=discrete_deflated_annuities,  # type: ignore[arg-type]
+                deflated_annuities_interp = _mf_cubic(
+                    self._y_grid_array, discrete_deflated_annuities
                 )
             except Exception:
                 deflated_annuities_interp = None
@@ -648,14 +791,9 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
                     integral = 0.0
                 digital += integral * numeraire0
 
-                if digital >= cp.min_rate_digital:
-                    swap_rate = self._settings.lower_rate_bound
-                elif digital <= cp.max_rate_digital:
-                    swap_rate = self._settings.upper_rate_bound
-                else:
-                    swap_rate = self._market_swap_rate(
-                        expiry, cp, digital, swap_rate_0
-                    )
+                swap_rate = self._invert_digital(
+                    expiry, cp, digital, swap_rate_0, monotone=j < y_size - 1
+                )
                 swap_rate_0 = swap_rate
                 numeraire_jb = 1.0 / max(
                     swap_rate * float(discrete_deflated_annuities[j])
@@ -668,16 +806,60 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
 
             # Refresh the interpolator for this row (used by
             # subsequent rows' deflated-zerobond integral).
-            self._numeraire_interp[idx] = CubicNaturalSpline(
-                x_seq=self._y_grid_array,  # type: ignore[arg-type]
-                y_seq=self._discrete_numeraire[idx].copy(),  # type: ignore[arg-type]
+            self._numeraire_interp[idx] = _mf_cubic(
+                self._y_grid_array, self._discrete_numeraire[idx].copy()
             )
 
             idx -= 1
 
+    def _invert_digital(
+        self,
+        expiry: Date,
+        cp: CalibrationPoint,
+        digital: float,
+        swap_rate_0: float,
+        *,
+        monotone: bool,
+    ) -> float:
+        """Swap rate implied by a cumulative digital price at one y-node.
+
+        # C++ parity: markovfunctional.cpp:553-580, the body of the y-sweep's
+        # inversion step. Extracted into a helper only to keep the sweep
+        # readable; the branch order and the monotonicity reset are C++'s.
+        """
+        assert cp.raw_smile_section is not None
+        raw_shift = cp.raw_smile_section.shift()
+        check = True
+        if self._settings.custom_smile:
+            mf_sec = cp.smile_section
+            qassert.require(
+                isinstance(mf_sec, CustomSmileSection),
+                "no CustomSmileSection given, this is unexpected...",
+            )
+            assert isinstance(mf_sec, CustomSmileSection)
+            swap_rate = mf_sec.inverse_digital_call(digital, cp.annuity)
+        elif digital >= cp.min_rate_digital:
+            # C++ measures the floor relative to the RAW section's shift
+            # (markovfunctional.cpp:558-559), not the pretreated one.
+            swap_rate = self._settings.lower_rate_bound - raw_shift
+            check = False
+        elif digital <= cp.max_rate_digital:
+            swap_rate = self._settings.upper_rate_bound
+            check = False
+        else:
+            swap_rate = self._market_swap_rate(expiry, cp, digital, swap_rate_0, raw_shift)
+
+        if check and monotone and swap_rate > swap_rate_0:
+            # C++ parity: markovfunctional.cpp:568-580 — the swap rate must be
+            # non-increasing in y; when the inversion says otherwise the node is
+            # reset to its neighbour. Omitting this guard let a non-monotone
+            # numeraire row through silently.
+            swap_rate = swap_rate_0
+        return swap_rate
+
     def _segment_polynomial_coeffs(
         self,
-        interp: CubicNaturalSpline,
+        interp: CubicInterpolation,
         ys: npt.NDArray[np.float64],
         j: int,
     ) -> tuple[float, float, float]:
@@ -697,7 +879,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         # (whose signature is ``(quartic, cubic, quadratic, linear, ...)``).
         #
         # This used to read scipy's ``PPoly.c`` matrix off the interpolation's
-        # private ``_spline``. ``CubicNaturalSpline`` is now a transcription of
+        # private ``_spline``. ``CubicInterpolation`` is now a transcription of
         # the C++ class and exposes C++'s own accessors, so the coefficients
         # come straight from those — no basis conversion, and no dependence on
         # a scipy attribute that could change under us.
@@ -712,39 +894,45 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
     def _market_swap_rate(
         self,
         expiry: Date,
-        cp: _CalibrationPoint,
+        cp: CalibrationPoint,
         digital_price: float,
         guess: float,
+        shift: float = 0.0,
     ) -> float:
-        # C++ parity: markovfunctional.cpp:814-828.
-        _ = expiry  # unused
-        assert cp.smile_section is not None
+        """Invert the market digital price for the swap rate.
 
-        def residual(strike: float) -> float:
-            assert cp.smile_section is not None
-            return (
-                cp.smile_section.digital_option_price(
-                    strike,
-                    1,  # Call
-                    cp.annuity,
-                    self._settings.digital_gap,
-                )
-                - digital_price
-            )
-
+        # C++ parity: ``MarkovFunctional::marketSwapRate``
+        # (markovfunctional.cpp:809-823). ``shift`` is the raw smile
+        # section's shift and moves the LOWER bracket only, exactly as C++
+        # does; it was previously absent from this signature entirely, so a
+        # shifted-lognormal input was solved on the unshifted bracket.
+        """
+        z = ZeroHelper(self, expiry, cp, digital_price)
         b = Brent()
-        # Bracket within (lower, upper) bounds with the C++ epsilon
-        # buffer.
-        eps = 1.0e-5
+        eps = 0.00001
         return b.solve(
-            residual,
+            z,
             self._settings.market_rate_accuracy,
-            min(
-                max(guess, self._settings.lower_rate_bound + eps),
-                self._settings.upper_rate_bound - eps,
+            max(
+                min(guess, self._settings.upper_rate_bound - eps),
+                self._settings.lower_rate_bound - shift + eps,
             ),
-            self._settings.lower_rate_bound,
+            self._settings.lower_rate_bound - shift,
             self._settings.upper_rate_bound,
+        )
+
+    def market_digital_price(
+        self, expiry: Date, cp: CalibrationPoint, option_type: int, strike: float
+    ) -> float:
+        """Digital price of ``cp``'s smile section at ``strike``.
+
+        # C++ parity: ``MarkovFunctional::marketDigitalPrice``
+        # (markovfunctional.cpp:825-832).
+        """
+        _ = expiry  # C++ takes it but does not use it either
+        assert cp.smile_section is not None
+        return cp.smile_section.digital_option_price(
+            strike, option_type, cp.annuity, self._settings.digital_gap
         )
 
     # --- numeraire / zerobond array implementations ---------------------
@@ -902,7 +1090,7 @@ class MarkovFunctional(Gaussian1dModel, CalibratedModel):
         """Constant reversion value used to build the state process."""
         return self._reversion_value
 
-    def model_outputs(self) -> _ModelOutputs:
+    def model_outputs(self) -> ModelOutputs:
         """Diagnostic per-expiry calibration outputs (atm / annuity / adj factors)."""
         return self._model_outputs
 
