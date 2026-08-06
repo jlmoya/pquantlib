@@ -426,7 +426,20 @@ class AssetSwap(Swap):
     # --- engine plumbing -----------------------------------------------
 
     def setup_arguments(self, args: PricingEngineArguments) -> None:
-        """# C++ parity: ``AssetSwap::setupArguments`` (assetswap.cpp:188-220)."""
+        """Fill an asset-swap-aware argument carrier; no-op for a plain swap engine.
+
+        # C++ parity: ``AssetSwap::setupArguments`` (assetswap.cpp:188-220).
+
+        Note that no engine shipped with C++ v1.43 declares
+        ``AssetSwap::arguments``, and the C++ body cannot work if one did: it
+        ``dynamic_pointer_cast``s every bond-leg flow to ``FixedRateCoupon``
+        and every floating-leg flow to ``FloatingRateCoupon`` and dereferences
+        the result without a null check, while both legs always end in a
+        ``SimpleCashFlow`` (redemption / back-payment, and the upfront on a par
+        swap).  Rather than reproduce that undefined behaviour, the port raises
+        a ``LibraryException`` naming the flow — the carriers exist for API
+        parity and for ``fetch_results``, which *is* reachable.
+        """
         super().setup_arguments(args)
         if not isinstance(args, AssetSwapArguments):
             # It's a plain swap engine.
@@ -437,6 +450,11 @@ class AssetSwap(Swap):
         args.fixed_pay_dates = []
         args.fixed_coupons = []
         for cf in fixed_coupons:
+            qassert.require(
+                isinstance(cf, Coupon),
+                "bond-leg flow is not a coupon; AssetSwap::arguments cannot "
+                "represent it (C++ dereferences a null cast here)",
+            )
             assert isinstance(cf, Coupon)
             args.fixed_pay_dates.append(cf.date())
             args.fixed_reset_dates.append(cf.accrual_start_date())
@@ -449,6 +467,12 @@ class AssetSwap(Swap):
         args.floating_accrual_times = []
         args.floating_spreads = []
         for cf in floating_coupons:
+            qassert.require(
+                isinstance(cf, FloatingRateCoupon),
+                "floating-leg flow is not a floating-rate coupon; "
+                "AssetSwap::arguments cannot represent it "
+                "(C++ dereferences a null cast here)",
+            )
             assert isinstance(cf, FloatingRateCoupon)
             args.floating_reset_dates.append(cf.accrual_start_date())
             args.floating_pay_dates.append(cf.date())

@@ -147,9 +147,7 @@ def test_convexity_adjustment_inspector(cpp: dict[str, Any]) -> None:
         OvernightIndexFuture(_sofr(), value_date, maturity_date).convexity_adjustment()
         == ref["convexity_adjustment_empty"]
     )
-    with_quote = OvernightIndexFuture(
-        _sofr(), value_date, maturity_date, SimpleQuote(_CONVEXITY)
-    )
+    with_quote = OvernightIndexFuture(_sofr(), value_date, maturity_date, SimpleQuote(_CONVEXITY))
     tight(with_quote.convexity_adjustment(), ref["convexity_adjustment_quote"])
 
 

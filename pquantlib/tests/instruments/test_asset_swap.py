@@ -39,9 +39,10 @@ from pquantlib.exceptions import LibraryException
 from pquantlib.indexes.ibor.euribor import Euribor
 from pquantlib.indexes.ibor.sofr import Sofr
 from pquantlib.indexes.ibor_index import IborIndex
-from pquantlib.instruments.asset_swap import AssetSwap
+from pquantlib.instruments.asset_swap import AssetSwap, AssetSwapArguments, AssetSwapResults
 from pquantlib.instruments.bond import Bond
 from pquantlib.instruments.bonds.fixed_rate_bond import FixedRateBond
+from pquantlib.instruments.swap import SwapArguments
 from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.swap.discounting_swap_engine import DiscountingSwapEngine
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
@@ -328,3 +329,82 @@ def test_deal_maturity_before_schedule_front_raises(cpp: dict[str, Any]) -> None
             None,
             Date.from_ymd(22, Month.January, 2024),
         )
+
+
+def test_setup_arguments_is_a_no_op_for_a_plain_swap_engine() -> None:
+    """``DiscountingSwapEngine`` gets only the legs + payer multipliers."""
+    swap = _CASES["base_pay_bond_coupon"].build()
+    args = SwapArguments()
+    swap.setup_arguments(args)
+    args.validate()
+    assert len(args.legs) == 2
+    assert args.payer == [-1.0, 1.0]
+    assert [cf.date() for cf in args.legs[0]] == [cf.date() for cf in swap.bond_leg()]
+
+
+def test_setup_arguments_rejects_non_coupon_flows() -> None:
+    """``AssetSwap::arguments`` cannot represent the legs' SimpleCashFlows.
+
+    No C++ v1.43 engine declares this carrier, and the C++ body would
+    dereference a null ``dynamic_pointer_cast`` on the redemption /
+    back-payment flows.  The port raises instead — pinned here so the
+    behaviour is deliberate rather than accidental.
+    """
+    swap = _CASES["base_pay_bond_coupon"].build()
+    with pytest.raises(LibraryException, match="bond-leg flow is not a coupon"):
+        swap.setup_arguments(AssetSwapArguments())
+
+
+def test_arguments_validate_checks_vector_sizes() -> None:
+    """# C++ parity: ``AssetSwap::arguments::validate`` (assetswap.cpp:284-306)."""
+    args = AssetSwapArguments()
+    args.validate()  # all empty — consistent
+    args.fixed_reset_dates = [Date.from_ymd(1, Month.March, 2024)]
+    with pytest.raises(LibraryException, match="number of fixed start dates"):
+        args.validate()
+    args.fixed_pay_dates = [Date.from_ymd(1, Month.March, 2024)]
+    with pytest.raises(LibraryException, match="number of fixed payment dates"):
+        args.validate()
+    args.fixed_coupons = [1.0]
+    args.validate()
+    args.floating_reset_dates = [Date.from_ymd(1, Month.March, 2024)]
+    with pytest.raises(LibraryException, match="number of floating start dates"):
+        args.validate()
+
+
+def test_results_reset_clears_the_asset_swap_fields() -> None:
+    """# C++ parity: ``AssetSwap::results::reset`` (assetswap.cpp:308-313)."""
+    results = AssetSwapResults()
+    results.fair_spread = 0.01
+    results.fair_clean_price = 99.0
+    results.fair_non_par_repayment = 101.0
+    results.reset()
+    assert results.fair_spread is None
+    assert results.fair_clean_price is None
+    assert results.fair_non_par_repayment is None
+
+
+def test_fetch_results_takes_the_engine_values_when_supplied() -> None:
+    """An asset-swap-aware engine's fair values win over the local formulas.
+
+    # C++ parity: ``AssetSwap::fetchResults`` (assetswap.cpp:293-305).
+    """
+    swap = _CASES["base_pay_bond_coupon"].build()
+    swap.npv()  # populate the local caches from DiscountingSwapEngine
+    local_fair_spread = swap.fair_spread()
+
+    results = AssetSwapResults()
+    results.value = 1.0
+    results.leg_npv = [1.0, 1.0]
+    results.leg_bps = [1.0, 1.0]
+    results.start_discounts = [1.0, 1.0]
+    results.end_discounts = [1.0, 1.0]
+    results.npv_date_discount = 1.0
+    results.fair_spread = 0.0123
+    results.fair_clean_price = 98.75
+    results.fair_non_par_repayment = 101.25
+    swap.fetch_results(results)
+    assert swap.fair_spread() == 0.0123
+    assert swap.fair_clean_price() == 98.75
+    assert swap.fair_non_par_repayment() == 101.25
+    assert swap.fair_spread() != local_fair_spread
