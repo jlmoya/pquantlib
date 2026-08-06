@@ -223,9 +223,19 @@ class ChebyshevInterpolation(Interpolation):
         """Replace the y-values at the (already-fixed) Chebyshev nodes.
 
         # C++ parity: ``ChebyshevInterpolation::updateY``
-        #             (chebyshevinterpolation.cpp:76-81).
+        #             (chebyshevinterpolation.cpp:76-81), which is
+        #             ``std::copy(y.begin(), y.end(), y_.begin())`` -- copy
+        #             semantics, not a rebind.
+
+        The copy is load-bearing. ``np.ascontiguousarray`` returns its argument
+        unchanged when it is already a contiguous float64 array, which would
+        alias the caller's buffer into the interpolation: a caller that
+        subsequently writes into that buffer -- as ``QdFpAmericanEngine`` does,
+        filling one ``y`` array in place across successive fixed-point sweeps --
+        would see the interpolation change under it mid-sweep, where C++ keeps
+        serving the previous sweep's values. ``np.array`` always copies.
         """
-        y_arr = np.ascontiguousarray(y_values, dtype=np.float64)
+        y_arr = np.array(y_values, dtype=np.float64)
         qassert.require(
             y_arr.shape[0] == self._ys.shape[0],
             f"ChebyshevInterpolation.update_y: length mismatch "
