@@ -3,10 +3,9 @@
 # C++ parity: ql/methods/finitedifferences/meshers/fdmmeshercomposite.{hpp,cpp}
 # (v1.42.1).
 
-For the L5-D scope only the single-direction composite is used
-(wrapping a 1-D log-spot mesher into the ``FdmMesher`` shape that
-the operators and engine expect). Multi-D composites are kept on
-the API surface for forward compatibility with Phase 6.
+A single-direction composite wraps a 1-D mesher into the ``FdmMesher``
+shape the operators expect; the two- and three-direction forms carry
+the Heston, Bates, G2, CIR and Heston-Hull-White meshes.
 """
 
 from __future__ import annotations

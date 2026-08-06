@@ -14,10 +14,9 @@ indices are ``i0[i] = max(0, i-1)`` and ``i2[i] = min(N-1, i+1)``;
 the reverse-index permutation is the identity.
 
 The Python implementation is built directly on numpy / scipy.sparse:
-``apply`` uses numpy fancy-indexing for speed, and ``solve_splitting``
-uses the classic Thomas tridiagonal algorithm (1-D only). Multi-D
-support is deferred to Phase 6 along with the rest of the multi-asset
-FD scaffolding.
+``apply`` uses numpy fancy-indexing, and ``solve_splitting`` uses the
+classic Thomas tridiagonal algorithm driven along ``reverse_index``, so
+it solves along any direction of a multi-D layout exactly as C++ does.
 """
 
 from __future__ import annotations
@@ -245,14 +244,15 @@ class TripleBandLinearOp(FdmLinearOp):
     # --- splitting solve ------------------------------------------------
 
     def solve_splitting(self, r: Array, a: float, b: float = 1.0) -> Array:
-        """Solve ``(b * I + a * L) x = r`` via the Thomas algorithm (1-D).
+        """Solve ``(b * I + a * L) x = r`` via the Thomas algorithm.
 
         # C++ parity: ``TripleBandLinearOp::solve_splitting(r, a, b)``.
 
         The Thomas algorithm is a classical tridiagonal direct solver
-        in O(N) time. We use the C++ in-place variant adapted to
-        Python — ``reverse_index`` is the identity in 1-D, so the
-        sweep is straightforward.
+        in O(N) time. This is the C++ in-place variant: the sweep runs
+        along ``reverse_index``, which is the identity in 1-D and the
+        direction-ordered permutation of the layout otherwise, so the
+        same code solves along any direction.
         """
         qassert.require(
             r.size == self._mesher.layout().size(),
