@@ -9,15 +9,24 @@ A triple-band operator stores three per-node coefficients
 ``apply`` does ``out[i] = lower[i]*r[i0[i]] + diag[i]*r[i] +
 upper[i]*r[i2[i]]``.
 
-For the **1-D** case (the only case exercised in L5-D), neighbour
-indices are ``i0[i] = max(0, i-1)`` and ``i2[i] = min(N-1, i+1)``;
-the reverse-index permutation is the identity.
+For the **1-D** case, neighbour indices are ``i0[i] = max(0, i-1)`` and
+``i2[i] = min(N-1, i+1)``; the reverse-index permutation is the identity.
+
+For **multi-D**, ``reverse_index`` is the permutation that walks the grid
+with ``direction`` varying fastest, so that the Thomas sweep runs along
+the operator's own direction rather than along the layout's first axis.
+C++ builds it by re-deriving the spacings of a layout whose first and
+``direction``-th dimensions are swapped
+(``triplebandlinearop.cpp`` constructor).
 
 The Python implementation is built directly on numpy / scipy.sparse:
 ``apply`` uses numpy fancy-indexing for speed, and ``solve_splitting``
-uses the classic Thomas tridiagonal algorithm (1-D only). Multi-D
-support is deferred to Phase 6 along with the rest of the multi-asset
-FD scaffolding.
+uses the classic Thomas tridiagonal algorithm. Because a valid triple-band
+operator has ``lower == 0`` at each line's lower boundary and
+``upper == 0`` at its upper boundary, C++'s single sweep over the whole
+reordered array decouples exactly into independent per-line sweeps
+(the coupling terms multiply by exact zeros), so the sweep is run
+batched across lines — same arithmetic, vectorised.
 """
 
 from __future__ import annotations
@@ -32,6 +41,9 @@ from pquantlib import qassert
 from pquantlib.math.array import Array
 from pquantlib.methods.finitedifferences.meshers.fdm_mesher import FdmMesher
 from pquantlib.methods.finitedifferences.operators.fdm_linear_op import FdmLinearOp
+from pquantlib.methods.finitedifferences.operators.fdm_linear_op_layout import (
+    FdmLinearOpLayout,
+)
 
 # Integer index array (separate from the float-Array alias).
 _IntArray = npt.NDArray[np.int64]
@@ -49,18 +61,29 @@ class TripleBandLinearOp(FdmLinearOp):
         n = mesher.layout().size()
         self._i0: _IntArray = np.zeros(n, dtype=np.int64)
         self._i2: _IntArray = np.zeros(n, dtype=np.int64)
-        # 1-D specialisation: reverseIndex is the identity for any
-        # 1-D direction (multi-D requires the iter_swap permutation —
-        # deferred to Phase 6).
-        self._reverse_index: _IntArray = np.arange(n, dtype=np.int64)
+        self._reverse_index: _IntArray = np.zeros(n, dtype=np.int64)
         self._lower: Array = np.zeros(n, dtype=np.float64)
         self._diag: Array = np.zeros(n, dtype=np.float64)
         self._upper: Array = np.zeros(n, dtype=np.float64)
+
+        # C++ parity: the constructor swaps dim[0] with dim[direction],
+        # takes the spacings of that permuted layout, swaps element 0 with
+        # element `direction` back, and uses the result to renumber each grid
+        # point so that `direction` is the fastest-varying axis. For
+        # direction == 0 this collapses to the identity.
+        dim = list(mesher.layout().dim())
+        dim[0], dim[direction] = dim[direction], dim[0]
+        new_spacing = list(FdmLinearOpLayout(tuple(dim)).spacing())
+        new_spacing[0], new_spacing[direction] = new_spacing[direction], new_spacing[0]
 
         for iter_ in mesher.layout().iter():
             i = iter_.index
             self._i0[i] = mesher.layout().neighbourhood(iter_, direction, -1)
             self._i2[i] = mesher.layout().neighbourhood(iter_, direction, +1)
+            new_index = 0
+            for c, s in zip(iter_.coordinates, new_spacing, strict=True):
+                new_index += c * s
+            self._reverse_index[new_index] = i
 
     # --- mutating arithmetic builders ----------------------------------
 
@@ -184,43 +207,54 @@ class TripleBandLinearOp(FdmLinearOp):
     # --- splitting solve ------------------------------------------------
 
     def solve_splitting(self, r: Array, a: float, b: float = 1.0) -> Array:
-        """Solve ``(b * I + a * L) x = r`` via the Thomas algorithm (1-D).
+        """Solve ``(b * I + a * L) x = r`` via the Thomas algorithm.
 
         # C++ parity: ``TripleBandLinearOp::solve_splitting(r, a, b)``.
 
-        The Thomas algorithm is a classical tridiagonal direct solver
-        in O(N) time. We use the C++ in-place variant adapted to
-        Python — ``reverse_index`` is the identity in 1-D, so the
-        sweep is straightforward.
+        C++ runs one Thomas sweep over the whole array in
+        ``reverse_index`` order. A valid triple-band operator has
+        ``lower == 0`` at each line's first node and ``upper == 0`` at its
+        last (C++ asserts exactly this under ``QL_EXTRA_SAFETY_CHECKS``),
+        so the two coupling terms across a line boundary multiply by exact
+        zeros and the long chain decouples into independent per-line
+        systems. This implementation therefore reshapes into
+        ``(lines, line_length)`` and runs the identical recurrence batched
+        across lines — the per-line arithmetic, and hence the result, is
+        unchanged.
         """
         qassert.require(
             r.size == self._mesher.layout().size(),
             f"inconsistent size of rhs (got {r.size}, expected {self._mesher.layout().size()})",
         )
 
-        n = r.size
-        ret_val: Array = np.zeros(n, dtype=np.float64)
-        tmp: Array = np.zeros(n, dtype=np.float64)
+        line_len = self._mesher.layout().dim()[self._direction]
+        idx = self._reverse_index.reshape(-1, line_len)
 
-        rim1 = int(self._reverse_index[0])
-        bet = 1.0 / (a * self._diag[rim1] + b)
-        qassert.require(bet != 0.0, "division by zero")
-        ret_val[self._reverse_index[0]] = r[rim1] * bet
+        diag = self._diag[idx]
+        lower = self._lower[idx]
+        upper = self._upper[idx]
+        rhs = r[idx]
 
-        for j in range(1, n):
-            ri = int(self._reverse_index[j])
-            tmp[j] = a * self._upper[rim1] * bet
-            bet = b + a * (self._diag[ri] - tmp[j] * self._lower[ri])
-            qassert.require(bet != 0.0, "division by zero")
+        x: Array = np.zeros_like(rhs)
+        tmp: Array = np.zeros_like(rhs)
+
+        bet = a * diag[:, 0] + b
+        qassert.require(bool(np.all(bet != 0.0)), "division by zero")
+        bet = 1.0 / bet
+        x[:, 0] = rhs[:, 0] * bet
+
+        for j in range(1, line_len):
+            tmp[:, j] = a * upper[:, j - 1] * bet
+            bet = b + a * (diag[:, j] - tmp[:, j] * lower[:, j])
+            qassert.require(bool(np.all(bet != 0.0)), "division by zero")
             bet = 1.0 / bet
-            ret_val[ri] = (r[ri] - a * self._lower[ri] * ret_val[rim1]) * bet
-            rim1 = ri
+            x[:, j] = (rhs[:, j] - a * lower[:, j] * x[:, j - 1]) * bet
 
-        # Back-substitution: indices n-2 down to 1, then 0.
-        for j in range(n - 2, 0, -1):
-            ret_val[self._reverse_index[j]] -= tmp[j + 1] * ret_val[self._reverse_index[j + 1]]
-        ret_val[self._reverse_index[0]] -= tmp[1] * ret_val[self._reverse_index[1]]
+        for j in range(line_len - 2, -1, -1):
+            x[:, j] -= tmp[:, j + 1] * x[:, j + 1]
 
+        ret_val: Array = np.zeros(r.size, dtype=np.float64)
+        ret_val[idx.reshape(-1)] = x.reshape(-1)
         return ret_val
 
 

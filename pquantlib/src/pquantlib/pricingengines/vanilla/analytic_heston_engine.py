@@ -275,7 +275,7 @@ class AnalyticHestonEngine(GenericEngine[OptionArguments, OneAssetOptionResults]
 
     # --- pricing ---------------------------------------------------------
 
-    def _price_vanilla_payoff(
+    def price_vanilla_payoff(
         self,
         *,
         payoff: PlainVanillaPayoff,
@@ -284,7 +284,9 @@ class AnalyticHestonEngine(GenericEngine[OptionArguments, OneAssetOptionResults]
         """Closed-form price of the European vanilla under Heston.
 
         # C++ parity: ``AnalyticHestonEngine::priceVanillaPayoff`` in
-        # analytichestonengine.cpp:725-746 + 748-859.
+        # analytichestonengine.cpp:725-746 + 748-859 — a PUBLIC member there,
+        # and public here: ``HestonBlackVolSurface`` prices through it without
+        # going near the ``PricingEngine`` arguments/results protocol.
 
         Only the Gatheral branch is implemented (see module docstring).
         """
@@ -346,7 +348,7 @@ class AnalyticHestonEngine(GenericEngine[OptionArguments, OneAssetOptionResults]
         # only fills NPV, mirroring the C++ which sets results_.value
         # and leaves the Greeks as their NaN sentinels).
         results.reset()
-        results.value = self._price_vanilla_payoff(
+        results.value = self.price_vanilla_payoff(
             payoff=payoff,
             maturity=maturity,
         )

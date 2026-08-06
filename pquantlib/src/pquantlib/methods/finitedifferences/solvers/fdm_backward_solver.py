@@ -17,6 +17,14 @@ are needed in L5-D:
   equivalent to one implicit-Euler step (the implicit branch is
   exercised, the explicit branch contributes nothing).
 * ``ExplicitEulerType`` — ``CrankNicolsonScheme(theta=0.0)``.
+* ``HundsdorferType`` — ``HundsdorferScheme(theta, mu)``, the
+  multi-direction ADI splitting used by the ZABR 2-D PDE.
+
+The Douglas routing is exact rather than approximate in 1-D: C++'s
+``DouglasScheme::step`` computes ``y = a + dt*L a``, then
+``rhs = y - theta*dt*L a`` and ``solve_splitting(0, rhs, -theta*dt)``,
+which for a single direction is algebraically the explicit-then-implicit
+pair that ``CrankNicolsonScheme`` performs with the same theta.
 
 The damping-steps branch (``dampingSteps != 0`` and scheme !=
 ``ImplicitEulerType``) runs ``dampingSteps`` implicit-Euler steps
@@ -27,7 +35,7 @@ the requested scheme.
 from __future__ import annotations
 
 import math
-from typing import final
+from typing import Protocol, final
 
 from pquantlib import qassert
 from pquantlib.math.array import Array
@@ -42,13 +50,28 @@ from pquantlib.methods.finitedifferences.schemes.fdm_scheme_desc import (
     FdmSchemeDesc,
     FdmSchemeType,
 )
+from pquantlib.methods.finitedifferences.schemes.hundsdorfer_scheme import (
+    HundsdorferScheme,
+)
 from pquantlib.methods.finitedifferences.step_conditions.fdm_step_condition_composite import (
     FdmStepConditionComposite,
 )
 
 
+class _Evolver(Protocol):
+    """One-step evolver surface used by the rollback loop.
+
+    # C++ parity: the ``Evolver`` template parameter of
+    # ``FiniteDifferenceModel<Evolver>``.
+    """
+
+    def set_step(self, dt: float) -> None: ...
+
+    def step(self, a: Array, t: float) -> Array: ...
+
+
 def _rollback_with_scheme(
-    scheme: CrankNicolsonScheme,
+    scheme: _Evolver,
     a: Array,
     from_t: float,
     to_t: float,
@@ -136,11 +159,15 @@ class FdmBackwardSolver:
             rhs = _rollback_with_scheme(implicit, rhs, from_t, damping_to, damping_steps, self._condition)
 
         # Main scheme.
+        scheme: _Evolver
         if self._scheme_desc.type in (
             FdmSchemeType.CrankNicolsonType,
             FdmSchemeType.DouglasType,
         ):
             scheme = CrankNicolsonScheme(theta=self._scheme_desc.theta, op=self._op)
+            rhs = _rollback_with_scheme(scheme, rhs, damping_to, to_t, steps, self._condition)
+        elif self._scheme_desc.type == FdmSchemeType.HundsdorferType:
+            scheme = HundsdorferScheme(self._scheme_desc.theta, self._scheme_desc.mu, self._op)
             rhs = _rollback_with_scheme(scheme, rhs, damping_to, to_t, steps, self._condition)
         elif self._scheme_desc.type == FdmSchemeType.ImplicitEulerType:
             scheme = CrankNicolsonScheme(theta=1.0, op=self._op)
