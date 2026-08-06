@@ -10,12 +10,17 @@ the same, in ``_KNOWN_DATE_SERIALS`` below.
 Module-level state ``_known_dates`` is a mutable ``set[Date]`` so callers
 can extend / remove dates at runtime, mirroring the C++ static-set
 ``addDate`` / ``removeDate`` API. Codes are ``MMM<YY>`` (e.g. ``"MAR10"``).
+
+C++ exposes these as static members of a ``struct ECB``. This module
+carries them as module-level free functions (the implementation) and also
+as the :class:`ECB` namespace-only class, which mirrors the C++ API
+name-for-name.
 """
 
 from __future__ import annotations
 
 import bisect
-from typing import Final
+from typing import Final, NoReturn
 
 from pquantlib import qassert
 from pquantlib.time.date import Date
@@ -300,8 +305,19 @@ def code(ecb_date: Date) -> str:
     return f"{_MONTH_TO_NAME[ecb_date.month()]}{ecb_date.year() % 100:02d}"
 
 
-def next_date(d: Date | None = None) -> Date:
-    """Smallest known ECB date strictly after ``d``."""
+def next_date(d: Date | str | None = None, reference_date: Date | None = None) -> Date:
+    """Smallest known ECB date strictly after ``d``.
+
+    Two C++ overloads collapse into one signature:
+
+    - ``next_date(Date)`` — ``ECB::nextDate(const Date&)`` (ecb.cpp).
+      With ``d=None``, uses today's date.
+    - ``next_date(str, reference_date)`` —
+      ``ECB::nextDate(const std::string&, const Date&)`` (ecb.hpp:65-68),
+      i.e. ``nextDate(date(ecbCode, referenceDate))``.
+    """
+    if isinstance(d, str):
+        return next_date(date(d, reference_date))
     ref = d if d is not None else Date.todays_date()
     sorted_known = sorted(_known_dates)
     idx = bisect.bisect_right(sorted_known, ref)
@@ -309,8 +325,14 @@ def next_date(d: Date | None = None) -> Date:
     return sorted_known[idx]
 
 
-def next_dates(d: Date | None = None) -> tuple[Date, ...]:
-    """All known ECB dates strictly after ``d`` (in order)."""
+def next_dates(d: Date | str | None = None, reference_date: Date | None = None) -> tuple[Date, ...]:
+    """All known ECB dates strictly after ``d`` (in order).
+
+    Mirrors both C++ overloads: ``ECB::nextDates(const Date&)`` and
+    ``ECB::nextDates(const std::string&, const Date&)`` (ecb.hpp:74-78).
+    """
+    if isinstance(d, str):
+        return next_dates(date(d, reference_date))
     ref = d if d is not None else Date.todays_date()
     sorted_known = sorted(_known_dates)
     idx = bisect.bisect_right(sorted_known, ref)
@@ -318,8 +340,29 @@ def next_dates(d: Date | None = None) -> tuple[Date, ...]:
     return tuple(sorted_known[idx:])
 
 
-def next_code(ecb_code: str) -> str:
-    """Mirrors C++ ``ECB::nextCode(const std::string&)`` — bump month then year on December overflow."""
+def is_ecb_date(d: Date) -> bool:
+    """Whether ``d`` is a maintenance-period start date.
+
+    C++ parity: ``ECB::isECBdate`` (ecb.hpp:81-84) — ``nextDate(d-1) == d``.
+    Like C++, this propagates the "ECB dates after ... are unknown" failure
+    when ``d-1`` is at or past the last known date.
+    """
+    return next_date(d - 1) == d
+
+
+def next_code(d: Date | str | None = None) -> str:
+    """ECB code following ``d``.
+
+    Two C++ overloads collapse into one signature:
+
+    - ``next_code(Date)`` — ``ECB::nextCode(const Date&)`` (ecb.hpp:87-89),
+      i.e. ``code(nextDate(d))``. With ``d=None``, uses today's date.
+    - ``next_code(str)`` — ``ECB::nextCode(const std::string&)``: bump the
+      month, then the year on December overflow.
+    """
+    if not isinstance(d, str):
+        return code(next_date(d))
+    ecb_code = d
     qassert.require(is_ecb_code(ecb_code), f"{ecb_code} is not a valid ECB code")
     month = _NAME_TO_MONTH[ecb_code[:3].upper()]
     yy = ecb_code[3:5]
@@ -339,3 +382,27 @@ def next_code(ecb_code: str) -> str:
     if inc_with_overflow(1):
         inc_with_overflow(0)
     return f"JAN{''.join(digits)}"
+
+
+class ECB:
+    """Namespace-only class — direct construction is disabled.
+
+    C++ parity: ``ql/time/ecb.hpp:34`` ``struct ECB``. See
+    :class:`pquantlib.time.imm.IMM` for the rationale behind mirroring the
+    C++ static-member struct as a namespace-only Python class.
+    """
+
+    def __init__(self) -> NoReturn:
+        msg = "ECB is a namespace; use staticmethods only"
+        raise TypeError(msg)
+
+    known_dates = staticmethod(known_dates)
+    add_date = staticmethod(add_date)
+    remove_date = staticmethod(remove_date)
+    date = staticmethod(date)
+    code = staticmethod(code)
+    next_date = staticmethod(next_date)
+    next_dates = staticmethod(next_dates)
+    is_ecb_date = staticmethod(is_ecb_date)
+    is_ecb_code = staticmethod(is_ecb_code)
+    next_code = staticmethod(next_code)

@@ -976,3 +976,13 @@ target_link_libraries(v143_inst_etrs_probe PRIVATE ${QUANTLIB_LIBRARY})
 # --- merged from wave 6 (methods) ---
     add_executable(v143_methods_${area}_probe v143_methods_${area}/probe.cpp)
     target_link_libraries(v143_methods_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# --- merged from wave 9 (time + math) ---
+add_executable(v143_time_calmarkets_probe v143_time_calmarkets/probe.cpp)
+target_link_libraries(v143_time_calmarkets_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_time_immasxecb_probe v143_time_immasxecb/probe.cpp)
+target_link_libraries(v143_time_immasxecb_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_math_zabrspecs_probe v143_math_zabrspecs/probe.cpp)
+target_link_libraries(v143_math_zabrspecs_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_math_arraymatrix_probe v143_math_arraymatrix/probe.cpp)
+target_link_libraries(v143_math_arraymatrix_probe PRIVATE ${QUANTLIB_LIBRARY})

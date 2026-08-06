@@ -2,6 +2,11 @@
 
 # C++ parity: ql/time/asx.hpp + ql/time/asx.cpp (v1.42.1).
 
+C++ exposes these as static methods on a ``struct ASX``. This module
+carries them as module-level free functions (the implementation) and also
+as the :class:`ASX` namespace-only class, which mirrors the C++ API
+name-for-name.
+
 Structurally identical to IMM, but with:
 - Day-of-week: Friday (vs Wednesday).
 - Day-of-month range: [8, 14] (vs [15, 21]).
@@ -11,6 +16,9 @@ Structurally identical to IMM, but with:
 """
 
 from __future__ import annotations
+
+from enum import IntEnum
+from typing import NoReturn
 
 from pquantlib import qassert
 from pquantlib.time.date import Date
@@ -79,7 +87,23 @@ def date(asx_code: str, reference_date: Date | None = None) -> Date:
     return result
 
 
-def next_date(d: Date | None = None, main_cycle: bool = True) -> Date:
+def next_date(
+    d: Date | str | None = None,
+    main_cycle: bool = True,
+    reference_date: Date | None = None,
+) -> Date:
+    """Next ASX date strictly after ``d``.
+
+    Two C++ overloads collapse into one signature:
+
+    - ``next_date(Date, main_cycle)`` — ``ASX::nextDate(const Date&, bool)``
+      (asx.cpp:118). With ``d=None``, uses today's date.
+    - ``next_date(str, main_cycle, reference_date)`` —
+      ``ASX::nextDate(const std::string&, bool, const Date&)``
+      (asx.cpp:144-149), i.e. ``nextDate(date(asxCode, referenceDate) + 1)``.
+    """
+    if isinstance(d, str):
+        return next_date(date(d, reference_date) + 1, main_cycle)
     ref = d if d is not None else Date.todays_date()
     y = ref.year()
     m = int(ref.month())
@@ -101,5 +125,56 @@ def next_date(d: Date | None = None, main_cycle: bool = True) -> Date:
     return result
 
 
-def next_code(d: Date | None = None, main_cycle: bool = True) -> str:
-    return code(next_date(d, main_cycle))
+def next_code(
+    d: Date | str | None = None,
+    main_cycle: bool = True,
+    reference_date: Date | None = None,
+) -> str:
+    """ASX code for the next ASX date strictly after ``d``.
+
+    Mirrors both C++ overloads: ``ASX::nextCode(const Date&, bool)``
+    (asx.cpp:151-155) and
+    ``ASX::nextCode(const std::string&, bool, const Date&)``
+    (asx.cpp:157-162).
+    """
+    return code(next_date(d, main_cycle, reference_date))
+
+
+class ASX:
+    """Namespace-only class — direct construction is disabled.
+
+    C++ parity: ``ql/time/asx.hpp:36`` ``struct ASX``. See
+    :class:`pquantlib.time.imm.IMM` for the rationale behind mirroring the
+    C++ static-member struct as a namespace-only Python class.
+    """
+
+    class Month(IntEnum):
+        """C++ parity: ``ql/time/asx.hpp:37-40`` ``ASX::Month``.
+
+        Futures-market month letters. Distinct from
+        :class:`pquantlib.time.month.Month`, which is the calendar month.
+        """
+
+        F = 1
+        G = 2
+        H = 3
+        J = 4
+        K = 5
+        M = 6
+        N = 7
+        Q = 8
+        U = 9
+        V = 10
+        X = 11
+        Z = 12
+
+    def __init__(self) -> NoReturn:
+        msg = "ASX is a namespace; use staticmethods only"
+        raise TypeError(msg)
+
+    is_asx_date = staticmethod(is_asx_date)
+    is_asx_code = staticmethod(is_asx_code)
+    code = staticmethod(code)
+    date = staticmethod(date)
+    next_date = staticmethod(next_date)
+    next_code = staticmethod(next_code)

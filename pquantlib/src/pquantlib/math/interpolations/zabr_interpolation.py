@@ -48,17 +48,27 @@ Documented divergences from C++:
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from pquantlib import qassert
+from pquantlib.math.array import Array
 from pquantlib.math.interpolations.zabr_formula import (
     ZabrEvaluation,
     zabr_volatility,
 )
+from pquantlib.pricingengines.black_formula import black_formula_std_dev_derivative
+
+if TYPE_CHECKING:
+    from pquantlib.termstructures.volatility.zabr_smile_section import ZabrSmileSection
+
+#: C++ ``Null<Real>()`` — the sentinel a caller passes for "use the default".
+#: Same value as ``sabr_interpolation.NULL_REAL``.
+NULL_REAL: Final[float] = float(np.finfo(np.float32).max)
 
 _BETA_DEFAULT: Final[float] = 0.5
 _NU_DEFAULT: Final[float] = 0.6324555320336759  # sqrt(0.4) — C++ default
@@ -448,3 +458,341 @@ class ZabrInterpolation:
 
     def __call__(self, strike: float) -> float:
         return self.value(strike)
+
+
+class ZabrSpecs:
+    """The ZABR model policy the C++ XABR template is instantiated with.
+
+    # C++ parity: ``struct detail::ZabrSpecs<Evaluation>``
+    # (zabrinterpolation.hpp:36-118).
+
+    ``XABRInterpolation<Model>`` is generic over a "specs" type supplying the
+    parameter count, the default/initial values, the residual weights and —
+    the substantive part — a bijection between the constrained parameter box
+    and unconstrained R^5, so that an *unconstrained* optimiser can be used.
+    :meth:`direct` maps R^5 into the box, :meth:`inverse` maps back.
+
+    Same standing as :class:`pquantlib.math.interpolations.sabr_interpolation.SABRSpecs`:
+    :class:`ZabrInterpolation` does not route its optimisation through this
+    reparameterisation (it uses scipy's native box constraints instead — see
+    the module docstring), so these methods exist as a faithful,
+    cross-validated transcription rather than as the live calibration path.
+    They are what any port of the C++ optimiser arm needs.
+
+    Unlike ``SABRSpecs``, ZABR takes no shift: C++ ``ZabrSpecs`` ignores
+    ``addParams`` everywhere, including in :meth:`weight`.
+
+    ``Evaluation`` is a C++ template parameter; here it is a constructor
+    argument, consulted only by :meth:`instance`.
+    """
+
+    __slots__ = ("_evaluation",)
+
+    def __init__(
+        self, evaluation: ZabrEvaluation = ZabrEvaluation.ShortMaturityLognormal
+    ) -> None:
+        self._evaluation: ZabrEvaluation = evaluation
+
+    def dimension(self) -> int:
+        """Number of model parameters (5). C++ ``dimension``."""
+        return 5
+
+    def eps(self) -> float:
+        """Optimiser epsilon. C++ ``eps``."""
+        return 0.000001
+
+    def eps1(self) -> float:
+        """Lower clamp used by :meth:`direct` / :meth:`inverse`. C++ ``eps1``."""
+        return 0.0000001
+
+    def eps2(self) -> float:
+        """Rho saturation level. C++ ``eps2``."""
+        return 0.9999
+
+    def dilation_factor(self) -> float:
+        """Unused in the live formulas; kept for parity. C++ ``dilationFactor``."""
+        return 0.001
+
+    def default_values(
+        self,
+        params: list[float],
+        param_is_fixed: Sequence[bool],
+        forward: float,
+        expiry_time: float,
+        add_params: Sequence[float],
+    ) -> None:
+        """Fill any ``NULL_REAL`` slot of ``params`` in place.
+
+        # C++ parity: ``defaultValues`` (zabrinterpolation.hpp:39-53).
+
+        Order matters: beta is defaulted first because alpha's default reads
+        it. ``expiry_time``, ``param_is_fixed`` and ``add_params`` are
+        accepted and ignored, as in C++.
+        """
+        del param_is_fixed, expiry_time, add_params
+        if params[1] == NULL_REAL:
+            params[1] = 0.5
+        if params[0] == NULL_REAL:
+            # adapt alpha to beta level
+            params[0] = 0.2 * (
+                math.pow(forward, 1.0 - params[1]) if params[1] < 0.9999 else 1.0
+            )
+        if params[2] == NULL_REAL:
+            params[2] = math.sqrt(0.4)
+        if params[3] == NULL_REAL:
+            params[3] = 0.0
+        if params[4] == NULL_REAL:
+            params[4] = 1.0
+
+    def guess(
+        self,
+        values: Array,
+        param_is_fixed: Sequence[bool],
+        forward: float,
+        expiry_time: float,
+        r: Sequence[float],
+        add_params: Sequence[float],
+    ) -> None:
+        """Seed ``values`` in place from the low-discrepancy draws ``r``.
+
+        # C++ parity: ``guess`` (zabrinterpolation.hpp:54-71).
+
+        ``r`` is consumed by a single running index in the order
+        beta, alpha, nu, rho, gamma — *not* the parameter order — and a fixed
+        parameter consumes nothing. Getting that order wrong silently
+        reshuffles a multi-start search.
+
+        Note the alpha branch reads ``values[1]`` even when beta is fixed and
+        was therefore never written by this call; C++ does the same, so the
+        incoming contents of ``values[1]`` matter. Reproduced verbatim.
+        """
+        del expiry_time, add_params
+        j = 0
+        if not param_is_fixed[1]:
+            values[1] = (1.0 - 2e-6) * r[j] + 1e-6
+            j += 1
+        if not param_is_fixed[0]:
+            values[0] = (1.0 - 2e-6) * r[j] + 1e-6  # lognormal vol guess
+            j += 1
+            # adapt this to beta level
+            if values[1] < 0.999:
+                values[0] *= math.pow(forward, 1.0 - float(values[1]))
+        if not param_is_fixed[2]:
+            values[2] = 1.5 * r[j] + 1e-6
+            j += 1
+        if not param_is_fixed[3]:
+            values[3] = (2.0 * r[j] - 1.0) * (1.0 - 1e-6)
+            j += 1
+        if not param_is_fixed[4]:
+            values[4] = r[j] * 2.0
+
+    def inverse(
+        self,
+        y: Array,
+        param_is_fixed: Sequence[bool],
+        params: Sequence[float],
+        forward: float,
+    ) -> Array:
+        """Constrained ``y`` -> unconstrained ``x``.
+
+        # C++ parity: ``inverse`` (zabrinterpolation.hpp:77-88).
+
+        Inverse of :meth:`direct`. Alpha switches to a linear arm above
+        ``25 + eps1`` so the map stays well conditioned far out; beta goes
+        through ``sqrt(-log(.))``, nu and gamma through ``tan``, and rho
+        through ``asin(./eps2)``.
+        """
+        del param_is_fixed, params, forward
+        eps1 = self.eps1()
+        x = np.zeros(5, dtype=np.float64)
+        y0 = float(y[0])
+        x[0] = math.sqrt(y0 - eps1) if y0 < 25.0 + eps1 else (y0 - eps1 + 25.0) / 10.0
+        x[1] = math.sqrt(-math.log(float(y[1])))
+        x[2] = math.tan(math.pi * (float(y[2]) / 5.0 - 0.5))
+        x[3] = math.asin(float(y[3]) / self.eps2())
+        x[4] = math.tan(math.pi * (float(y[4]) / 1.9 - 0.5))
+        return x
+
+    def direct(
+        self,
+        x: Array,
+        param_is_fixed: Sequence[bool],
+        params: Sequence[float],
+        forward: float,
+    ) -> Array:
+        """Unconstrained ``x`` -> constrained ``y``.
+
+        # C++ parity: ``direct`` (zabrinterpolation.hpp:89-104).
+
+        Note the saturating arms: beyond ``|x0| = 5`` alpha grows linearly
+        rather than quadratically, beta collapses to ``eps1`` once ``|x1|``
+        reaches ``sqrt(-log(eps1))``, and rho saturates at ``+/- eps2``
+        beyond ``|x3| = 2.5 pi``. Those are the branches a port is tempted to
+        drop as unreachable; the optimiser does reach them. ``atan`` caps nu
+        at 5.0 and gamma at 1.9.
+        """
+        del param_is_fixed, params, forward
+        eps1 = self.eps1()
+        eps2 = self.eps2()
+        y = np.zeros(5, dtype=np.float64)
+        x0 = float(x[0])
+        y[0] = x0 * x0 + eps1 if abs(x0) < 5.0 else (10.0 * abs(x0) - 25.0) + eps1
+        x1 = float(x[1])
+        y[1] = math.exp(-(x1 * x1)) if abs(x1) < math.sqrt(-math.log(eps1)) else eps1
+        # limit nu to 5.00
+        y[2] = (math.atan(float(x[2])) / math.pi + 0.5) * 5.0
+        x3 = float(x[3])
+        y[3] = (
+            eps2 * math.sin(x3)
+            if abs(x3) < 2.5 * math.pi
+            else eps2 * (1.0 if x3 > 0.0 else -1.0)
+        )
+        # limit gamma to 1.9
+        y[4] = (math.atan(float(x[4])) / math.pi + 0.5) * 1.9
+        return y
+
+    def weight(
+        self,
+        strike: float,
+        forward: float,
+        std_dev: float,
+        add_params: Sequence[float],
+    ) -> float:
+        """Per-strike residual weight — the Black vega wrt std dev.
+
+        # C++ parity: ``weight`` (zabrinterpolation.hpp:105-108). Unlike the
+        # SABR specs, no displacement is passed: C++ calls
+        # ``blackFormulaStdDevDerivative(strike, forward, stdDev, 1.0)``.
+        """
+        del add_params
+        return black_formula_std_dev_derivative(strike, forward, std_dev, 1.0)
+
+    def instance(
+        self,
+        t: float,
+        forward: float,
+        params: Sequence[float],
+        add_params: Sequence[float],
+    ) -> ZabrSmileSection:
+        """Build the bound model.
+
+        C++ ``instance`` / ``typedef ZabrSmileSection<Evaluation> type``
+        (zabrinterpolation.hpp:109-115).
+        """
+        del add_params
+        # Deferred import: ZabrSmileSection lives under termstructures, which
+        # already depends on math.interpolations. C++ has the same edge
+        # (zabrinterpolation.hpp includes zabrsmilesection.hpp); importing it
+        # at module scope here would close the cycle in Python.
+        from pquantlib.termstructures.volatility.zabr_smile_section import (  # noqa: PLC0415
+            ZabrSmileSection as _ZabrSmileSection,
+        )
+
+        alpha, beta, nu, rho, gamma = (float(p) for p in params[:5])
+        return _ZabrSmileSection(
+            forward=forward,
+            zabr_params=(alpha, beta, nu, rho, gamma),
+            exercise_time=t,
+            evaluation=self._evaluation,
+        )
+
+
+class Zabr:
+    """ZABR interpolation factory and traits.
+
+    # C++ parity: ``template<class Evaluation> class Zabr``
+    # (zabrinterpolation.hpp:169-215).
+
+    Holds the fit configuration and stamps out a
+    :class:`ZabrInterpolation` per strike/vol slice, so a caller can
+    configure the smile model once and hand the factory to something that
+    interpolates many slices. ``global_`` is the C++ ``static const bool
+    global`` traits flag that tells the interpolated-curve machinery this
+    interpolation is fitted over all points at once rather than piecewise.
+
+    Mirrors :class:`pquantlib.math.interpolations.sabr_interpolation.SABR`
+    with the fifth ZABR parameter gamma.
+    """
+
+    #: C++ ``static const bool global = true``.
+    global_: Final[bool] = True
+
+    def __init__(
+        self,
+        t: float,
+        forward: float,
+        alpha: float,
+        beta: float,
+        nu: float,
+        rho: float,
+        gamma: float,
+        alpha_is_fixed: bool,
+        beta_is_fixed: bool,
+        nu_is_fixed: bool,
+        rho_is_fixed: bool,
+        gamma_is_fixed: bool,
+        vega_weighted: bool = False,
+        end_criteria: Any = None,
+        optimization_method: Any = None,
+        error_accept: float = 0.0020,
+        use_max_error: bool = False,
+        max_guesses: int = 50,
+        evaluation: ZabrEvaluation = ZabrEvaluation.ShortMaturityLognormal,
+    ) -> None:
+        self._t: float = t
+        self._forward: float = forward
+        self._alpha: float = alpha
+        self._beta: float = beta
+        self._nu: float = nu
+        self._rho: float = rho
+        self._gamma: float = gamma
+        self._alpha_is_fixed: bool = alpha_is_fixed
+        self._beta_is_fixed: bool = beta_is_fixed
+        self._nu_is_fixed: bool = nu_is_fixed
+        self._rho_is_fixed: bool = rho_is_fixed
+        self._gamma_is_fixed: bool = gamma_is_fixed
+        self._vega_weighted: bool = vega_weighted
+        # C++ takes ext::shared_ptr<EndCriteria> / <OptimizationMethod>
+        # pass-throughs; PQuantLib's fitter is fixed at the scipy TRF arm, so
+        # they are accepted and unused (same treatment as SABR).
+        self._end_criteria: Any = end_criteria
+        self._optimization_method: Any = optimization_method
+        self._error_accept: float = error_accept
+        self._use_max_error: bool = use_max_error
+        self._max_guesses: int = max_guesses
+        self._evaluation: ZabrEvaluation = evaluation
+
+    def interpolate(
+        self, strikes: Sequence[float], volatilities: Sequence[float]
+    ) -> ZabrInterpolation:
+        """Fit a :class:`ZabrInterpolation` to one strike/vol slice.
+
+        # C++ parity: ``Zabr::interpolate`` (zabrinterpolation.hpp:197-206).
+        """
+        return ZabrInterpolation(
+            strikes,
+            volatilities,
+            self._t,
+            self._forward,
+            alpha=self._alpha,
+            beta=self._beta,
+            nu=self._nu,
+            rho=self._rho,
+            gamma=self._gamma,
+            alpha_is_fixed=self._alpha_is_fixed,
+            beta_is_fixed=self._beta_is_fixed,
+            nu_is_fixed=self._nu_is_fixed,
+            rho_is_fixed=self._rho_is_fixed,
+            gamma_is_fixed=self._gamma_is_fixed,
+            vega_weighted=self._vega_weighted,
+            evaluation=self._evaluation,
+            max_guesses=self._max_guesses,
+        )
+
+
+__all__ = [
+    "NULL_REAL",
+    "Zabr",
+    "ZabrInterpolation",
+    "ZabrSpecs",
+]

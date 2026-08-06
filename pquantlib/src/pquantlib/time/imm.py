@@ -2,9 +2,11 @@
 
 # C++ parity: ql/time/imm.hpp + ql/time/imm.cpp (v1.42.1).
 
-C++ exposes these as static methods on a ``struct IMM``; the Python port
-flattens them to module-level free functions, matching the parsers/IMM
-pattern (no shared state to encapsulate).
+C++ exposes these as static methods on a ``struct IMM``. This module
+carries them as module-level free functions (the implementation) and also
+as the :class:`IMM` namespace-only class, which mirrors the C++ API
+name-for-name — same idiom as :class:`pquantlib.cashflows.cash_flows.CashFlows`
+for ``ql/cashflows/cashflows.hpp``.
 
 The IMM main cycle is the four months {March, June, September, December};
 the non-main cycle is any month. An IMM date is the 3rd Wednesday of the
@@ -12,6 +14,9 @@ relevant month (i.e. ``Date.nth_weekday(3, Wednesday, m, y)``).
 """
 
 from __future__ import annotations
+
+from enum import IntEnum
+from typing import NoReturn
 
 from pquantlib import qassert
 from pquantlib.time.date import Date
@@ -94,11 +99,23 @@ def date(imm_code: str, reference_date: Date | None = None) -> Date:
     return result
 
 
-def next_date(d: Date | None = None, main_cycle: bool = True) -> Date:
+def next_date(
+    d: Date | str | None = None,
+    main_cycle: bool = True,
+    reference_date: Date | None = None,
+) -> Date:
     """Next IMM date strictly after ``d``.
 
-    With ``d=None``, uses today's date.
+    Two C++ overloads collapse into one signature:
+
+    - ``next_date(Date, main_cycle)`` — ``IMM::nextDate(const Date&, bool)``
+      (imm.cpp:163). With ``d=None``, uses today's date.
+    - ``next_date(str, main_cycle, reference_date)`` —
+      ``IMM::nextDate(const std::string&, bool, const Date&)``
+      (imm.cpp:189-194), i.e. ``nextDate(date(immCode, referenceDate) + 1)``.
     """
+    if isinstance(d, str):
+        return next_date(date(d, reference_date) + 1, main_cycle)
     ref = d if d is not None else Date.todays_date()
     y = ref.year()
     m = int(ref.month())
@@ -119,6 +136,57 @@ def next_date(d: Date | None = None, main_cycle: bool = True) -> Date:
     return result
 
 
-def next_code(d: Date | None = None, main_cycle: bool = True) -> str:
-    """IMM code for the next IMM date strictly after ``d``."""
-    return code(next_date(d, main_cycle))
+def next_code(
+    d: Date | str | None = None,
+    main_cycle: bool = True,
+    reference_date: Date | None = None,
+) -> str:
+    """IMM code for the next IMM date strictly after ``d``.
+
+    Mirrors both C++ overloads: ``IMM::nextCode(const Date&, bool)``
+    (imm.cpp:196-200) and
+    ``IMM::nextCode(const std::string&, bool, const Date&)``
+    (imm.cpp:202-207).
+    """
+    return code(next_date(d, main_cycle, reference_date))
+
+
+class IMM:
+    """Namespace-only class — direct construction is disabled.
+
+    C++ parity: ``ql/time/imm.hpp:35`` ``struct IMM``. C++ groups these
+    helpers as static members of a struct that is never instantiated;
+    pquantlib keeps the module-level free functions as the implementation
+    and exposes this class as the name-for-name mirror of the C++ API.
+    """
+
+    class Month(IntEnum):
+        """C++ parity: ``ql/time/imm.hpp:36-39`` ``IMM::Month``.
+
+        Futures-market month letters. Distinct from
+        :class:`pquantlib.time.month.Month`, which is the calendar month.
+        """
+
+        F = 1
+        G = 2
+        H = 3
+        J = 4
+        K = 5
+        M = 6
+        N = 7
+        Q = 8
+        U = 9
+        V = 10
+        X = 11
+        Z = 12
+
+    def __init__(self) -> NoReturn:
+        msg = "IMM is a namespace; use staticmethods only"
+        raise TypeError(msg)
+
+    is_imm_date = staticmethod(is_imm_date)
+    is_imm_code = staticmethod(is_imm_code)
+    code = staticmethod(code)
+    date = staticmethod(date)
+    next_date = staticmethod(next_date)
+    next_code = staticmethod(next_code)
