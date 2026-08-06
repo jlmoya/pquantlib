@@ -29,7 +29,25 @@ PY_ROOTS = [
 # class/struct Name, not a forward-decl (no trailing ';' immediately after the name),
 # optionally preceded by a template<...> on the same logical line is fine — we just
 # scan line-anchored declarations.
-CPP_DECL = re.compile(r"^\s*(?:class|struct)\s+([A-Z][A-Za-z0-9_]*)\s*(?:[:{]|$)", re.MULTILINE)
+# A class declaration the gate must see. Three forms this deliberately covers,
+# each of which the original pattern silently dropped from the DENOMINATOR —
+# which is the dangerous direction of error: a name the gate never sees can
+# never be reported missing, so the gate reads 0 while the class is absent.
+#
+#   template <class Curve> class GlobalBootstrap final : ...   one-line template
+#   class Foo final : ...                                       'final'
+#   class QL_DEPRECATED Foo : ...                                leading macro
+#
+# Forward declarations (`class Foo;`) stay excluded: the trailing group requires
+# ':' or '{' or end-of-line, and ';' is neither.
+CPP_DECL = re.compile(
+    r"^\s*(?:template\s*<[^>\n]*>\s*)?"
+    r"(?:class|struct)\s+"
+    r"(?:[A-Z_][A-Z0-9_]*\s+)?"
+    r"([A-Z][A-Za-z0-9_]*)"
+    r"(?:\s+final)?\s*(?:[:{]|$)",
+    re.MULTILINE,
+)
 PY_DECL = re.compile(r"^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
 
 
