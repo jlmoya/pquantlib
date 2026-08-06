@@ -132,4 +132,64 @@ class ObservableSettings(Singleton, Observable):
         self.evaluation_date = None
 
 
-__all__ = ["ObservableSettings"]
+class SavedSettings:
+    """Snapshot of :class:`ObservableSettings`, restored on exit.
+
+    # C++ parity: ``class SavedSettings`` (ql/settings.hpp:120, ql/settings.cpp:49-67).
+    #
+    # C++ uses RAII: the constructor snapshots the four mutable ``Settings``
+    # fields and the destructor puts them back. Python's deterministic analogue
+    # of a stack-scoped destructor is the context manager, so this is both a
+    # context manager AND callable via explicit :meth:`restore` for callers that
+    # want the C++ object-lifetime shape.
+    #
+    # Note the C++ constructor reads ``Settings::instance().evaluationDate()``
+    # through ``DateProxy::operator Date()``, which RESOLVES an unset date to
+    # ``Date::todaysDate()``. Restoring therefore leaves the evaluation date
+    # anchored even if it was unset on entry — reproduced here deliberately via
+    # :meth:`ObservableSettings.evaluation_date_or_today`.
+
+    Usage::
+
+        with SavedSettings():
+            ObservableSettings().evaluation_date = Date.from_ymd(1, Month.March, 2025)
+            ...
+        # every field is back to what it was
+    """
+
+    __slots__ = (
+        "_enforces_todays_historic_fixings",
+        "_evaluation_date",
+        "_include_reference_date_events",
+        "_include_todays_cash_flows",
+    )
+
+    def __init__(self) -> None:
+        settings = ObservableSettings()
+        self._evaluation_date: Date = settings.evaluation_date_or_today()
+        self._include_reference_date_events: bool = settings.include_reference_date_events
+        self._include_todays_cash_flows: bool | None = settings.include_todays_cash_flows
+        self._enforces_todays_historic_fixings: bool = settings.enforces_todays_historic_fixings
+
+    def restore(self) -> None:
+        """Put every snapshotted field back.
+
+        # C++ parity: ``SavedSettings::~SavedSettings`` (ql/settings.cpp:55-67).
+        # The evaluation date is only re-assigned when it actually differs, so
+        # no spurious observer notification is emitted — same guard as C++.
+        """
+        settings = ObservableSettings()
+        if settings.evaluation_date != self._evaluation_date:
+            settings.evaluation_date = self._evaluation_date
+        settings.include_reference_date_events = self._include_reference_date_events
+        settings.include_todays_cash_flows = self._include_todays_cash_flows
+        settings.enforces_todays_historic_fixings = self._enforces_todays_historic_fixings
+
+    def __enter__(self) -> SavedSettings:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.restore()
+
+
+__all__ = ["ObservableSettings", "SavedSettings"]
