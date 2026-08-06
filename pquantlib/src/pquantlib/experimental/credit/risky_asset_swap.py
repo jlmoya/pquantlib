@@ -14,12 +14,9 @@ recovered value on default. The pricing decomposes the NPV into:
 This port keeps the C++ structure 1-1 — eager mutable result fields
 populated by ``perform_calculations``.
 
-# C++ parity divergence: the C++ class exposes the ``AssetSwapHelper``
-# helper for default-curve bootstrap; the helper depends on the
-# ``DefaultProbabilityHelper`` base which is in scope at L8-B but
-# the helper logic itself is deferred (used only with rate bootstrap
-# specialisations not yet ported). Tracked in the cluster completion
-# notes.
+``AssetSwapHelper`` is the matching bootstrap helper: it rebuilds a
+100-notional, 1%-coupon ``RiskyAssetSwap`` off the current evaluation date
+and reports its fair spread as the implied quote.
 """
 
 from __future__ import annotations
@@ -28,12 +25,18 @@ from pquantlib import qassert
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.instruments.instrument import Instrument
 from pquantlib.patterns.observable_settings import ObservableSettings
+from pquantlib.quotes.quote import Quote
+from pquantlib.termstructures.bootstrap_helper import BootstrapHelper
 from pquantlib.termstructures.credit.default_probability_term_structure import (
     DefaultProbabilityTermStructure,
 )
 from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 from pquantlib.time.business_day_convention import BusinessDayConvention
+from pquantlib.time.calendar import Calendar
 from pquantlib.time.calendars.null_calendar import NullCalendar
+from pquantlib.time.date import Date
+from pquantlib.time.date_generation import DateGeneration
+from pquantlib.time.period import Period
 from pquantlib.time.schedule import Schedule
 from pquantlib.time.time_unit import TimeUnit
 
@@ -290,4 +293,158 @@ class RiskyAssetSwap(Instrument):
         return (1.0 - initial_disc + value - self._recovery_value) / self._fixed_annuity
 
 
-__all__ = ["RiskyAssetSwap"]
+class AssetSwapHelper(BootstrapHelper[DefaultProbabilityTermStructure]):
+    """Risky-asset-swap helper for default-probability-curve bootstrap.
+
+    # C++ parity: ``class AssetSwapHelper : public DefaultProbabilityHelper``
+    # (riskyassetswap.hpp:89-127, riskyassetswap.cpp:181-260).
+    # ``DefaultProbabilityHelper`` is the C++ typedef for
+    # ``BootstrapHelper<DefaultProbabilityTermStructure>``, which is what this
+    # class derives from here. Note C++ does NOT derive from
+    # ``RelativeDateBootstrapHelper``; it registers with the evaluation date
+    # itself and hand-rolls the ``update()`` guard (riskyassetswap.cpp:225-230),
+    # which is reproduced below rather than delegated to the relative-date base.
+
+    The helper rebuilds a 100-notional, 1%-coupon :class:`RiskyAssetSwap` off
+    the current evaluation date and reports its fair spread as the implied
+    quote.
+    """
+
+    def __init__(
+        self,
+        spread: Quote | float,
+        tenor: Period,
+        settlement_days: int,
+        calendar: Calendar,
+        fixed_period: Period,
+        fixed_convention: BusinessDayConvention,
+        fixed_day_count: DayCounter,
+        float_period: Period,
+        float_convention: BusinessDayConvention,
+        float_day_count: DayCounter,
+        recovery_rate: float,
+        yield_ts: YieldTermStructure,
+        integration_step_size: Period | None = None,
+    ) -> None:
+        # C++ parity: riskyassetswap.cpp:181-205.
+        super().__init__(spread)
+        self._tenor: Period = tenor
+        self._settlement_days: int = settlement_days
+        self._calendar: Calendar = calendar
+        self._fixed_convention: BusinessDayConvention = fixed_convention
+        self._fixed_period: Period = fixed_period
+        self._fixed_day_count: DayCounter = fixed_day_count
+        self._float_convention: BusinessDayConvention = float_convention
+        self._float_period: Period = float_period
+        self._float_day_count: DayCounter = float_day_count
+        self._recovery_rate: float = recovery_rate
+        self._yield_ts: YieldTermStructure = yield_ts
+        # C++ parity note: ``integrationStepSize_`` is stored by the C++ ctor
+        # and then never read — ``RiskyAssetSwap``'s own ctor takes no such
+        # argument (riskyassetswap.hpp:44-55) and ``initializeDates`` does not
+        # pass it (riskyassetswap.cpp:247-258). Kept as a field for signature
+        # parity; reproducing the dead store rather than dropping the
+        # parameter keeps the constructor callable exactly as in C++.
+        self._integration_step_size: Period = (
+            Period() if integration_step_size is None else integration_step_size
+        )
+
+        self._evaluation_date: Date = Date()
+        self._asw: RiskyAssetSwap | None = None
+        self._probability: DefaultProbabilityTermStructure | None = None
+
+        self._initialize_dates()
+
+        ObservableSettings().register_with(self)
+        yield_ts.register_with(self)
+
+    def implied_quote(self) -> float:
+        """Fair spread of the rebuilt risky asset swap.
+
+        # C++ parity: ``AssetSwapHelper::impliedQuote``
+        # (riskyassetswap.cpp:207-213).
+        """
+        qassert.require(self._probability is not None, "default term structure not set")
+        assert self._asw is not None
+        # C++ parity: "we didn't register as observers - force calculation".
+        self._asw.recalculate()
+        return self._asw.fair_spread()
+
+    def set_term_structure(self, ts: DefaultProbabilityTermStructure) -> None:
+        """# C++ parity: ``AssetSwapHelper::setTermStructure``
+        (riskyassetswap.cpp:215-223).
+
+        C++ links a ``RelinkableHandle`` that the already-built swap holds; the
+        Python port has no handle indirection, so the swap is (re)built by
+        ``_initialize_dates`` once the curve is known. C++ calls
+        ``initializeDates()`` here too, so the rebuild happens at the same
+        point in both.
+        """
+        super().set_term_structure(ts)
+        self._probability = ts
+        self._initialize_dates()
+
+    def update(self) -> None:
+        """# C++ parity: ``AssetSwapHelper::update``
+        (riskyassetswap.cpp:225-230).
+        """
+        if self._evaluation_date != ObservableSettings().evaluation_date_or_today():
+            self._initialize_dates()
+        super().update()
+
+    def _initialize_dates(self) -> None:
+        """# C++ parity: ``AssetSwapHelper::initializeDates``
+        (riskyassetswap.cpp:232-259).
+        """
+        self._evaluation_date = ObservableSettings().evaluation_date_or_today()
+
+        self._earliest_date = self._calendar.advance(
+            self._evaluation_date,
+            self._settlement_days,
+            TimeUnit.Days,
+        )
+        maturity = self._earliest_date + self._tenor
+        self._latest_date = self._calendar.adjust(maturity, self._fixed_convention)
+
+        if self._probability is None:
+            # Nothing to price against yet; C++ gets here too (the ctor runs
+            # before setTermStructure) but its Handle absorbs the emptiness.
+            self._asw = None
+            return
+
+        fixed_schedule = Schedule.from_rule(
+            effective_date=self._earliest_date,
+            termination_date=maturity,
+            tenor=self._fixed_period,
+            calendar=self._calendar,
+            convention=self._fixed_convention,
+            termination_date_convention=self._fixed_convention,
+            rule=DateGeneration.Forward,
+            end_of_month=False,
+        )
+        float_schedule = Schedule.from_rule(
+            effective_date=self._earliest_date,
+            termination_date=maturity,
+            tenor=self._float_period,
+            calendar=self._calendar,
+            convention=self._float_convention,
+            termination_date_convention=self._float_convention,
+            rule=DateGeneration.Forward,
+            end_of_month=False,
+        )
+
+        self._asw = RiskyAssetSwap(
+            True,
+            100.0,
+            fixed_schedule,
+            float_schedule,
+            self._fixed_day_count,
+            self._float_day_count,
+            0.01,
+            self._recovery_rate,
+            self._yield_ts,
+            self._probability,
+        )
+
+
+__all__ = ["AssetSwapHelper", "RiskyAssetSwap"]
