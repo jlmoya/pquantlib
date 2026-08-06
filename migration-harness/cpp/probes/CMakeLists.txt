@@ -910,3 +910,12 @@ target_link_libraries(v143_ts_onfuture_probe PRIVATE ${QUANTLIB_LIBRARY})
 # Emits references/v143/ts/swapindexclone.json.
 add_executable(v143_ts_swapindexclone_probe v143_ts_swapindexclone/probe.cpp)
 target_link_libraries(v143_ts_swapindexclone_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# === termstructures/inflation: KerkhofSeasonality vs MultiplicativePriceSeasonality ===
+# Kerkhof replaces both the factor lookup (a running product of monthly
+# factors, not a cyclic lookup) and the correction kernel of the class it
+# inherits from. Both are emitted over the same dates so a port that
+# subclassed but forgot one of the two overrides is caught.
+# Emits references/v143/ts/kerkhof.json.
+add_executable(v143_ts_kerkhof_probe v143_ts_kerkhof/probe.cpp)
+target_link_libraries(v143_ts_kerkhof_probe PRIVATE ${QUANTLIB_LIBRARY})
