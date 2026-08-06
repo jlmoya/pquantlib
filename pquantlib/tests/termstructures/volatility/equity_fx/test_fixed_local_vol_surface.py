@@ -73,10 +73,31 @@ def test_interp_time_midpoint(surface: FixedLocalVolSurface) -> None:
     tight(v, 0.19, reason="midpoint linear time interp")
 
 
-def test_extrapolation_constant_in_strike(surface: FixedLocalVolSurface) -> None:
-    """Constant extrapolation below min strike."""
+def test_extrapolation_is_linear_on_a_time_node(surface: FixedLocalVolSurface) -> None:
+    """ON a time node the strike-extrapolation policy does NOT apply.
+
+    ``localVolImpl`` short-circuits to ``localVolInterpol_[idx](strike, true)``
+    with no clamping (fixedlocalvolsurface.cpp:139-144), so the slice's Linear
+    interpolation extrapolates. At t = 0 the slice runs 80 -> 0.25,
+    100 -> 0.20, so K = 50 gives 0.25 + (50 - 80) * (0.20 - 0.25) / 20 = 0.325,
+    not the clamped 0.25 this test used to assert. Cross-validated in
+    test_grid_model_local_vol_surface.py against
+    references/v143/eqfx/gridlocalvol.json.
+    """
     v = surface.local_vol_at_time(0.0, 50.0, extrapolate=True)
-    exact(v, 0.25)
+    tight(v, 0.325, reason="linear strike extrapolation on a time node")
+
+
+def test_extrapolation_constant_in_strike_between_nodes(
+    surface: FixedLocalVolSurface,
+) -> None:
+    """Between time nodes the ConstantExtrapolation policy does apply.
+
+    At t = 0.25 both bracketing slices clamp K = 50 to 80, giving the
+    time-interpolated value of 0.25 (t=0) and 0.22 (t=0.5): 0.235.
+    """
+    v = surface.local_vol_at_time(0.25, 50.0, extrapolate=True)
+    tight(v, 0.235, reason="constant strike extrapolation between time nodes")
 
 
 def test_extrapolation_constant_in_time(surface: FixedLocalVolSurface) -> None:
@@ -92,5 +113,11 @@ def test_set_column_updates_surface(surface: FixedLocalVolSurface) -> None:
     surface.set_column(1, new_strikes, new_col)
     v = surface.local_vol_at_time(0.5, 100.0, extrapolate=True)
     exact(v, 0.25)
-    # Min strike should have refreshed to 70.
+    # min_strike reads the LAST slice only (C++ strikes_.back()->front()), and
+    # slice 1 is not the last, so it stays at 80. This test used to assert 70,
+    # from a port that took the min over all slices.
+    exact(surface.min_strike(), 80.0)
+    # Changing the last slice does move it.
+    surface.set_column(2, [70.0, 100.0, 130.0], new_col)
     exact(surface.min_strike(), 70.0)
+    exact(surface.max_strike(), 130.0)

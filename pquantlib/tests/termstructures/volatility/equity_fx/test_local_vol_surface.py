@@ -1,9 +1,10 @@
 """Tests for LocalVolSurface — cross-validated against L2-E probe.
 
-L2-E ports the flat-curve simplification of LocalVolSurface (zero
-risk-free + zero dividend ⇒ forward = spot). The C++ probe used
-``FlatForward(0%)`` curves on both sides, so the reference values
-agree with our flat-curve impl.
+The L2-E probe built the C++ surface over ``FlatForward(0%)`` curves on
+both sides, so this fixture passes the same two curves. (The port used to
+hard-code zero rates instead of taking the curves; see
+``migration-harness/references/v143/eqfx/localvol.json`` for the
+non-flat-curve cases that pin the corrected behaviour.)
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pquantlib.termstructures.volatility.equity_fx.black_variance_surface import
     BlackVarianceSurface,
 )
 from pquantlib.termstructures.volatility.equity_fx.local_vol_surface import LocalVolSurface
+from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing import reference_reader, tolerance
 from pquantlib.time.calendars.null_calendar import NullCalendar
 from pquantlib.time.date import Date
@@ -45,7 +47,17 @@ def _make_local_vol_surface() -> LocalVolSurface:
         ),
         day_counter=Actual365Fixed(),
     )
-    return LocalVolSurface(black_ts=surf, underlying=100.0)
+    flat_zero = FlatForward.from_rate(
+        reference_date=Date.from_ymd(15, Month.June, 2026),
+        forward_rate=0.0,
+        day_counter=Actual365Fixed(),
+    )
+    return LocalVolSurface(
+        black_ts=surf,
+        risk_free_ts=flat_zero,
+        dividend_ts=flat_zero,
+        underlying=100.0,
+    )
 
 
 def test_local_vol_surface_delegates_reference_date() -> None:

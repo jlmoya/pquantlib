@@ -1,7 +1,7 @@
 """BlackVarianceCurve — Black vol curve modelled as a variance curve.
 
 # C++ parity: ql/termstructures/volatility/equityfx/blackvariancecurve.hpp +
-#             blackvariancecurve.cpp (v1.42.1).
+#             blackvariancecurve.cpp (v1.43).
 
 Inputs: a reference date, a list of dates, a list of Black volatilities
 at those dates, and a day counter. The class converts each (date, vol)
@@ -9,16 +9,13 @@ to (t, variance) where ``t = day_counter.year_fraction(ref, date)`` and
 ``variance = t * vol^2``. A linear interpolation on (t, variance) is
 the default (settable via ``set_interpolation`` for custom interpolators).
 
-PQuantLib defers two C++ features:
+Past the last pillar the curve hands off to
+:class:`BlackVolTimeExtrapolation`, selected by the
+``time_extrapolation_type`` constructor argument (C++ default:
+``FlatVolatility``).
 
-- ``BlackVolTimeExtrapolation`` (FlatVolatility / UseInterpolator /
-  LinearVariance). The C++ default is ``FlatVolatility``; PQuantLib
-  L2-E exposes only the default behavior — extrapolation beyond the
-  last pillar uses ``flat-variance-per-time = variance(t_max) /
-  t_max * t``.
-- Custom interpolators via ``setInterpolation<Interpolator>``. The
-  L2-E port pins Linear; cubic-spline variants will land alongside
-  the same in L1 carve-outs (currently deferred).
+PQuantLib still defers one C++ feature: custom interpolators via
+``setInterpolation<Interpolator>``. This port pins Linear.
 """
 
 from __future__ import annotations
@@ -33,6 +30,9 @@ from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.math.interpolations.linear import LinearInterpolation
 from pquantlib.termstructures.volatility.equity_fx.black_vol_term_structure import (
     BlackVarianceTermStructure,
+)
+from pquantlib.termstructures.volatility.equity_fx.black_vol_time_extrapolation import (
+    BlackVolTimeExtrapolation,
 )
 from pquantlib.time.business_day_convention import BusinessDayConvention
 from pquantlib.time.calendar import Calendar
@@ -50,6 +50,9 @@ class BlackVarianceCurve(BlackVarianceTermStructure):
         black_vol_curve: Sequence[float],
         day_counter: DayCounter,
         force_monotone_variance: bool = True,
+        time_extrapolation_type: BlackVolTimeExtrapolation.Type = (
+            BlackVolTimeExtrapolation.Type.FlatVolatility
+        ),
         calendar: Calendar | None = None,
     ) -> None:
         super().__init__(
@@ -87,6 +90,9 @@ class BlackVarianceCurve(BlackVarianceTermStructure):
         self._max_date: Date = dates[-1]
         self._times: list[float] = times
         self._variances: list[float] = variances
+        self._time_extrapolation_type: BlackVolTimeExtrapolation.Type = (
+            time_extrapolation_type
+        )
         # default: linear interpolation on (times, variances)
         self._variance_curve: LinearInterpolation = LinearInterpolation(
             np.asarray(times, dtype=np.float64),
@@ -106,7 +112,9 @@ class BlackVarianceCurve(BlackVarianceTermStructure):
         _ = strike  # the curve is strike-independent
         if t <= self._times[-1]:
             return max(self._variance_curve(t, allow_extrapolation=True), 0.0)
-        # FlatVolatility extrapolation (C++ default):
-        # ``max(varianceCurve(t_max), 0) / t_max * t``.
-        v_max = max(self._variance_curve(self._times[-1], allow_extrapolation=True), 0.0)
-        return v_max / self._times[-1] * t
+        return BlackVolTimeExtrapolation.extrapolated_variance_curve(
+            self._time_extrapolation_type,
+            t,
+            self._times,
+            lambda tt: float(self._variance_curve(tt, allow_extrapolation=True)),
+        )

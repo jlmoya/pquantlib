@@ -290,12 +290,11 @@ class GeneralizedBlackScholesProcess(StochasticProcess1D):
                 self._updated = True
                 return self._local_vol_cached
 
-            # Strike-dependent — Dupire on the full surface. Python's
-            # ``LocalVolSurface`` accepts only the Black-vol-TS plus an
-            # underlying (no rates/div curves — those would lead to
-            # additional complexity that's deferred for L3-D).
+            # Strike-dependent — Dupire on the full surface.
             self._local_vol_cached = LocalVolSurface(
                 black_ts=black_ts,
+                risk_free_ts=self._risk_free_ts,
+                dividend_ts=self._dividend_ts,
                 underlying=self._x0_quote.value(),
             )
             self._updated = True
