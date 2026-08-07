@@ -1,8 +1,8 @@
 """LinearFlatInterpolation — linear interpolation with flat extrapolation.
 
-# C++ parity: ql/experimental/shortrate/generalizedhullwhite.hpp:310-382
-# (v1.42.1) — ``class LinearFlatInterpolation`` + ``LinearFlat`` factory +
-# ``detail::LinearFlatInterpolationImpl``.
+# C++ parity: ql/experimental/shortrate/generalizedhullwhite.hpp (v1.43) —
+# ``class LinearFlatInterpolation`` (line 313) + ``LinearFlat`` factory
+# (line 328) + ``detail::LinearFlatInterpolationImpl`` (line 341).
 
 Behaves exactly like ordinary linear interpolation strictly inside the
 node range, but clamps to the boundary y-values for x outside
@@ -31,7 +31,7 @@ class LinearFlatInterpolation(Interpolation):
     """Linear interpolation with flat extrapolation.
 
     # C++ parity: ``class LinearFlatInterpolation : public Interpolation``
-    # in generalizedhullwhite.hpp:312-323 (Impl at 338-382).
+    # in generalizedhullwhite.hpp:313-324 (Impl at 341-382).
 
     The constructor requires only one point (C++ ``requiredPoints = 1``);
     with a single node every query returns that node's y-value.
@@ -47,7 +47,7 @@ class LinearFlatInterpolation(Interpolation):
         self.update()
 
     def update(self) -> None:
-        # C++ parity: LinearFlatInterpolationImpl::update (lines 348-356).
+        # C++ parity: LinearFlatInterpolationImpl::update (lines 349-357).
         xs = self._xs
         ys = self._ys
         n = xs.shape[0]
@@ -60,7 +60,7 @@ class LinearFlatInterpolation(Interpolation):
             )
 
     def _value(self, x: float) -> float:
-        # C++ parity: LinearFlatInterpolationImpl::value (lines 357-364) —
+        # C++ parity: LinearFlatInterpolationImpl::value (lines 358-365) —
         # flat outside the range, linear inside.
         if x <= self.x_min:
             return float(self._ys[0])
@@ -70,7 +70,7 @@ class LinearFlatInterpolation(Interpolation):
         return float(self._ys[i]) + (x - float(self._xs[i])) * self._slopes[i]
 
     def _primitive(self, x: float) -> float:
-        # C++ parity: LinearFlatInterpolationImpl::primitive (lines 365-370).
+        # C++ parity: LinearFlatInterpolationImpl::primitive (lines 366-371).
         i = self._locate(x)
         dx = x - float(self._xs[i])
         return self._primitive_const[i] + dx * (
@@ -78,7 +78,7 @@ class LinearFlatInterpolation(Interpolation):
         )
 
     def _derivative(self, x: float) -> float:
-        # C++ parity: LinearFlatInterpolationImpl::derivative (lines 371-376)
+        # C++ parity: LinearFlatInterpolationImpl::derivative (lines 372-377)
         # — zero outside the range, slope of the bracketing segment inside.
         if not self.is_in_range(x):
             return 0.0
@@ -95,7 +95,7 @@ class LinearFlatInterpolation(Interpolation):
 class LinearFlat:
     """Linear-flat interpolation factory / traits object.
 
-    # C++ parity: ``class LinearFlat`` in generalizedhullwhite.hpp:327-336.
+    # C++ parity: ``class LinearFlat`` in generalizedhullwhite.hpp:328-337.
     """
 
     global_ = False  # C++ ``static const bool global = false``.

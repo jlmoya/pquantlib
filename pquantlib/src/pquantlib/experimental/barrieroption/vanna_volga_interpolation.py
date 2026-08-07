@@ -1,7 +1,9 @@
 """VannaVolga 3-point smile interpolation.
 
 # C++ parity: ql/experimental/barrieroption/vannavolgainterpolation.hpp
-#             (v1.43).
+#             (v1.43) — ``VannaVolgaInterpolation`` (line 39),
+#             ``VannaVolga`` (line 58), ``detail::VannaVolgaInterpolationImpl``
+#             (line 82).
 
 The Vanna-Volga method interpolates an FX volatility smile from exactly
 three pillars (25-delta put, ATM, 25-delta call). Given a strike ``k``
