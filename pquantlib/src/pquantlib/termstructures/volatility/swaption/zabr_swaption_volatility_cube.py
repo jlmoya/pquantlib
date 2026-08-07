@@ -3,12 +3,21 @@
 # C++ parity: ql/termstructures/volatility/swaption/zabrswaptionvolatilitycube.hpp
 #             typedef
 #             ``XabrSwaptionVolatilityCube<SwaptionVolCubeZabrModel<>>``.
-#             (v1.42.1).
+#             (v1.43).
 
 Thin wrapper around :class:`XabrSwaptionVolatilityCube` that fixes
-``model_kind`` to :attr:`XabrModelKind.ZABR`. Eager fits a 5-parameter
-ZABR slice per ``(option_tenor, swap_tenor)`` cell and routes
-``smile_section_impl`` through a :class:`ZabrSmileSection`.
+``model_kind`` to :attr:`XabrModelKind.ZABR`. Fits a 5-parameter
+ZABR slice per ``(option_tenor, swap_tenor)`` cell into the parameter
+:class:`~pquantlib.termstructures.volatility.swaption.xabr_swaption_volatility_cube.Cube`
+and routes ``smile_section_impl`` through a :class:`ZabrSmileSection`
+built from the *interpolated* parameters.
+
+Because ``nParams == 5`` for ZABR, layers 0..4 of the parameter cube are
+the model parameters and the forward-rate metadata layer is index 5 —
+which, per the C++ ``k <= 4`` threshold (hpp:1011-1017, 1227), means the
+forward layer is BILINEAR even when ``backward_flat`` is set, while for a
+4-parameter model it is backward-flat. That asymmetry is upstream's and
+is reproduced.
 
 The C++ ``ZabrSwaptionVolatilityCube`` is a typedef of the SABR-mode
 template specialised for ZABR via ``SwaptionVolCubeZabrModel``. PQuantLib
@@ -54,9 +63,10 @@ class ZabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
             vega_weighted_smile_fit: same as
             :class:`SwaptionVolatilityCube`.
         zabr_initial_guess: optional outer list shape
-            ``(n_option_tenors x n_swap_tenors) x 5`` of initial
-            ``(alpha, beta, nu, rho, gamma)`` quintuples. If ``None``,
-            each cell uses ``ZabrInterpolation``'s default initial guess.
+            ``n_option_tenors x n_swap_tenors``, each cell an
+            ``(alpha, beta, nu, rho, gamma)`` quintuple of floats or
+            :class:`Quote` objects. If ``None``, each cell uses
+            ``ZabrInterpolation``'s default initial guess.
         is_parameter_fixed: 5-element ``(alpha_fixed, beta_fixed,
             nu_fixed, rho_fixed, gamma_fixed)`` mask shared across grid
             cells.
@@ -77,11 +87,13 @@ class ZabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
         short_swap_index_base: SwapIndex | AtmSwapIndexProtocol,
         vega_weighted_smile_fit: bool = False,
         zabr_initial_guess: (
-            Sequence[Sequence[tuple[float, float, float, float, float]]] | None
+            Sequence[Sequence[Sequence[float] | Sequence[Quote]]] | None
         ) = None,
         is_parameter_fixed: tuple[bool, bool, bool, bool, bool] = (
             False, False, False, False, False,
         ),
+        backward_flat: bool = False,
+        cutoff_strike: float = 0.0001,
         zabr_evaluation: ZabrEvaluation = ZabrEvaluation.ShortMaturityLognormal,
     ) -> None:
         super().__init__(
@@ -96,6 +108,8 @@ class ZabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
             vega_weighted_smile_fit=vega_weighted_smile_fit,
             initial_guess=zabr_initial_guess,
             is_parameter_fixed=is_parameter_fixed,
+            backward_flat=backward_flat,
+            cutoff_strike=cutoff_strike,
             zabr_evaluation=zabr_evaluation,
         )
 
