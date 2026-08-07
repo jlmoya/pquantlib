@@ -33,8 +33,13 @@ same ``integrand1`` / ``integrand2`` / ``integrand3`` substitutions. The
 accepted it and silently used ``scipy.integrate.quad`` instead, so
 ``AnalyticHestonEngine(model, 1)`` and ``AnalyticHestonEngine(model, 144)``
 returned the same number while C++ returned 9.1988042562105914 and
-8.4559223723439541 respectively. The order sweep in
-``tests/pricingengines/vanilla/test_bates_engines.py`` pins that.
+8.4559223723439541 respectively.
+
+NOT YET PINNED: that order sweep has no test. An earlier draft of this
+docstring cited ``tests/pricingengines/vanilla/test_bates_engines.py``, which
+does not exist — the file is ``test_bates_engine.py`` and it has no sweep.
+Recorded here rather than quietly dropped, because the sweep is the assertion
+that would have caught the ignored-argument defect.
 
 Constructors
 ------------
@@ -78,6 +83,7 @@ from pquantlib.math.integrals.discrete_integrals import (
     DiscreteTrapezoidIntegrator,
 )
 from pquantlib.math.integrals.exp_sinh_integral import ExpSinhIntegral
+from pquantlib.math.integrals.exponential_integrals import ci, si
 from pquantlib.math.integrals.gaussian_quadrature import (
     GaussChebyshev2ndIntegration,
     GaussChebyshevIntegration,
@@ -658,11 +664,6 @@ class AP_Helper:  # noqa: N801  (C++ class name, character for character)
 
         if cpx_log == ComplexLogFormula.AsymptoticChF:
             qassert.require(self._alpha == -0.5, "alpha must be equal to -0.5")
-            # Imported lazily: the exponential-integral module is only needed by
-            # this branch, and importing it eagerly would make every Heston
-            # pricing pay for it.
-            from pquantlib.math.integrals.exponential_integrals import ci, si
-
             phi_freq = complex(self._phi.real, self._phi.imag + self._freq)
             return (
                 self._fwd

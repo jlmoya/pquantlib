@@ -899,6 +899,12 @@ foreach(area
     target_link_libraries(v143_math_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
 endforeach()
 
+# ql/math/integrals/exponentialintegrals.{hpp,cpp} — Si/Ci/E1/Ei, real and
+# complex. Kept out of the loop above so its per-branch rationale stays next to
+# the target. Emits references/v143/math/expint.json.
+add_executable(v143_math_expint_probe v143_math_expint/probe.cpp)
+target_link_libraries(v143_math_expint_probe PRIVATE ${QUANTLIB_LIBRARY})
+
 # --- merged from wave 4 (termstructures) ---
 add_executable(v143_ts_swaphelper_probe v143_ts_swaphelper/probe.cpp)
 target_link_libraries(v143_ts_swaphelper_probe PRIVATE ${QUANTLIB_LIBRARY})
