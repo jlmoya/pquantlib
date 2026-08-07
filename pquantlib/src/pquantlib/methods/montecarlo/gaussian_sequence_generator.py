@@ -42,26 +42,24 @@ and ``last_sequence()`` returning the most recent sample (used by
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import numpy as np
 import numpy.typing as npt
 
 from pquantlib import qassert
 from pquantlib.math.distributions.inverse_cumulative_normal import InverseCumulativeNormal
 from pquantlib.math.randomnumbers.mersenne_twister import MersenneTwisterUniformRng
-from pquantlib.math.randomnumbers.random_number_generator import RandomNumberGenerator
+from pquantlib.math.randomnumbers.random_number_generator import (
+    RandomNumberGenerator,
+    SequenceSample,
+)
 
-
-@dataclass(frozen=True, slots=True)
-class SequenceSample:
-    """Multi-dimensional draw with a (multiplicative) weight.
-
-    # C++ parity: ``Sample<std::vector<Real>>`` (sample.hpp).
-    """
-
-    value: npt.NDArray[np.float64]
-    weight: float = 1.0
+# ``SequenceSample`` is re-exported, not redefined. C++ has exactly one
+# ``Sample<std::vector<Real>>`` (ql/methods/montecarlo/sample.hpp); this module
+# used to declare a second, structurally identical dataclass, which made
+# ``InverseCumulativeRsg`` (from ``math.randomnumbers``) fail to satisfy
+# ``GaussianSequenceGeneratorProtocol`` nominally even though it satisfies it in
+# every observable way. Engines that drive their generator through the
+# ``PseudoRandom`` / ``LowDiscrepancy`` traits need the two to be the same type.
 
 
 class UniformRandomSequenceGenerator:

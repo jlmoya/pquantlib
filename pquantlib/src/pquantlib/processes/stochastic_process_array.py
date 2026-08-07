@@ -8,54 +8,83 @@ takes ``N`` independent Brownian increments ``dw``, premultiplies by
 the spectral-square-root of the correlation matrix to inject the
 correlation, and feeds component ``dz[i]`` into ``processes[i].evolve``.
 
-Python divergences vs C++:
-
-* C++ uses ``Matrix`` and the ``pseudoSqrt(Spectral)`` helper.  The
-  Python port computes the same spectral square root inline via
-  ``numpy.linalg.eigh`` + clipping negative eigenvalues to zero
-  (mirrors the C++ ``SalvagingAlgorithm::Spectral`` branch of
-  ``pseudoSqrt``).
-* The C++ ``stdDeviation`` and ``diffusion`` return ``Matrix`` whose
-  row ``i`` is ``sqrt_corr.row(i) * processes_[i]->...``.  We mirror
-  that by scaling the ``sqrt_corr`` rows in-place.
+The C++ ``stdDeviation`` and ``diffusion`` return ``Matrix`` whose row ``i``
+is ``sqrt_corr.row(i) * processes_[i]->...``.  We mirror that by scaling the
+``sqrt_corr`` rows in-place.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 import numpy as np
 import numpy.typing as npt
 
 from pquantlib import qassert
+from pquantlib.math.matrixutilities.symmetric_schur_decomposition import (
+    SymmetricSchurDecomposition,
+)
 from pquantlib.processes.stochastic_process import StochasticProcess
 from pquantlib.processes.stochastic_process_1d import StochasticProcess1D
 from pquantlib.time.date import Date
+
+
+def _normalize_pseudo_root(
+    matrix: npt.NDArray[np.float64], pseudo: npt.NDArray[np.float64]
+) -> None:
+    """Rescale each row of ``pseudo`` so its norm matches ``matrix``' diagonal.
+
+    # C++ parity: ``normalizePseudoRoot`` (pseudosqrt.cpp, anonymous namespace).
+    """
+    size = int(matrix.shape[0])
+    pseudo_cols = int(pseudo.shape[1])
+    for i in range(size):
+        norm = 0.0
+        for j in range(pseudo_cols):
+            norm += float(pseudo[i, j]) * float(pseudo[i, j])
+        if norm > 0.0:
+            norm_adj = math.sqrt(float(matrix[i, i]) / norm)
+            for j in range(pseudo_cols):
+                pseudo[i, j] *= norm_adj
 
 
 def _spectral_sqrt(corr: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Spectral square root of a (possibly degenerate) symmetric matrix.
 
     # C++ parity: ``pseudoSqrt(corr, SalvagingAlgorithm::Spectral)``
-    # in ql/math/matrixutilities/pseudosqrt.cpp.
+    # (ql/math/matrixutilities/pseudosqrt.cpp:377-385):
+    #     for i: diagonal[i][i] = sqrt(max(jd.eigenvalues()[i], 0))
+    #     result = jd.eigenvectors() * diagonal
+    #     normalizePseudoRoot(matrix, result)
 
-    Compute eigen-decomposition ``corr = Q diag(λ) Q^T``, clip
-    negative eigenvalues to 0, return ``Q diag(sqrt(λ))``. The
-    matrix ``M`` so returned satisfies ``M M^T == salvaged corr``
-    where ``salvaged corr`` zeroes negative eigenvalues. For a
-    proper correlation matrix (positive-semidefinite, unit
-    diagonal), all eigenvalues are >= 0 and this is just the
-    standard symmetric square root.
+    The *value* of this matrix is observable, not merely its Gram product:
+    ``StochasticProcessArray.evolve`` uses ``dz = M @ dw`` for a specific
+    ``dw``, so any other square root of the same correlation gives a
+    statistically equivalent but path-wise different simulation. It must
+    therefore be built exactly as C++ builds it —
+    :class:`SymmetricSchurDecomposition` (eigenvalues in *decreasing* order,
+    with C++'s eigenvector sign convention), not ``numpy.linalg.eigh``, whose
+    eigenvalues come out ascending and whose eigenvector signs differ. Pinned
+    against C++ by ``migration-harness/references/v143/pe/basket.json``
+    (``mc_spectral_pseudo_sqrt_*``).
     """
-    qassert.require(corr.ndim == 2 and corr.shape[0] == corr.shape[1], "correlation matrix must be square")
+    qassert.require(
+        corr.ndim == 2 and corr.shape[0] == corr.shape[1],
+        "correlation matrix must be square",
+    )
     qassert.require(
         np.allclose(corr, corr.T, atol=1e-14),
         "correlation matrix must be symmetric",
     )
-    # eigh returns ascending eigenvalues + orthonormal eigenvectors.
-    eigvals, eigvecs = np.linalg.eigh(corr)
-    eigvals_clipped = np.clip(eigvals, 0.0, None)
-    return eigvecs * np.sqrt(eigvals_clipped)  # broadcast: columns scaled by sqrt(λ)
+    size = int(corr.shape[0])
+    jd = SymmetricSchurDecomposition(corr)
+    diagonal: npt.NDArray[np.float64] = np.zeros((size, size), dtype=np.float64)
+    for i in range(size):
+        diagonal[i, i] = math.sqrt(max(float(jd.eigenvalues()[i]), 0.0))
+    result: npt.NDArray[np.float64] = jd.eigenvectors() @ diagonal
+    _normalize_pseudo_root(corr, result)
+    return result
 
 
 class StochasticProcessArray(StochasticProcess):

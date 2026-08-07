@@ -25,8 +25,9 @@ from collections.abc import Callable
 
 from pquantlib import qassert
 from pquantlib.exceptions import LibraryException
-from pquantlib.exercise import EarlyExercise, EuropeanExercise, Exercise
-from pquantlib.instruments.european_option import EuropeanOption
+from pquantlib.exercise import EarlyExercise, EuropeanExercise
+from pquantlib.instruments.one_asset_option import OneAssetOptionResults
+from pquantlib.math.randomnumbers.rng_traits import PseudoRandom
 from pquantlib.methods.montecarlo.early_exercise_path_pricer import (
     EarlyExercisePathPricer,
 )
@@ -39,14 +40,17 @@ from pquantlib.methods.montecarlo.lsm_basis_system import (
 )
 from pquantlib.methods.montecarlo.path import Path
 from pquantlib.methods.montecarlo.path_pricer import PathPricer
+from pquantlib.option import OptionArguments
 from pquantlib.payoffs import Payoff, PlainVanillaPayoff, StrikedTypePayoff
 from pquantlib.pricingengines.mc_longstaff_schwartz_engine import (
     MCLongstaffSchwartzEngine,
 )
+from pquantlib.pricingengines.pricing_engine import PricingEngine
 from pquantlib.pricingengines.vanilla.analytic_european_engine import (
     AnalyticEuropeanEngine,
 )
 from pquantlib.pricingengines.vanilla.mc_european_engine import EuropeanPathPricer
+from pquantlib.pricingengines.vanilla.mc_vanilla_engine import RngTraits
 from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
 )
@@ -172,6 +176,8 @@ class MCAmericanEngine(MCLongstaffSchwartzEngine):
         calibration_samples: int = 2048,
         antithetic_variate_calibration: bool | None = None,
         seed_calibration: int | None = None,
+        rng_traits: RngTraits = PseudoRandom,
+        rng_traits_calibration: RngTraits | None = None,
     ) -> None:
         super().__init__(
             process,
@@ -187,7 +193,11 @@ class MCAmericanEngine(MCLongstaffSchwartzEngine):
             calibration_samples=calibration_samples,
             antithetic_variate_calibration=antithetic_variate_calibration,
             seed_calibration=seed_calibration,
+            rng_traits=rng_traits,
+            rng_traits_calibration=rng_traits_calibration,
         )
+        # C++ ``MCAmericanEngine`` passes ``brownianBridge = false``
+        # unconditionally (mcamericanengine.hpp:161), so no bridge knob here.
         self._polynom_order: int = polynom_order
         self._polynom_type: PolynomialType = polynom_type
 
@@ -277,40 +287,233 @@ class MCAmericanEngine(MCLongstaffSchwartzEngine):
             discount=discount,
         )
 
-    def control_variate_value(self) -> float | None:
-        """Analytic European NPV used as the CV reference value.
+    def control_pricing_engine(self) -> PricingEngine | None:
+        """Analytic European engine supplying the CV reference value.
 
-        # C++ parity: ``MCAmericanEngine::controlVariateValue``
-        # (mcamericanengine.hpp:244-265).
+        # C++ parity: ``MCAmericanEngine::controlPricingEngine``
+        # (mcamericanengine.hpp:234-242).
         """
-        if not self._control_variate:
-            return None
         qassert.require(
             isinstance(self._process, GeneralizedBlackScholesProcess),
             "generalized Black-Scholes process required",
         )
         process = self._process
         assert isinstance(process, GeneralizedBlackScholesProcess)
+        return AnalyticEuropeanEngine(process)
+
+    def control_variate_value(self) -> float | None:
+        """Analytic European NPV used as the CV reference value.
+
+        # C++ parity: ``MCAmericanEngine::controlVariateValue``
+        # (mcamericanengine.hpp:244-265). Note the C++ override does NOT
+        # simply delegate to ``MCVanillaEngine::controlVariateValue``: it
+        # copies the arguments and then *replaces* the exercise with a fresh
+        # ``EuropeanExercise(arguments_.exercise->lastDate())``, because the
+        # analytic engine cannot price the American exercise the MC engine
+        # was handed.
+        """
+        control_engine = self.control_pricing_engine()
+        qassert.require(
+            control_engine is not None,
+            "engine does not provide control variation pricing engine",
+        )
+        assert control_engine is not None
 
         payoff = self._arguments.payoff
         qassert.require(payoff is not None, "no payoff given")
         assert payoff is not None
-
         exercise = self._arguments.exercise
         qassert.require(exercise is not None, "no exercise given")
         assert exercise is not None
-
         if not isinstance(payoff, PlainVanillaPayoff):
             raise LibraryException(
                 "control variate requires a PlainVanillaPayoff (AnalyticEuropeanEngine "
                 "doesn't accept binary / asset-or-nothing payoffs)"
             )
-        # Wrap as a European with the same last_date — C++ creates a
-        # fresh EuropeanExercise from the exercise's last date.
-        european_exercise: Exercise = EuropeanExercise(exercise.last_date())
-        opt = EuropeanOption(payoff, european_exercise)
-        opt.set_pricing_engine(AnalyticEuropeanEngine(process))
-        return opt.npv()
+
+        european_arguments = OptionArguments()
+        european_arguments.payoff = payoff
+        european_arguments.exercise = EuropeanExercise(exercise.last_date())
+        control_arguments = control_engine.get_arguments()
+        qassert.require(
+            isinstance(control_arguments, OptionArguments),
+            "engine is using inconsistent arguments",
+        )
+        assert isinstance(control_arguments, OptionArguments)
+        control_arguments.payoff = european_arguments.payoff
+        control_arguments.exercise = european_arguments.exercise
+        control_engine.reset()
+        control_arguments.validate()
+        control_engine.calculate()
+        results = control_engine.get_results()
+        assert isinstance(results, OneAssetOptionResults)
+        value = results.value
+        if value is None:
+            raise LibraryException("control engine did not produce a value")
+        return value
 
 
-__all__ = ["AmericanPathPricer", "MCAmericanEngine"]
+class MakeMCAmericanEngine:
+    """Fluent builder for :class:`MCAmericanEngine`.
+
+    # C++ parity: ``MakeMCAmericanEngine<RNG, S, RNG_Calibration>``
+    # (mcamericanengine.hpp:108-139, 268-399).
+
+    Defaults reproduce the C++ member initialisers exactly::
+
+        antithetic_ = false, controlVariate_ = false,
+        calibrationSamples_ = 2048, seed_ = 0,
+        polynomialOrder_ = 2, polynomialType_ = LsmBasisSystem::Monomial,
+        antitheticCalibration_ = ext::nullopt, seedCalibration_ = Null<Size>()
+
+    and ``steps_ / stepsPerYear_ / samples_ / maxSamples_ / tolerance_`` all
+    start ``Null``. As in C++, the terminal conversion (here :meth:`engine`)
+    is what enforces steps XOR stepsPerYear.
+    """
+
+    __slots__ = (
+        "_antithetic",
+        "_antithetic_calibration",
+        "_calibration_samples",
+        "_control_variate",
+        "_max_samples",
+        "_polynomial_order",
+        "_polynomial_type",
+        "_process",
+        "_rng_traits",
+        "_rng_traits_calibration",
+        "_samples",
+        "_seed",
+        "_seed_calibration",
+        "_steps",
+        "_steps_per_year",
+        "_tolerance",
+    )
+
+    def __init__(
+        self,
+        process: GeneralizedBlackScholesProcess,
+        rng_traits: RngTraits = PseudoRandom,
+        rng_traits_calibration: RngTraits | None = None,
+    ) -> None:
+        self._process: GeneralizedBlackScholesProcess = process
+        self._rng_traits: RngTraits = rng_traits
+        self._rng_traits_calibration: RngTraits | None = rng_traits_calibration
+        self._antithetic: bool = False
+        self._control_variate: bool = False
+        self._steps: int | None = None
+        self._steps_per_year: int | None = None
+        self._samples: int | None = None
+        self._max_samples: int | None = None
+        self._calibration_samples: int = 2048
+        self._tolerance: float | None = None
+        self._seed: int = 0
+        self._polynomial_order: int = 2
+        self._polynomial_type: PolynomialType = PolynomialType.Monomial
+        self._antithetic_calibration: bool | None = None
+        self._seed_calibration: int | None = None
+
+    def with_steps(self, steps: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withSteps`` (mcamericanengine.hpp:288-293)."""
+        self._steps = steps
+        return self
+
+    def with_steps_per_year(self, steps: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withStepsPerYear`` (mcamericanengine.hpp:295-301)."""
+        self._steps_per_year = steps
+        return self
+
+    def with_samples(self, samples: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withSamples`` (mcamericanengine.hpp:303-310)."""
+        qassert.require(self._tolerance is None, "tolerance already set")
+        self._samples = samples
+        return self
+
+    def with_absolute_tolerance(self, tolerance: float) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withAbsoluteTolerance`` (mcamericanengine.hpp:312-323)."""
+        qassert.require(self._samples is None, "number of samples already set")
+        qassert.require(
+            bool(self._rng_traits.allows_error_estimate),
+            "chosen random generator policy does not allow an error estimate",
+        )
+        self._tolerance = tolerance
+        return self
+
+    def with_max_samples(self, samples: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withMaxSamples`` (mcamericanengine.hpp:325-331)."""
+        self._max_samples = samples
+        return self
+
+    def with_calibration_samples(self, samples: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withCalibrationSamples`` (mcamericanengine.hpp:333-339)."""
+        self._calibration_samples = samples
+        return self
+
+    def with_seed(self, seed: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withSeed`` (mcamericanengine.hpp:341-346)."""
+        self._seed = seed
+        return self
+
+    def with_antithetic_variate(self, b: bool = True) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withAntitheticVariate`` (mcamericanengine.hpp:348-354)."""
+        self._antithetic = b
+        return self
+
+    def with_control_variate(self, b: bool = True) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withControlVariate`` (mcamericanengine.hpp:356-361)."""
+        self._control_variate = b
+        return self
+
+    def with_polynomial_order(self, polynomial_order: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withPolynomialOrder`` (mcamericanengine.hpp:274-279)."""
+        self._polynomial_order = polynomial_order
+        return self
+
+    def with_basis_system(self, polynomial_type: PolynomialType) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withBasisSystem`` (mcamericanengine.hpp:281-286)."""
+        self._polynomial_type = polynomial_type
+        return self
+
+    def with_antithetic_variate_calibration(self, b: bool = True) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withAntitheticVariateCalibration``
+        # (mcamericanengine.hpp:363-368)."""
+        self._antithetic_calibration = b
+        return self
+
+    def with_seed_calibration(self, seed: int) -> MakeMCAmericanEngine:
+        """# C++ parity: ``withSeedCalibration`` (mcamericanengine.hpp:370-376)."""
+        self._seed_calibration = seed
+        return self
+
+    def engine(self) -> MCAmericanEngine:
+        """# C++ parity: ``operator ext::shared_ptr<PricingEngine>() const``
+        # (mcamericanengine.hpp:378-399)."""
+        qassert.require(
+            (self._steps is not None) or (self._steps_per_year is not None),
+            "number of steps not given",
+        )
+        qassert.require(
+            (self._steps is None) or (self._steps_per_year is None),
+            "number of steps overspecified",
+        )
+        return MCAmericanEngine(
+            self._process,
+            time_steps=self._steps,
+            time_steps_per_year=self._steps_per_year,
+            antithetic_variate=self._antithetic,
+            control_variate=self._control_variate,
+            required_samples=self._samples,
+            required_tolerance=self._tolerance,
+            max_samples=self._max_samples,
+            seed=self._seed,
+            polynom_order=self._polynomial_order,
+            polynom_type=self._polynomial_type,
+            calibration_samples=self._calibration_samples,
+            antithetic_variate_calibration=self._antithetic_calibration,
+            seed_calibration=self._seed_calibration,
+            rng_traits=self._rng_traits,
+            rng_traits_calibration=self._rng_traits_calibration,
+        )
+
+
+__all__ = ["AmericanPathPricer", "MCAmericanEngine", "MakeMCAmericanEngine"]

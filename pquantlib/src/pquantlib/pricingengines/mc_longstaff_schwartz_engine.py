@@ -43,10 +43,8 @@ from abc import abstractmethod
 from pquantlib import qassert
 from pquantlib.exceptions import LibraryException
 from pquantlib.instruments.one_asset_option import OneAssetOptionResults
+from pquantlib.math.randomnumbers.rng_traits import PseudoRandom
 from pquantlib.math.statistics.general_statistics import GeneralStatistics
-from pquantlib.methods.montecarlo.gaussian_sequence_generator import (
-    make_pseudo_random_rsg,
-)
 from pquantlib.methods.montecarlo.longstaff_schwartz_path_pricer import (
     LongstaffSchwartzPathPricer,
 )
@@ -60,14 +58,35 @@ from pquantlib.methods.montecarlo.path_pricer import PathPricer
 from pquantlib.option import OptionArguments
 from pquantlib.pricingengines.generic_engine import GenericEngine
 from pquantlib.pricingengines.mc_simulation import McSimulation
+from pquantlib.pricingengines.vanilla.mc_vanilla_engine import RngTraits
 from pquantlib.processes.stochastic_process_1d import StochasticProcess1D
 from pquantlib.time.time_grid import TimeGrid
 
-# C++ ``MCLongstaffSchwartzEngine`` uses this constant as the offset for
-# the calibration seed when the user passes a nonzero pricing seed (see
-# mclongstaffschwartzengine.hpp:148-149):
-#     seedCalibration = seed + 1768237423L
-_CALIBRATION_SEED_OFFSET = 1768237423
+# C++ ``MCLongstaffSchwartzEngine`` *documents* this offset for the calibration
+# seed when the user passes a nonzero pricing seed
+# (mclongstaffschwartzengine.hpp:148-149)::
+#
+#     seedCalibration_(seedCalibration != Null<Real>()
+#                          ? seedCalibration
+#                          : (seed == 0 ? 0 : seed + 1768237423L))
+#
+# but that fallback is DEAD CODE, and reproducing the documented intent instead
+# of the actual behaviour gets every American MC price wrong. ``seedCalibration``
+# is a ``BigNatural`` whose default is ``Null<Size>()``, and the guard compares
+# it against ``Null<Real>()`` -- a different specialisation. In v1.43
+# ``Null<T>`` yields ``numeric_limits<int>::max()`` for integral ``T`` and
+# ``numeric_limits<float>::max()`` for floating-point ``T``, so the default
+# ``2147483647`` never equals ``3.4028235e38`` and the ternary always takes its
+# first branch. The effective default calibration seed is therefore the literal
+# ``Null<Size>()`` value, *independent of the pricing seed*.
+#
+# Cross-validated: with the offset rule, MCAmericanEngine's ATM put on the probe
+# setup prices 6.140821805548784 against C++ 6.2236096554773 (1.3% out, 21 of
+# 2047 paths taking a different exercise decision); with ``_NULL_SIZE`` it
+# prices 6.223609655477297, i.e. 4.8e-16 relative.
+
+#: ``Null<Size>()`` as an integer -- ``std::numeric_limits<int>::max()``.
+_NULL_SIZE = 2147483647
 
 
 class MCLongstaffSchwartzEngine(
@@ -105,6 +124,8 @@ class MCLongstaffSchwartzEngine(
         brownian_bridge_calibration: bool | None = None,
         antithetic_variate_calibration: bool | None = None,
         seed_calibration: int | None = None,
+        rng_traits: RngTraits = PseudoRandom,
+        rng_traits_calibration: RngTraits | None = None,
     ) -> None:
         GenericEngine.__init__(  # pyright: ignore[reportUnknownMemberType]
             self, OptionArguments(), OneAssetOptionResults()
@@ -153,10 +174,17 @@ class MCLongstaffSchwartzEngine(
             if antithetic_variate_calibration is not None
             else antithetic_variate
         )
+        # C++ parity: mclongstaffschwartzengine.hpp:148-149 -- see the
+        # ``_NULL_SIZE`` note above. ``None`` here means "the caller left
+        # ``seedCalibration`` at its ``Null<Size>()`` default", which C++ then
+        # uses verbatim as the seed.
         self._seed_calibration: int = (
-            seed_calibration
-            if seed_calibration is not None
-            else (seed + _CALIBRATION_SEED_OFFSET if seed != 0 else 0)
+            seed_calibration if seed_calibration is not None else _NULL_SIZE
+        )
+        # C++ ``RNG`` and ``RNG_Calibration = RNG`` template parameters.
+        self._rng_traits: RngTraits = rng_traits
+        self._rng_traits_calibration: RngTraits = (
+            rng_traits_calibration if rng_traits_calibration is not None else rng_traits
         )
 
         # LSM pricer cache: built in ``calculate()``, consumed by ``path_pricer``.
@@ -177,7 +205,12 @@ class MCLongstaffSchwartzEngine(
 
         # 2) Drive the calibration MC.
         grid = self.time_grid()
-        cal_pg = self._build_path_generator(self._seed_calibration, grid)
+        cal_pg = self._build_path_generator(
+            self._seed_calibration,
+            grid,
+            traits=self._rng_traits_calibration,
+            brownian_bridge=self._brownian_bridge_calibration,
+        )
         cal_model = MonteCarloModel[Path](
             path_generator=cal_pg,
             path_pricer=self._cached_lsm_pricer,
@@ -200,11 +233,12 @@ class MCLongstaffSchwartzEngine(
 
         # 5) Fill results.
         assert self._mc_model is not None
-        self._results.value = self._mc_model.sample_accumulator().mean()
-        if self._mc_model.sample_accumulator().samples() > 1:
-            self._results.error_estimate = (
-                self._mc_model.sample_accumulator().error_estimate()
-            )
+        accumulator = self._mc_model.sample_accumulator()
+        self._results.value = accumulator.mean()
+        # C++ parity: ``if constexpr (RNG::allowsErrorEstimate)``
+        # (mclongstaffschwartzengine.hpp:206-209).
+        if self._rng_traits.allows_error_estimate:
+            self._results.error_estimate = accumulator.error_estimate()
 
     # --- McSimulation hooks ------------------------------------------------
 
@@ -295,20 +329,31 @@ class MCLongstaffSchwartzEngine(
 
     # --- helpers ------------------------------------------------------------
 
-    def _build_path_generator(self, seed: int, grid: TimeGrid) -> PathGenerator:
+    def _build_path_generator(
+        self,
+        seed: int,
+        grid: TimeGrid,
+        *,
+        traits: RngTraits | None = None,
+        brownian_bridge: bool | None = None,
+    ) -> PathGenerator:
         """Build a 1-D PathGenerator over ``grid`` with the given seed.
 
-        # C++ parity: same wiring as ``MCVanillaEngine::pathGenerator``:
-        #   factors * (grid.size() - 1) dim Gaussian sequence over PseudoRandom.
+        # C++ parity: ``MCLongstaffSchwartzEngine::pathGenerator``
+        # (mclongstaffschwartzengine.hpp:247-256) for the pricing pass and
+        # the inline generator construction in ``calculate()``
+        # (mclongstaffschwartzengine.hpp:182-190) for the calibration pass.
+        # Dimension is ``factors * (grid.size() - 1)`` in both.
+
+        The seed is passed through untouched: seed 0 reaches ``SeedGenerator``
+        via the Mersenne Twister and is clock-derived, exactly as in C++.
         """
-        dim_factors = self._process.factors()
-        total_dim = dim_factors * (len(grid) - 1)
-        # Mirror Phase 5 L5-C divergence: MT rejects seed=0, so use 1 as
-        # a deterministic fallback.
-        effective_seed = seed if seed != 0 else 1
-        gsg = make_pseudo_random_rsg(total_dim, effective_seed)
+        rng = traits if traits is not None else self._rng_traits
+        bb = brownian_bridge if brownian_bridge is not None else self._brownian_bridge
+        total_dim = self._process.factors() * (len(grid) - 1)
+        gsg = rng.make_sequence_generator(total_dim, seed)
         return PathGenerator.with_time_grid(
-            self._process, grid, gsg, brownian_bridge=self._brownian_bridge
+            self._process, grid, gsg, brownian_bridge=bb
         )
 
 
