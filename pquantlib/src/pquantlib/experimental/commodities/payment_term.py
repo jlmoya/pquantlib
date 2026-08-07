@@ -25,26 +25,25 @@ class EventType(IntEnum):
     PRICING_DATE = 1
 
 
-@dataclass
-class _Data:
-    """Flyweight payload (parity with C++ ``PaymentTerm::Data``)."""
-
-    name: str
-    event_type: EventType
-    offset_days: int
-    calendar: Calendar
-
-
-# Module-level flyweight registry (parity with C++ static paymentTerms_ map,
-# keyed on name).
-_payment_terms: dict[str, _Data] = {}
-
-
 class PaymentTerm:
     """Payment-term flyweight (name + anchor event + offset days + calendar)."""
 
     # Nested enum alias for the C++ idiom ``PaymentTerm.EventType.TRADE_DATE``.
     EventType = EventType
+
+    @dataclass
+    class Data:
+        """Flyweight payload.
+
+        # C++ parity: ``struct PaymentTerm::Data`` in
+        # paymentterm.hpp:54 (declaration) + :57-64 (definition), with the
+        # inline ctor at :82-87.
+        """
+
+        name: str
+        event_type: EventType
+        offset_days: int
+        calendar: Calendar
 
     def __init__(
         self,
@@ -54,7 +53,7 @@ class PaymentTerm:
         calendar: Calendar | None = None,
     ) -> None:
         if name is None:
-            self._data: _Data | None = None
+            self._data: PaymentTerm.Data | None = None
             return
         assert event_type is not None
         assert offset_days is not None
@@ -63,7 +62,7 @@ class PaymentTerm:
         if existing is not None:
             self._data = existing
         else:
-            data = _Data(name, event_type, offset_days, calendar)
+            data = PaymentTerm.Data(name, event_type, offset_days, calendar)
             _payment_terms[name] = data
             self._data = data
 
@@ -123,3 +122,10 @@ class PaymentTerm:
 
     def __repr__(self) -> str:
         return f"PaymentTerm({self.__str__()!r})"
+
+
+# Module-level flyweight registry (parity with C++ static paymentTerms_ map,
+# keyed on name). Constructing a second PaymentTerm with an already-registered
+# name silently discards the new event type / offset / calendar
+# (paymentterm.cpp:26-41; pinned by ``pt_again_*``).
+_payment_terms: dict[str, PaymentTerm.Data] = {}

@@ -27,26 +27,35 @@ class Type(IntEnum):
     DERIVED = 1  # derived from a chain of other conversions
 
 
-@dataclass
-class _Data:
-    """PIMPL payload (parity with C++ ``UnitOfMeasureConversion::Data``)."""
-
-    commodity_type: CommodityType
-    source: UnitOfMeasure
-    target: UnitOfMeasure
-    conversion_factor: float
-    type: Type
-    code: str
-    # For Derived conversions: the (r1, r2) pair chained together.
-    chain_first: UnitOfMeasureConversion | None = None
-    chain_second: UnitOfMeasureConversion | None = None
-
-
 class UnitOfMeasureConversion:
     """A conversion factor between two units of measure for a commodity type."""
 
     # Nested enum alias for the C++ idiom ``UnitOfMeasureConversion.Type.DIRECT``.
     Type = Type
+
+    @dataclass
+    class Data:
+        """PIMPL payload.
+
+        # C++ parity: ``struct UnitOfMeasureConversion::Data`` in
+        # unitofmeasureconversion.hpp:82 (declaration) + :85-103 (definition).
+
+        Unlike the three commodity flyweights, this one has no registry: it is
+        a plain shared payload, so two ``UnitOfMeasureConversion`` handles copied
+        from one another see the same state (C++ ``ext::shared_ptr<Data> data_``;
+        Python objects are reference types, so a copied reference does the same).
+        """
+
+        commodity_type: CommodityType
+        source: UnitOfMeasure
+        target: UnitOfMeasure
+        conversion_factor: float
+        type: Type
+        code: str
+        # For Derived conversions: the (r1, r2) pair chained together
+        # (C++ ``conversionFactorChain``).
+        chain_first: UnitOfMeasureConversion | None = None
+        chain_second: UnitOfMeasureConversion | None = None
 
     def __init__(
         self,
@@ -57,14 +66,14 @@ class UnitOfMeasureConversion:
     ) -> None:
         if commodity_type is None:
             # default ctor -> empty placeholder
-            self._data: _Data | None = None
+            self._data: UnitOfMeasureConversion.Data | None = None
             return
         assert source is not None
         assert target is not None
         assert conversion_factor is not None
         # code = commodityType.name + source.code + target.code  (parity)
         code = commodity_type.name + source.code + target.code
-        self._data = _Data(
+        self._data = UnitOfMeasureConversion.Data(
             commodity_type,
             source,
             target,
@@ -149,8 +158,16 @@ class UnitOfMeasureConversion:
         assert r1._data is not None
         assert r2._data is not None
         result = UnitOfMeasureConversion()
-        result._data = _Data(
-            commodity_type=r1._data.commodity_type,
+        # # C++ parity note: ``Data(r1, r2)``
+        # (unitofmeasureconversion.cpp:53-58) sets ONLY the chain pair — it
+        # leaves ``commodityType`` default-constructed (i.e. EMPTY) and ``code``
+        # the empty string, and ``chain`` (cpp:93-121) never fills either in.
+        # So a Derived conversion carries no commodity type and no code. That
+        # looks like an oversight, but it is v1.43 behaviour and is reproduced
+        # verbatim (pinned by ``uomc_chain_code`` and
+        # ``uomc_chain_commodity_type_empty``).
+        result._data = UnitOfMeasureConversion.Data(
+            commodity_type=CommodityType(),
             source=UnitOfMeasure(),
             target=UnitOfMeasure(),
             conversion_factor=0.0,

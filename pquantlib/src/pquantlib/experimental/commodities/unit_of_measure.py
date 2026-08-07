@@ -7,9 +7,15 @@ The C++ class uses a ``shared_ptr<Data>`` PIMPL plus a static
 ``unitsOfMeasure_`` map keyed on ``name`` to give flyweight semantics:
 two ``UnitOfMeasure`` objects built with the same ``name`` share the same
 ``Data`` instance. PQuantLib reproduces this with a module-level
-``_units_of_measure`` registry dict and a small ``_Data`` dataclass; a
-``UnitOfMeasure`` holds a reference to its ``_Data`` (or ``None`` for the
-default-constructed "empty" instance).
+``_units_of_measure`` registry dict and the nested
+:class:`UnitOfMeasure.Data` dataclass; a ``UnitOfMeasure`` holds a
+reference to its ``Data`` (or ``None`` for the default-constructed
+"empty" instance).
+
+Because the flyweight is keyed on ``name`` alone, constructing a second
+``UnitOfMeasure`` with an already-registered name **silently discards**
+the new ``code`` and ``unit_type`` — reproduced verbatim from
+unitofmeasure.cpp:37-49 and pinned by ``uom_bbl_again_*``.
 
 Equality mirrors C++ ``operator==``: code-based (``c1.code() == c2.code()``).
 """
@@ -21,6 +27,7 @@ from enum import IntEnum
 
 from pquantlib import qassert
 from pquantlib.math.rounding import Rounding
+from pquantlib.math.rounding import Type as RoundingType
 
 
 class UnitType(IntEnum):
@@ -32,23 +39,15 @@ class UnitType(IntEnum):
     QUANTITY = 3
 
 
-@dataclass
-class _Data:
-    """Flyweight payload shared by all UnitOfMeasure instances with the same name.
+def _default_uom_rounding() -> Rounding:
+    """The default rounding a ``UnitOfMeasure.Data`` carries.
 
-    Mirrors C++ ``UnitOfMeasure::Data``.
+    # C++ parity: ``unitofmeasure.hpp:86`` defaults the ``Data`` ctor's
+    # rounding argument to ``Rounding(0)`` — precision 0, type *Closest*,
+    # digit 5 — NOT the no-op ``Rounding()``. (Pinned by
+    # ``uom_bbl_rounding_*`` in ``v143/experimental/misc``.)
     """
-
-    name: str
-    code: str
-    unit_type: UnitType
-    triangulation_unit_of_measure: UnitOfMeasure
-    rounding: Rounding = field(default_factory=Rounding)
-
-
-# Module-level flyweight registry (parity with C++ static unitsOfMeasure_ map,
-# keyed on name).
-_units_of_measure: dict[str, _Data] = {}
+    return Rounding(0, RoundingType.Closest, 5)
 
 
 class UnitOfMeasure:
@@ -63,6 +62,20 @@ class UnitOfMeasure:
     # class attribute so ``UnitOfMeasure.Type.MASS`` reads like the C++ idiom.
     Type = UnitType
 
+    @dataclass
+    class Data:
+        """Flyweight payload shared by every UnitOfMeasure with the same name.
+
+        # C++ parity: ``struct UnitOfMeasure::Data`` in
+        # unitofmeasure.hpp:69-70 (declaration) + :76-87 (definition).
+        """
+
+        name: str
+        code: str
+        unit_type: UnitType
+        triangulation_unit_of_measure: UnitOfMeasure
+        rounding: Rounding = field(default_factory=_default_uom_rounding)
+
     def __init__(
         self,
         name: str | None = None,
@@ -71,7 +84,7 @@ class UnitOfMeasure:
     ) -> None:
         if name is None:
             # default ctor -> empty placeholder
-            self._data: _Data | None = None
+            self._data: UnitOfMeasure.Data | None = None
             return
         qassert.require(code is not None, "UnitOfMeasure: code required")
         qassert.require(unit_type is not None, "UnitOfMeasure: unit_type required")
@@ -83,7 +96,7 @@ class UnitOfMeasure:
         else:
             # Default triangulation is the empty UnitOfMeasure (parity with
             # C++ Data's default-constructed triangulationUnitOfMeasure).
-            data = _Data(name, code, unit_type, UnitOfMeasure())
+            data = UnitOfMeasure.Data(name, code, unit_type, UnitOfMeasure())
             _units_of_measure[name] = data
             self._data = data
 
@@ -153,7 +166,7 @@ class UnitOfMeasure:
         unit_type: UnitType,
         triangulation: UnitOfMeasure | None = None,
     ) -> None:
-        """Install (and register) this instance's flyweight ``_Data``.
+        """Install (and register) this instance's flyweight :class:`Data`.
 
         Used by the petroleum-UOM concretes. Mirrors the C++ subclass ctors
         that install a static ``Data`` carrying a triangulation unit (e.g.
@@ -164,12 +177,17 @@ class UnitOfMeasure:
             self._data = existing
             return
         tri = triangulation if triangulation is not None else UnitOfMeasure()
-        data = _Data(name, code, unit_type, tri)
+        data = UnitOfMeasure.Data(name, code, unit_type, tri)
         _units_of_measure[name] = data
         self._data = data
 
     def __repr__(self) -> str:
         return f"UnitOfMeasure({self.__str__()!r})"
+
+
+# Module-level flyweight registry (parity with C++ static unitsOfMeasure_ map,
+# keyed on name).
+_units_of_measure: dict[str, UnitOfMeasure.Data] = {}
 
 
 class LotUnitOfMeasure(UnitOfMeasure):
