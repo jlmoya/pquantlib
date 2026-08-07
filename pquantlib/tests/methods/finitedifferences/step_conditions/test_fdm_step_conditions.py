@@ -2,7 +2,12 @@
 
 # C++ parity: ql/methods/finitedifferences/stepconditions/fdmstepconditioncomposite.{hpp,cpp},
 # ql/methods/finitedifferences/stepconditions/fdmamericanstepcondition.{hpp,cpp}
-# @ v1.42.1.
+# @ v1.43.
+
+``FdmAmericanStepCondition`` takes an ``FdmInnerValueCalculator``, as C++
+does; on a plain log-spot grid that is ``FdmLogInnerValue(payoff, mesher, 0)``,
+whose ``inner_value`` is exactly the ``payoff(exp(location))`` these tests
+already asserted, so every expected value below is unchanged.
 """
 
 from __future__ import annotations
@@ -23,6 +28,9 @@ from pquantlib.methods.finitedifferences.step_conditions.fdm_american_step_condi
 from pquantlib.methods.finitedifferences.step_conditions.fdm_step_condition_composite import (
     FdmStepConditionComposite,
 )
+from pquantlib.methods.finitedifferences.utilities.fdm_inner_value_calculator import (
+    FdmLogInnerValue,
+)
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.testing.tolerance import tight
 
@@ -41,7 +49,7 @@ def test_american_put_floor_replaces_when_payoff_higher() -> None:
     """
     mesh = _build_log_spot_mesh()
     payoff = PlainVanillaPayoff(OptionType.Put, 100.0)
-    cond = FdmAmericanStepCondition(mesh, payoff)
+    cond = FdmAmericanStepCondition(mesh, FdmLogInnerValue(payoff, mesh, 0))
     # Initial FD values: all zero (below payoff at low-S nodes).
     n = mesh.layout().size()
     a = np.zeros(n, dtype=np.float64)
@@ -58,7 +66,7 @@ def test_american_no_floor_when_a_already_higher() -> None:
     """If a[i] already exceeds the payoff, apply_to leaves it alone."""
     mesh = _build_log_spot_mesh()
     payoff = PlainVanillaPayoff(OptionType.Put, 100.0)
-    cond = FdmAmericanStepCondition(mesh, payoff)
+    cond = FdmAmericanStepCondition(mesh, FdmLogInnerValue(payoff, mesh, 0))
     n = mesh.layout().size()
     a = np.full(n, 200.0, dtype=np.float64)  # uniformly above payoff
     cond.apply_to(a, 0.5)
@@ -71,7 +79,7 @@ def test_american_respects_exercise_start() -> None:
     """If t < exercise_start, apply_to is a no-op."""
     mesh = _build_log_spot_mesh()
     payoff = PlainVanillaPayoff(OptionType.Put, 100.0)
-    cond = FdmAmericanStepCondition(mesh, payoff, exercise_start=0.5)
+    cond = FdmAmericanStepCondition(mesh, FdmLogInnerValue(payoff, mesh, 0), exercise_start=0.5)
     n = mesh.layout().size()
     a = np.zeros(n, dtype=np.float64)
     cond.apply_to(a, 0.1)  # before exercise start
@@ -84,7 +92,7 @@ def test_inconsistent_array_dimensions_raises() -> None:
     """apply_to with a wrong-length array must raise."""
     mesh = _build_log_spot_mesh()
     payoff = PlainVanillaPayoff(OptionType.Put, 100.0)
-    cond = FdmAmericanStepCondition(mesh, payoff)
+    cond = FdmAmericanStepCondition(mesh, FdmLogInnerValue(payoff, mesh, 0))
     bad = np.zeros(5, dtype=np.float64)
     with pytest.raises(LibraryException):
         cond.apply_to(bad, 0.5)
@@ -109,7 +117,7 @@ def test_composite_applies_all_conditions() -> None:
     """All conditions in the composite are applied in sequence."""
     mesh = _build_log_spot_mesh()
     put_payoff = PlainVanillaPayoff(OptionType.Put, 100.0)
-    cond1 = FdmAmericanStepCondition(mesh, put_payoff)
+    cond1 = FdmAmericanStepCondition(mesh, FdmLogInnerValue(put_payoff, mesh, 0))
     composite = FdmStepConditionComposite([], [cond1])
     n = mesh.layout().size()
     a = np.zeros(n, dtype=np.float64)

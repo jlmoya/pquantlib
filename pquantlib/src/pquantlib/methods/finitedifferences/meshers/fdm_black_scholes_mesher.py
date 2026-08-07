@@ -16,21 +16,28 @@ helper mesh to a ``Concentrating1dMesher`` anchored at ``log(c_point[0])``
 — but only when that log lies inside ``[x_min, x_max]``, exactly as the
 C++ guard requires.
 
-**Absent C++ parameters.** C++ also takes a ``DividendSchedule`` and an
-``FdmQuantoHelper``, which feed the forward walk and swap the dividend
-curve for a ``QuantoTermStructure`` respectively. pquantlib has neither
-type yet, so neither parameter exists on this signature — a caller cannot
-pass one and have it ignored.
+**Dividends and quanto.** C++ also takes a ``DividendSchedule`` and an
+``FdmQuantoHelper``. The schedule adds one ``(time, amount)`` point per
+dividend inside ``[0, maturity]`` to the forward walk — so it moves both
+the ``mi``/``ma`` envelope *and* the grid bounds — and the quanto helper
+swaps ``process->dividendYield()`` for a ``QuantoTermStructure``. Both are
+ported; an earlier revision of this module omitted them and every caller
+that passes a dividend schedule (``FdBlackScholesVanillaEngine``,
+``FdBlackScholesBarrierEngine``, ``FdBlackScholesRebateEngine``,
+``FdCIRVanillaEngine``, ``FdHestonVanillaEngine``) silently built a
+different mesh than C++.
 """
 
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import final
 
 import numpy as np
 
 from pquantlib import qassert
+from pquantlib.cashflows.dividend import Dividend
 from pquantlib.math.distributions.inverse_cumulative_normal import (
     InverseCumulativeNormal,
 )
@@ -41,9 +48,12 @@ from pquantlib.methods.finitedifferences.meshers.fdm_1d_mesher import Fdm1dMeshe
 from pquantlib.methods.finitedifferences.meshers.uniform_1d_mesher import (
     Uniform1dMesher,
 )
+from pquantlib.methods.finitedifferences.utilities.fdm_quanto_helper import FdmQuantoHelper
 from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
 )
+from pquantlib.termstructures.yield_.quanto_term_structure import QuantoTermStructure
+from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 
 
 @final
@@ -64,24 +74,49 @@ class FdmBlackScholesMesher(Fdm1dMesher):
         eps: float = 0.0001,
         scale_factor: float = 1.5,
         c_point: tuple[float | None, float | None] | None = None,
+        dividend_schedule: Sequence[Dividend] = (),
+        quanto_helper: FdmQuantoHelper | None = None,
         spot_adjustment: float = 0.0,
     ) -> None:
         super().__init__(size)
         spot = process.x0()
         qassert.require(spot > 0.0, "negative or null underlying given")
 
+        # C++ parity: the dividend points come first, then the uniform ones,
+        # then the whole vector is sorted.
+        intermediate_steps: list[tuple[float, float]] = []
+        for div in dividend_schedule:
+            t = process.time(div.date())
+            if t <= maturity and t >= 0.0:
+                intermediate_steps.append((process.time(div.date()), div.amount()))
+
         # Intermediate-step forward evolution. C++:
         #   intermediateTimeSteps = max(2, int(24 * maturity)).
         intermediate_time_steps: int = max(2, int(24.0 * maturity))
-        # Build intermediate time points (linear on (0, T]).
-        # Dividends are not supported in the L5-D scope.
-        intermediate_steps: list[tuple[float, float]] = [
-            ((i + 1) * (maturity / intermediate_time_steps), 0.0) for i in range(intermediate_time_steps)
-        ]
+        intermediate_steps.extend(
+            ((i + 1) * (maturity / intermediate_time_steps), 0.0)
+            for i in range(intermediate_time_steps)
+        )
         intermediate_steps.sort()
 
         rts = process.risk_free_rate()
-        qts = process.dividend_yield()
+        # C++ parity: with a quanto helper the dividend curve is replaced by a
+        # ``QuantoTermStructure`` built from the process' own curves plus the
+        # helper's foreign curve, FX vol, ATM level and correlation.
+        qts: YieldTermStructure
+        if quanto_helper is not None:
+            qts = QuantoTermStructure(
+                process.dividend_yield(),
+                process.risk_free_rate(),
+                quanto_helper.f_ts,
+                process.black_volatility(),
+                strike,
+                quanto_helper.fx_vol_ts,
+                quanto_helper.exch_rate_atm_level,
+                quanto_helper.equity_fx_correlation,
+            )
+        else:
+            qts = process.dividend_yield()
 
         last_div_time = 0.0
         fwd = spot + spot_adjustment
