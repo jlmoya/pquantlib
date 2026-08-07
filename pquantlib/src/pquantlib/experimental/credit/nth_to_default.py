@@ -10,7 +10,7 @@ The pricing follows the Hull-White 2004 framework (or any equivalent
 default-loss model wired via ``BasketProtocol.prob_at_least_n_events``).
 The instrument is a single product instance bound to a basket plus a
 premium schedule; pricing is delegated to a registered engine (see
-``IntegralNTDEngine`` for the canonical implementation).
+``IntegralNtdEngine`` for the canonical implementation).
 """
 
 from __future__ import annotations

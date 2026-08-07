@@ -1,4 +1,4 @@
-"""Cross-validate BlackCDSOptionEngine against the C++ reference.
+"""Cross-validate BlackCdsOptionEngine against the C++ reference.
 
 Probe source: migration-harness/cpp/probes/cluster_w3d/probe.cpp
 Reference:    migration-harness/references/cluster/w3d.json
@@ -13,14 +13,14 @@ import pytest
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.exceptions import LibraryException
 from pquantlib.exercise import EuropeanExercise
-from pquantlib.instruments.cds_option import CDSOption
+from pquantlib.instruments.cds_option import CdsOption
 from pquantlib.instruments.credit_default_swap import (
     CreditDefaultSwap,
     ProtectionSide,
 )
 from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.credit.black_cds_option_engine import (
-    BlackCDSOptionEngine,
+    BlackCdsOptionEngine,
 )
 from pquantlib.pricingengines.credit.midpoint_cds_engine import MidPointCdsEngine
 from pquantlib.quotes.simple_quote import SimpleQuote
@@ -97,13 +97,13 @@ def test_black_cds_option_knockout_npv_matches_cpp(cpp_ref: dict[str, Any]) -> N
     today = Date.from_ymd(15, Month.January, 2024)
     cal = TARGET()
     exercise_date = cal.advance(today, 1, TimeUnit.Years)
-    opt = CDSOption(
+    opt = CdsOption(
         underlying=cds,
         exercise=EuropeanExercise(exercise_date),
         knocks_out=True,
     )
     vol = SimpleQuote(0.30)
-    opt.set_pricing_engine(BlackCDSOptionEngine(dts, 0.4, yts, vol))
+    opt.set_pricing_engine(BlackCdsOptionEngine(dts, 0.4, yts, vol))
 
     ref = cpp_ref["cds_option"]
     tolerance.loose(opt.npv(), ref["npv_knockout"])
@@ -119,13 +119,13 @@ def test_black_cds_option_non_knockout_npv_matches_cpp(cpp_ref: dict[str, Any]) 
     today = Date.from_ymd(15, Month.January, 2024)
     cal = TARGET()
     exercise_date = cal.advance(today, 1, TimeUnit.Years)
-    opt = CDSOption(
+    opt = CdsOption(
         underlying=cds,
         exercise=EuropeanExercise(exercise_date),
         knocks_out=False,
     )
     vol = SimpleQuote(0.30)
-    opt.set_pricing_engine(BlackCDSOptionEngine(dts, 0.4, yts, vol))
+    opt.set_pricing_engine(BlackCdsOptionEngine(dts, 0.4, yts, vol))
 
     ref = cpp_ref["cds_option"]
     tolerance.loose(opt.npv(), ref["npv_non_knockout"])
@@ -163,7 +163,7 @@ def test_cds_option_receiver_must_knock_out() -> None:
     )
 
     with pytest.raises(LibraryException):
-        CDSOption(
+        CdsOption(
             underlying=cds_seller,
             exercise=EuropeanExercise(exercise),
             knocks_out=False,
@@ -202,7 +202,7 @@ def test_cds_option_upfront_underlying_rejected() -> None:
     )
 
     with pytest.raises(LibraryException):
-        CDSOption(
+        CdsOption(
             underlying=cds_upf,
             exercise=EuropeanExercise(exercise),
         )
