@@ -910,3 +910,37 @@ endforeach()
 # have to be pinned in isolation because they are implementation-defined.
 add_executable(v143_experimental_pso_probe v143_experimental_pso/probe.cpp)
 target_link_libraries(v143_experimental_pso_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# Remaining experimental areas. One probe per cluster; each emits
+# references/v143/experimental/<area>.json.
+#   latent      LatentModel's FactorSampler / IntegrationBase / IntegrationFactory,
+#               GaussianQuadMultidimIntegrator::VectorIntegrator, Ziggurat traits
+#   volatility  Svi / NoArbSabr interpolation + their *Specs, VannaVolga,
+#               SwaptionVolCubeNoArbSabrModel
+#   basismodels TenorOptionletSmileSection / TenorSwaptionSmileSection
+#   coupons     the CMS-spread coupon/leg family + StrippedCappedFlooredCouponLeg
+#   barrier     discretized/MC/quanto/SuoWang double-barrier + perturbative barrier
+#   mcengines   the mcbasket + exoticoptions MC path engines and their Make* builders
+#   creditlm    the credit latent-model family (Default/ConstantLoss/SpotRecovery/Random*)
+#   creditloss  saddlepoint, homogeneous/inhomogeneous pools, base correlation, LossDist
+#   creditts    affine hazard-rate curves, one-factor survival, student copulas, keys
+#   crediteng   CDS-option and NTD engines
+#   misc        CLV model helpers, generalized Hull-White InterpolationParameter,
+#               Polynomial2DSpline, commodity Data, the ext-OU FD engines
+foreach(area
+        latent
+        volatility
+        basismodels
+        coupons
+        barrier
+        mcengines
+        creditlm
+        creditloss
+        creditts
+        crediteng
+        misc)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/v143_experimental_${area}/probe.cpp)
+        add_executable(v143_experimental_${area}_probe v143_experimental_${area}/probe.cpp)
+        target_link_libraries(v143_experimental_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
+    endif()
+endforeach()
