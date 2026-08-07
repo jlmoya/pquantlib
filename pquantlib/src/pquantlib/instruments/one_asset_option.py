@@ -122,6 +122,41 @@ class OneAssetOption(Option, ABC):
         assert self._itm_cash_probability is not None
         return self._itm_cash_probability
 
+    # The four MoreGreeks accessors below were fetched into private fields but
+    # never exposed. C++ v1.43 declares all eleven greeks on OneAssetOption
+    # (oneassetoption.hpp:45-55); several engines — AnalyticEuropeanEngine,
+    # BaroneAdesiWhaleyApproximationEngine, JuQuadraticApproximationEngine,
+    # BjerksundStenslandApproximationEngine — fill them, and without the
+    # accessor there was no way to read the result back off the instrument.
+
+    def delta_forward(self) -> float:
+        """# C++ parity: ``OneAssetOption::deltaForward`` (oneassetoption.cpp:43)."""
+        self.calculate()
+        qassert.require(self._delta_forward is not None, "forward delta not provided")
+        assert self._delta_forward is not None
+        return self._delta_forward
+
+    def elasticity(self) -> float:
+        """# C++ parity: ``OneAssetOption::elasticity`` (oneassetoption.cpp:50)."""
+        self.calculate()
+        qassert.require(self._elasticity is not None, "elasticity not provided")
+        assert self._elasticity is not None
+        return self._elasticity
+
+    def theta_per_day(self) -> float:
+        """# C++ parity: ``OneAssetOption::thetaPerDay`` (oneassetoption.cpp:68)."""
+        self.calculate()
+        qassert.require(self._theta_per_day is not None, "theta per-day not provided")
+        assert self._theta_per_day is not None
+        return self._theta_per_day
+
+    def strike_sensitivity(self) -> float:
+        """# C++ parity: ``OneAssetOption::strikeSensitivity`` (oneassetoption.cpp:92)."""
+        self.calculate()
+        qassert.require(self._strike_sensitivity is not None, "strike sensitivity not provided")
+        assert self._strike_sensitivity is not None
+        return self._strike_sensitivity
+
     # --- result fetch -----------------------------------------------------
 
     def fetch_results(self, results: PricingEngineResults) -> None:
