@@ -19,7 +19,6 @@ from __future__ import annotations
 import math
 
 from pquantlib import qassert
-from pquantlib.exceptions import LibraryException
 from pquantlib.exercise import Exercise
 from pquantlib.instruments.asian_option import (
     AverageType,
@@ -116,8 +115,13 @@ class AnalyticDiscreteGeometricAveragePriceAsianEngine(
 
         time_sum = sum(fixing_times)
 
+        # C++ analytic_discr_geom_av_price.cpp:92-94 calls the two-argument
+        # blackVol(date, strike) overload, whose `extrapolate` defaults to
+        # FALSE. Passing True here made the engine silently price off an
+        # extrapolated surface where C++ raises "date is past max curve date" —
+        # it returned a plausible number instead of refusing.
         vola = process.black_volatility().black_vol(
-            args.exercise.last_date(), payoff.strike(), extrapolate=True
+            args.exercise.last_date(), payoff.strike()
         )
 
         # temp = sum_{i = pastFixings+1..number_of_fixings-1} t[i] * (N - i)
@@ -219,27 +223,28 @@ class AnalyticDiscreteGeometricAveragePriceAsianEngine(
         #     Volatility v = p->localVolatility()->localVol(0.0, u);
         #     return r*value - (r-q)*u*delta - 0.5*v*v*u*u*gamma;
         #   }
-        try:
-            u = s
-            r = process.risk_free_rate().zero_rate(
-                0.0, Compounding.Continuous, Frequency.NoFrequency
-            ).rate()
-            q = process.dividend_yield().zero_rate(
-                0.0, Compounding.Continuous, Frequency.NoFrequency
-            ).rate()
-            v = process.local_volatility().local_vol_at_time(
-                0.0, u, extrapolate=True
-            )
-            assert results.delta is not None
-            assert results.gamma is not None
-            assert results.value is not None
-            results.theta = (
-                r * results.value
-                - (r - q) * u * results.delta
-                - 0.5 * v * v * u * u * results.gamma
-            )
-        except LibraryException:
-            results.theta = None
+        # C++ has no try/catch here and calls localVol(0.0, u) with
+        # `extrapolate` defaulting to FALSE. Both divergences pointed the same
+        # way: the port swallowed a failure C++ propagates, and where it did
+        # not fail it answered from an extrapolated surface. A theta of None
+        # after a silently-caught error is indistinguishable from a theta the
+        # engine legitimately does not provide.
+        u = s
+        r = process.risk_free_rate().zero_rate(
+            0.0, Compounding.Continuous, Frequency.NoFrequency
+        ).rate()
+        q = process.dividend_yield().zero_rate(
+            0.0, Compounding.Continuous, Frequency.NoFrequency
+        ).rate()
+        v = process.local_volatility().local_vol_at_time(0.0, u)
+        assert results.delta is not None
+        assert results.gamma is not None
+        assert results.value is not None
+        results.theta = (
+            r * results.value
+            - (r - q) * u * results.delta
+            - 0.5 * v * v * u * u * results.gamma
+        )
 
 
 __all__ = ["AnalyticDiscreteGeometricAveragePriceAsianEngine"]
