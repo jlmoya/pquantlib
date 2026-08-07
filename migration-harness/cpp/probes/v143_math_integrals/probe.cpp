@@ -327,6 +327,29 @@ int main() {
             emitQuadrature("laguerre_16_s1_5", "GaussLaguerreIntegration", q, all, true);
         }
         {
+            // High order on purpose. GaussianQuadrature's weight is
+            // mu_0 * v0_i^2 / w(x_i), and for Laguerre w(x) = x^s e^{-x}, so
+            // the division multiplies by e^{x_i}. At order 64 the largest node
+            // is ~2.3e2 and at order 144 it is ~5.5e2, which means the first
+            // eigenvector component there is ~e^{-x/2} — 1e-50 and 1e-119
+            // below the unit norm respectively. A norm-wise backward-stable
+            // eigensolver (LAPACK) returns noise or an exact zero in that
+            // position; squaring it and multiplying by e^{x} yields weights
+            // that are 0 or ~1e126 where C++ has O(10). Only an
+            // implementation that keeps *relative* accuracy in tiny
+            // components — C++'s TqrEigenDecomposition, which multiplies
+            // Givens rotations into the first row and never forms a
+            // cancelling difference — reproduces these.
+            //
+            // Orders 8 and 16 above cannot detect that: their largest nodes
+            // are ~22 and ~51, so e^{-x/2} is still 1e-5 / 1e-12 and survives
+            // in double. 64 and 144 are the orders the Heston engines
+            // actually run (Integration::gaussLaguerre defaults to 128, the
+            // engine to 144, HestonBlackVolSurface to 160).
+            GaussLaguerreIntegration q(64);
+            emitQuadrature("laguerre_64", "GaussLaguerreIntegration", q, all, true);
+        }
+        {
             GaussHermiteIntegration q(8);
             emitQuadrature("hermite_8", "GaussHermiteIntegration", q, all, true);
         }

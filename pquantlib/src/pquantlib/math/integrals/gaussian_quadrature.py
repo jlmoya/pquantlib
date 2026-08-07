@@ -15,22 +15,38 @@ Golub-Welsch algorithm:
 (G.H. Golub & J.H. Welsch, "Calculation of Gauss quadrature rules",
 Math. Comput. 23 (1969), 221-230.)
 
-Eigen-decomposition delegation
-------------------------------
+Why the eigen-decomposition is NOT delegated to LAPACK
+-----------------------------------------------------
 
-The C++ class runs its own ``TqrEigenDecomposition`` (implicit-shift QL with
-the "over-relaxation" Wilkinson shift) on the Jacobi matrix; the Python port
-delegates the symmetric-tridiagonal eigenproblem to
-``scipy.linalg.eigh_tridiagonal``. That is a genuine linear-algebra
-delegation, not an algorithm substitution: both are backward-stable solvers
-for the *same* matrix, and the node/weight arrays are cross-validated
-element-by-element against the C++ probe.
+C++ runs its own ``TqrEigenDecomposition`` (implicit-shift QL with the
+"over-relaxation" Wilkinson shift) in ``OnlyFirstRowEigenVector`` mode, and
+this port does the same. An earlier revision delegated the symmetric-
+tridiagonal eigenproblem to ``scipy.linalg.eigh_tridiagonal`` on the reasoning
+that both are backward-stable solvers for the same matrix. **They are, and
+that is not sufficient here.**
 
-What is **not** free is the ordering. ``TqrEigenDecomposition`` sorts
-``(eigenvalue, eigenvector)`` pairs with ``std::greater<>`` — nodes come out
-**descending** — whereas LAPACK returns them ascending. ``x()``/``weights()``
-are public API and ``operator()`` accumulates from the last index down, so the
-port reverses LAPACK's output to restore the C++ order.
+A norm-wise backward-stable eigensolver guarantees each eigenvector to a small
+error *relative to the vector's norm*. This algorithm needs something much
+stronger: the weights are ``mu_0 * v0_i**2 / w(x_i)``, and for Gauss-Laguerre
+``w(x) = x**s * exp(-x)``, so dividing by ``w(x_i)`` multiplies by ``exp(x_i)``.
+At order 144 the largest node is ``x ~ 547``, and the first eigenvector
+component there is ``v0 ~ 5e-119`` — 119 decades below the unit norm. LAPACK
+returns noise (often an exact zero) in that position; squaring the noise and
+multiplying by ``exp(547) ~ 1e237`` yields weights that are either 0 or ~1e126
+where C++ has ``O(10)``. The quadrature then returns values like 1e72 for a
+Heston call worth ~12.
+
+The QL iteration keeps those components because it builds the first row by
+*multiplying* Givens rotations into it and never forms a difference that can
+cancel, so tiny entries retain full relative accuracy. That property, not
+backward stability, is what this formula depends on. The failure is invisible
+below order ~20 (``exp(-x_max/2)`` is still above 1e-16 there), which is why
+an 8- and a 16-point test can both pass over a broken implementation.
+
+Ordering follows from using the C++ algorithm: ``TqrEigenDecomposition`` sorts
+``(eigenvalue, eigenvector)`` pairs with ``std::greater<>``, so nodes come out
+descending, which is the order ``x()`` / ``weights()`` expose and the order
+``__call__`` accumulates in.
 """
 
 from __future__ import annotations
@@ -39,9 +55,6 @@ import math
 from collections.abc import Callable, Sequence
 
 import numpy as np
-from scipy.linalg import (  # pyright: ignore[reportMissingTypeStubs]
-    eigh_tridiagonal,  # pyright: ignore[reportUnknownVariableType]
-)
 
 from pquantlib.math.array import Array
 from pquantlib.math.integrals.gaussian_orthogonal_polynomial import (
@@ -52,6 +65,11 @@ from pquantlib.math.integrals.gaussian_orthogonal_polynomial import (
     GaussLaguerrePolynomial,
 )
 from pquantlib.math.integrals.integrator import Integrator, RealFunction
+from pquantlib.math.matrixutilities.tqr_eigen_decomposition import (
+    EigenVectorCalculation,
+    ShiftStrategy,
+    TqrEigenDecomposition,
+)
 
 # C++ ``Null<Real>()`` — ql/utilities/null.hpp returns
 # ``std::numeric_limits<float>::max()`` for any floating-point type. Several
@@ -70,7 +88,9 @@ class GaussianQuadrature:
     __slots__ = ("_w", "_x")
 
     def __init__(self, n: int, orth_poly: GaussianOrthogonalPolynomial) -> None:
-        # C++ parity: gaussianquadratures.cpp:34-61 — Golub-Welsch.
+        # C++ parity: gaussianquadratures.cpp:34-61 — Golub-Welsch, with the
+        # eigenproblem solved by TqrEigenDecomposition and NOT by LAPACK. See
+        # the module docstring for why the substitution is not admissible.
         diag = np.empty(n, dtype=np.float64)
         off = np.empty(n - 1, dtype=np.float64)
         diag[0] = orth_poly.alpha(0)
@@ -78,20 +98,17 @@ class GaussianQuadrature:
             diag[i] = orth_poly.alpha(i)
             off[i - 1] = math.sqrt(orth_poly.beta(i))
 
-        # scipy.linalg.eigh_tridiagonal is untyped; the ndarray results are
-        # immediately normalised into owned float64 arrays.
-        eigenvalues, eigenvectors = eigh_tridiagonal(diag, off)  # pyright: ignore[reportUnknownVariableType]
-        # C++ parity: tqreigendecomposition.cpp:124 sorts the (eigenvalue,
-        # eigenvector) pairs with std::greater<> — descending. LAPACK hands
-        # them back ascending, so undo that here; the sign normalisation the
-        # C++ applies afterwards is irrelevant because the weight squares the
-        # eigenvector component.
-        order = np.argsort(eigenvalues, kind="stable")[::-1]  # pyright: ignore[reportUnknownArgumentType]
-        self._x: Array = np.ascontiguousarray(eigenvalues[order], dtype=np.float64)  # pyright: ignore[reportUnknownArgumentType]
+        tqr = TqrEigenDecomposition(
+            diag,
+            off,
+            EigenVectorCalculation.ONLY_FIRST_ROW_EIGEN_VECTOR,
+            ShiftStrategy.OVERRELAXATION,
+        )
+        self._x: Array = np.ascontiguousarray(tqr.eigenvalues(), dtype=np.float64)
 
         mu_0 = orth_poly.mu_0()
         w = np.empty(n, dtype=np.float64)
-        first_row = np.ascontiguousarray(eigenvectors[0, :][order], dtype=np.float64)  # pyright: ignore[reportUnknownArgumentType]
+        first_row = tqr.eigenvectors()[0]
         for i in range(n):
             w[i] = mu_0 * first_row[i] * first_row[i] / orth_poly.w(float(self._x[i]))
         self._w: Array = w
