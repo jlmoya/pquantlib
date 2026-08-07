@@ -47,6 +47,7 @@ from pquantlib.instruments.fixed_vs_floating_swap import (
 from pquantlib.instruments.instrument import InstrumentResults
 from pquantlib.instruments.swap import SwapType
 from pquantlib.option import Option, OptionArguments
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.payoffs import Payoff
 from pquantlib.pricingengines.pricing_engine import PricingEngineArguments
 
@@ -202,16 +203,30 @@ class Swaption(Option):
     # --- Instrument interface ----------------------------------------------
 
     def is_expired(self) -> bool:
-        """Expired iff the last exercise date is past today.
+        """Expired once the last exercise date is reached.
 
-        # C++ parity: ``Swaption::isExpired`` (swaption.cpp:158-160).
-        # C++ uses ``simple_event(exercise_->dates().back()).hasOccurred()``
-        # which consults Settings::evaluationDate. PQuantLib's
-        # Settings.evaluation_date is wired but VanillaOption defers
-        # to `False` for the same reason — let the engine compute the
-        # expired-day NPV (zero). We match that.
+        # C++ parity: ``Swaption::isExpired`` (swaption.cpp:158-160) —
+        # ``simple_event(exercise_->dates().back()).hasOccurred()``.
+        # ``Event::hasOccurred`` with no explicit flag consults
+        # ``Settings::includeReferenceDateEvents()``, which defaults to
+        # ``false``, so the test is ``exerciseDate <= evaluationDate``:
+        # a swaption exercising TODAY is already expired and prices at 0
+        # without the engine ever running.
+        #
+        # ALIGN (v1.43 bondswap wave): this used to ``return False``
+        # unconditionally, on the premise that "the engine computes the
+        # expired-day NPV (zero)". The premise is false —
+        # ``BlackStyleSwaptionEngine`` prices a today-expiring swaption at its
+        # intrinsic value (11.92 on the ``cva_swaplet_strip`` case where C++
+        # reports 0) and can even raise on a missing past index fixing, since
+        # it discounts the whole underlying swap. Cross-validated by
+        # ``cva_swaplet_strip`` in
+        # migration-harness/references/v143/pe/bondswap.json, where
+        # ``swaplet_0_call_npv == swaplet_0_put_npv == 0`` while
+        # ``swaplet_0_atm_forward`` throws — i.e. C++ never entered the engine.
         """
-        return False
+        eval_date = ObservableSettings().evaluation_date_or_today()
+        return self._exercise.dates()[-1] <= eval_date
 
     def setup_arguments(self, args: PricingEngineArguments) -> None:
         """Copy swap + exercise + settlement into the engine's arguments.

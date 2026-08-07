@@ -154,12 +154,14 @@ def test_with_nominal(cpp: dict[str, Any]) -> None:
 
 
 def test_with_settlement_type_and_method_cash_par_yield(cpp: dict[str, Any]) -> None:
-    """Cash/ParYieldCurve reaches the instrument; only its NPV is out of reach.
+    """Cash/ParYieldCurve now prices: the annuity comes from CashFlows.bps.
 
-    ``BlackSwaptionEngine`` has a documented carve-out for the ParYieldCurve
-    annuity (black_swaption_engine.py), so the C++ NPV cannot be reproduced
-    yet — the setters themselves are still cross-validated through the built
-    instrument and both legs, and the carve-out is pinned as a raise.
+    The previous carve-out in ``black_swaption_engine.py`` (which raised on
+    this settlement pair) was lifted when ``BlackStyleSwaptionEngine`` was
+    aligned with v1.43; blackswaptionengine.hpp:275-293 computes the annuity
+    as ``|CashFlows::bps(fixedLeg, InterestRate(atmForward, ...)) /
+    basisPoint| * discountCurve->discount(discountDate)``. The C++ NPV in
+    the reference is therefore now reachable and asserted.
     """
     mk = MakeSwaption(_swap_index(), _5Y, _STRIKE)
     mk.with_settlement_type(SettlementType.Cash)
@@ -168,11 +170,9 @@ def test_with_settlement_type_and_method_cash_par_yield(cpp: dict[str, Any]) -> 
     sw = mk.build()
     assert sw.settlement_type == SettlementType.Cash
     assert sw.settlement_method == SettlementMethod.ParYieldCurve
-    _check(sw, cpp["swaption_cash_par_yield"], npv=False)
+    _check(sw, cpp["swaption_cash_par_yield"])
     # In C++ the cash annuity moves the price off the physical-settlement one.
     assert cpp["swaption_cash_par_yield"]["npv"] != cpp["swaption_default"]["npv"]
-    with pytest.raises(LibraryException, match="ParYieldCurve"):
-        sw.npv()
 
 
 def test_with_settlement_method_collateralized(cpp: dict[str, Any]) -> None:

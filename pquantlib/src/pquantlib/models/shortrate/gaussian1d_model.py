@@ -65,10 +65,16 @@ import numpy as np
 import numpy.typing as npt
 
 from pquantlib import qassert
+from pquantlib.math.interpolations.cubic_interpolation import (
+    BoundaryCondition,
+    CubicInterpolation,
+    DerivativeApprox,
+)
 from pquantlib.models.model import TermStructureConsistentModel
 from pquantlib.patterns.lazy_object import LazyObject
 from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.patterns.observer import Observable
+from pquantlib.payoffs import OptionType
 
 if TYPE_CHECKING:
     from pquantlib.indexes.ibor_index import IborIndex
@@ -78,6 +84,34 @@ if TYPE_CHECKING:
     from pquantlib.termstructures.yield_term_structure import YieldTermStructure
     from pquantlib.time.date import Date
     from pquantlib.time.period import Period
+
+EXTRAPOLATION_BOUND: float = 100.0
+"""# C++ parity: gaussian1dmodel.cpp:187-200 and every Gaussian1d engine use
+the literal +/-100.0 as the effective infinite bound; beyond ~7 standard
+deviations the normal density is numerically zero."""
+
+
+def payoff_interpolation(
+    x: npt.NDArray[np.float64], y: npt.NDArray[np.float64]
+) -> CubicInterpolation:
+    """The exact interpolant every Gaussian1d payoff replication uses.
+
+    # C++ parity: ``CubicInterpolation(z.begin(), z.end(), p.begin(),
+    # CubicInterpolation::Spline, true, CubicInterpolation::Lagrange, 0.0,
+    # CubicInterpolation::Lagrange, 0.0)`` — note ``monotonic == true``
+    # (Hyman filter) and Lagrange end conditions. This is NOT a natural
+    # cubic spline; substituting one changes the answer at the 1e-5 level.
+    """
+    return CubicInterpolation(
+        x,
+        y,
+        derivative_approx=DerivativeApprox.Spline,
+        monotonic=True,
+        left_condition=BoundaryCondition.Lagrange,
+        left_value=0.0,
+        right_condition=BoundaryCondition.Lagrange,
+        right_value=0.0,
+    )
 
 
 class Gaussian1dModel(TermStructureConsistentModel, LazyObject, ABC):
@@ -228,6 +262,95 @@ class Gaussian1dModel(TermStructureConsistentModel, LazyObject, ABC):
         t_T = ts.time_from_reference(maturity)  # noqa: N806 — math symbol
         t_t = ts.time_from_reference(reference_date) if reference_date is not None else 0.0
         return self.zerobond(t_T, t_t, y, yts)
+
+    def zerobond_option(
+        self,
+        option_type: OptionType,
+        expiry: Date,
+        value_date: Date,
+        maturity: Date,
+        strike: float,
+        reference_date: Date | None = None,
+        y: float = 0.0,
+        yts: YieldTermStructureProtocol | None = None,
+        y_std_devs: float = 7.0,
+        y_grid_points: int = 64,
+        extrapolate_payoff: bool = True,
+        flat_payoff_extrapolation: bool = False,
+    ) -> float:
+        """Price of an option on the discount bond ``P(valueDate, maturity)``.
+
+        # C++ parity: ``Gaussian1dModel::zerobondOption`` in
+        # gaussian1dmodel.cpp:143-207 (v1.43).
+
+        Payoff replication on the model's y-grid: build the conditional
+        payoff at every grid node, fit the SAME cubic interpolant C++
+        uses (``CubicInterpolation(Spline, monotonic=True, Lagrange BC
+        at both ends)``) and integrate it against the standard-normal
+        density in closed form. The optional tails are extended either
+        flat or with the boundary segment's cubic; in the non-flat case
+        the extended tail is type-dependent — Call extends only the upper
+        tail, Put only the lower.
+        """
+        self.calculate()
+
+        ts = self.term_structure
+        fixing_time = ts.time_from_reference(expiry)
+        reference_time = (
+            0.0 if reference_date is None else ts.time_from_reference(reference_date)
+        )
+
+        yg = self.y_grid(y_std_devs, y_grid_points, fixing_time, reference_time, y)
+        z = self.y_grid(y_std_devs, y_grid_points)
+
+        sign = 1.0 if option_type == OptionType.Call else -1.0
+        p = np.zeros(yg.size, dtype=np.float64)
+        for i in range(int(yg.size)):
+            yi = float(yg[i])
+            exp_val_dsc = self.zerobond_date(value_date, expiry, yi, yts)
+            discount = self.zerobond_date(maturity, expiry, yi, yts) / exp_val_dsc
+            p[i] = (
+                max(sign * (discount - strike), 0.0)
+                / self.numeraire(fixing_time, yi, yts)
+                * exp_val_dsc
+            )
+
+        payoff = payoff_interpolation(z, p)
+        a_c = payoff.a_coefficients()
+        b_c = payoff.b_coefficients()
+        c_c = payoff.c_coefficients()
+
+        z_size = int(z.size)
+        price = 0.0
+        for i in range(z_size - 1):
+            price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
+                0.0, c_c[i], b_c[i], a_c[i], float(p[i]), float(z[i]),
+                float(z[i]), float(z[i + 1]),
+            )
+        if extrapolate_payoff:
+            last = z_size - 2
+            if flat_payoff_extrapolation:
+                price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
+                    0.0, 0.0, 0.0, 0.0, float(p[last]), float(z[last]),
+                    float(z[z_size - 1]), EXTRAPOLATION_BOUND,
+                )
+                price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
+                    0.0, 0.0, 0.0, 0.0, float(p[0]), float(z[0]),
+                    -EXTRAPOLATION_BOUND, float(z[0]),
+                )
+            elif option_type == OptionType.Call:
+                price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
+                    0.0, c_c[last], b_c[last], a_c[last],
+                    float(p[last]), float(z[last]),
+                    float(z[z_size - 1]), EXTRAPOLATION_BOUND,
+                )
+            else:
+                price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
+                    0.0, c_c[0], b_c[0], a_c[0], float(p[0]), float(z[0]),
+                    -EXTRAPOLATION_BOUND, float(z[0]),
+                )
+
+        return price * self.numeraire(reference_time, y, yts)
 
     # --- forward-rate / swap-rate / swap-annuity ------------------------
 
@@ -548,4 +671,4 @@ class Gaussian1dModel(TermStructureConsistentModel, LazyObject, ABC):
         return result
 
 
-__all__ = ["Gaussian1dModel"]
+__all__ = ["EXTRAPOLATION_BOUND", "Gaussian1dModel", "payoff_interpolation"]
