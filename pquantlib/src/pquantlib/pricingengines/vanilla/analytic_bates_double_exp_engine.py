@@ -44,6 +44,7 @@ from __future__ import annotations
 from pquantlib.models.equity.bates_double_exp_model import BatesDoubleExpModel
 from pquantlib.pricingengines.vanilla.analytic_heston_engine import (
     AnalyticHestonEngine,
+    ComplexLogFormula,
 )
 
 
@@ -71,9 +72,17 @@ class AnalyticBatesDoubleExpEngine(AnalyticHestonEngine):
             Fourier integrand and whose double-exp jump parameters
             (p, nuDown, nuUp, lambda) drive the add_on_term.
         integration_order:
-            Kept for API parity. Ignored at runtime.
+            Order of the Gauss-Laguerre quadrature, as in C++.
         """
         super().__init__(model, integration_order=integration_order)
+        # C++ names the three-argument ``AnalyticHestonEngine`` constructor
+        # with ``Gatheral`` (batesengine.cpp:86-91) rather than delegating to
+        # the two-argument one, which would select ``OptimalCV``. See the same
+        # note in ``BatesEngine``: the control-variate forms build their
+        # control from the plain Heston characteristic function and so drop
+        # the double-exponential jump compensator that ``add_on_term`` adds.
+        self._cpx_log = ComplexLogFormula.Gatheral
+        self._andersen_piterbarg_epsilon = 1e-25
         self._double_exp_model: BatesDoubleExpModel = model
 
     # --- BatesDoubleExpModel narrow accessor ----------------------------

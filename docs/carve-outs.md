@@ -69,7 +69,7 @@ C++: `ql/models/shortrate/onefactormodels/{gaussian1dmodel,gsr,markovfunctional}
 ### Specialty Heston variants — **partially CLOSED** by Phase 11 W1-D
 
 Phase 11 W1-D landed:
-- `GjrGarchModel` + `AnalyticGjrGarchEngine` (Duan et al. 2006 Edgeworth expansion).
+- `GjrGarchModel` + `AnalyticGJRGARCHEngine` (Duan et al. 2006 Edgeworth expansion).
 - `PiecewiseTimeDependentHestonModel` + `AnalyticPiecewiseTimeDependentHestonEngine` (Gatheral form, time-segmented).
 - `HestonSlvMcModel` (MC-bucketing leverage-function calibration).
 - `HestonSlvFdmModel` (**scaffold only** — public API + unit-leverage fallback; the Fokker-Planck FDM solver depends on 2-D Heston FD operators scheduled for Phase 11 W5-C).

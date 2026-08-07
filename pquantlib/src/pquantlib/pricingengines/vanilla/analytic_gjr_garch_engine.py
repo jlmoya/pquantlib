@@ -1,7 +1,9 @@
-"""AnalyticGjrGarchEngine — Edgeworth-expansion European-option engine.
+"""AnalyticGJRGARCHEngine — Edgeworth-expansion European-option engine.
 
 # C++ parity: ql/pricingengines/vanilla/analyticgjrgarchengine.{hpp,cpp}
-# (v1.42.1).
+# (v1.43) — ``class AnalyticGJRGARCHEngine : public
+# GenericModelEngine<GJRGARCHModel, VanillaOption::arguments,
+# VanillaOption::results>``.
 
 Approximates the European call price under GJR-GARCH dynamics by
 projecting the GJR-GARCH log-return into a Black-Scholes-like form
@@ -35,6 +37,10 @@ Divergences from C++:
   are preserved verbatim for line-by-line C++ correspondence. ``del``
   is renamed ``delta_`` (Python keyword shadow). ``A3``, ``A4`` are
   upper-case because that's how they appear in the Duan paper.
+
+Only ``results.value`` is filled — the C++ ``calculate()`` assigns nothing else,
+so ``option.delta()`` raises "delta not provided"
+(``gjrgarch_no_greeks`` in the v1.43 reference pins that).
 """
 
 from __future__ import annotations
@@ -54,33 +60,26 @@ from pquantlib.payoffs import OptionType, StrikedTypePayoff
 from pquantlib.pricingengines.generic_engine import GenericEngine
 
 
-class AnalyticGjrGarchEngine(GenericEngine[OptionArguments, OneAssetOptionResults]):
+class AnalyticGJRGARCHEngine(GenericEngine[OptionArguments, OneAssetOptionResults]):
     """European-option engine for GJR-GARCH via Edgeworth expansion.
 
     # C++ parity: ``class AnalyticGJRGARCHEngine`` in
-    # analyticgjrgarchengine.hpp:52-83 (v1.42.1).
+    # analyticgjrgarchengine.hpp:52-83 (v1.43).
     """
 
-    def __init__(
-        self,
-        model: GjrGarchModel,
-        integration_order: int = 144,
-    ) -> None:
+    def __init__(self, model: GjrGarchModel) -> None:
         """Construct from a ``GjrGarchModel``.
 
         # C++ parity: ``AnalyticGJRGARCHEngine`` ctor in
-        # analyticgjrgarchengine.cpp:32-36.
+        # analyticgjrgarchengine.cpp:39-43 — one argument, the model.
+        # There is no integration knob: the engine is closed form and
+        # never integrates anything.
 
         Parameters
         ----------
         model:
             The GJR-GARCH model whose parameters drive the Edgeworth
             expansion.
-        integration_order:
-            Unused — kept as a kwarg for API parity with sibling
-            engines (the GJR-GARCH engine is closed-form, no
-            integration). Defaults to 144 to match
-            ``AnalyticHestonEngine`` / ``AnalyticPTDHestonEngine``.
         """
         super().__init__(OptionArguments(), OneAssetOptionResults())
         self._model: GjrGarchModel = model
@@ -486,4 +485,4 @@ class AnalyticGjrGarchEngine(GenericEngine[OptionArguments, OneAssetOptionResult
         self.notify_observers()
 
 
-__all__ = ["AnalyticGjrGarchEngine"]
+__all__ = ["AnalyticGJRGARCHEngine"]
