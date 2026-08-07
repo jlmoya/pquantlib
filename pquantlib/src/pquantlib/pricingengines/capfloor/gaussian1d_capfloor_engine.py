@@ -33,12 +33,6 @@ cap NPV minus floor NPV per coupon (per the standard convention).
 
 Divergences from C++:
 
-- C++ uses ``Lagrange`` boundary conditions (Lagrange-style 2nd-order
-  extrapolating BC) and ``Spline`` derivative approximation. PQuantLib
-  uses ``CubicNaturalSpline`` (natural BC + Spline approximation). The
-  difference is small in practice — both pass through the same knots;
-  the only divergence is in the off-knot quadrature for the boundary
-  segments, which is dominated by the body of the integral.
 - C++ ``optionletsAtmForward`` additional result is left at zero (the
   C++ code never populates it either — it's a placeholder).
 - The optional ``discountCurve`` Handle that overrides the model's
@@ -52,7 +46,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy.interpolate import CubicSpline  # type: ignore[import-untyped]
 
 from pquantlib import qassert
 from pquantlib.instruments.cap_floor import (
@@ -60,7 +53,11 @@ from pquantlib.instruments.cap_floor import (
     CapFloorResults,
     CapFloorType,
 )
-from pquantlib.models.shortrate.gaussian1d_model import Gaussian1dModel
+from pquantlib.models.shortrate.gaussian1d_model import (
+    EXTRAPOLATION_BOUND,
+    Gaussian1dModel,
+    payoff_interpolation,
+)
 from pquantlib.pricingengines.generic_engine import GenericEngine
 
 if TYPE_CHECKING:
@@ -68,11 +65,6 @@ if TYPE_CHECKING:
     from pquantlib.termstructures.protocols import YieldTermStructureProtocol
 
 
-# Sentinel used by C++ for the [-inf, x_0] / [x_n, inf] tails — the
-# integration uses Gaussian density so anything > ~7 stddevs is
-# numerically zero. The literal value matches gaussian1dcapfloorengine.cpp
-# (uses ±100.0 as the effective bound).
-_EXTRAPOLATION_BOUND: float = 100.0
 
 
 class Gaussian1dCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]):
@@ -281,18 +273,20 @@ class Gaussian1dCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]
             else:
                 p[j] = max(-(floating_leg_npv - fixed_leg_npv), 0.0) / num
 
-        # Fit a natural cubic spline + extract per-interval polynomial
-        # coefficients in C++'s (a=linear, b=quadratic, c=cubic) ordering.
-        # scipy PPoly: c[0,k] = cubic coef (C++ "c"), c[1,k] = quadratic
-        # (C++ "b"), c[2,k] = linear (C++ "a"), c[3,k] = constant (= p[k]).
-        spline = CubicSpline(z, p, bc_type="natural", extrapolate=True)
-        coef = spline.c  # shape (4, z_size - 1)
+        # C++ uses CubicInterpolation(Spline, monotonic=True, Lagrange BC at
+        # both ends) — NOT a natural cubic spline. gaussian1dcapfloorengine.cpp
+        # :100-104. The interpolant exposes the per-interval polynomial
+        # coefficients in C++'s own (a=linear, b=quadratic, c=cubic) ordering.
+        spline = payoff_interpolation(z, p)
+        a_coef = spline.a_coefficients()
+        b_coef = spline.b_coefficients()
+        c_coef = spline.c_coefficients()
 
         price = 0.0
         for j in range(z_size - 1):
-            c_cubic = float(coef[0, j])
-            b_quad = float(coef[1, j])
-            a_lin = float(coef[2, j])
+            c_cubic = c_coef[j]
+            b_quad = b_coef[j]
+            a_lin = a_coef[j]
             # Constant coef is the spline value at z[j] (= p[j]).
             price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                 0.0,
@@ -316,7 +310,7 @@ class Gaussian1dCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]
                     float(p[z_size - 2]),
                     float(z[z_size - 2]),
                     float(z[z_size - 1]),
-                    _EXTRAPOLATION_BOUND,
+                    EXTRAPOLATION_BOUND,
                 )
                 price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                     0.0,
@@ -325,7 +319,7 @@ class Gaussian1dCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]
                     0.0,
                     float(p[0]),
                     float(z[0]),
-                    -_EXTRAPOLATION_BOUND,
+                    -EXTRAPOLATION_BOUND,
                     float(z[0]),
                 )
             # Cubic extension via the boundary segment polynomial.
@@ -336,9 +330,9 @@ class Gaussian1dCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]
             # floor payoffs grow into the low-state tail (extend on
             # the left with the cubic). Match the same convention.
             elif is_cap:
-                c_cubic = float(coef[0, z_size - 2])
-                b_quad = float(coef[1, z_size - 2])
-                a_lin = float(coef[2, z_size - 2])
+                c_cubic = c_coef[z_size - 2]
+                b_quad = b_coef[z_size - 2]
+                a_lin = a_coef[z_size - 2]
                 price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                     0.0,
                     c_cubic,
@@ -347,12 +341,12 @@ class Gaussian1dCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]
                     float(p[z_size - 2]),
                     float(z[z_size - 2]),
                     float(z[z_size - 1]),
-                    _EXTRAPOLATION_BOUND,
+                    EXTRAPOLATION_BOUND,
                 )
             else:
-                c_cubic = float(coef[0, 0])
-                b_quad = float(coef[1, 0])
-                a_lin = float(coef[2, 0])
+                c_cubic = c_coef[0]
+                b_quad = b_coef[0]
+                a_lin = a_coef[0]
                 price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                     0.0,
                     c_cubic,
@@ -360,7 +354,7 @@ class Gaussian1dCapFloorEngine(GenericEngine[CapFloorArguments, CapFloorResults]
                     a_lin,
                     float(p[0]),
                     float(z[0]),
-                    -_EXTRAPOLATION_BOUND,
+                    -EXTRAPOLATION_BOUND,
                     float(z[0]),
                 )
 

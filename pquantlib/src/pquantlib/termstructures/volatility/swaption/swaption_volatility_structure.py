@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from pquantlib import qassert
 from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.math.rounding import ClosestRounding
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.termstructures.volatility_term_structure import VolatilityTermStructure
 from pquantlib.time.business_day_convention import BusinessDayConvention
@@ -36,6 +37,9 @@ if TYPE_CHECKING:
     from pquantlib.termstructures.volatility.smile_section import SmileSection
 
 _MONTHS_PER_YEAR: int = 12
+
+# # C++ parity: swaptionvolstructure.cpp:65 — ``ClosestRounding(0)``.
+_CLOSEST_ROUNDING: ClosestRounding = ClosestRounding(0)
 
 
 class SwaptionVolatilityStructure(VolatilityTermStructure):
@@ -60,12 +64,30 @@ class SwaptionVolatilityStructure(VolatilityTermStructure):
 
     # --- swap-length helpers --------------------------------------------
 
-    def swap_length(self, swap_tenor: Period) -> float:
-        """Convert a swap-tenor Period to a float year-fraction.
+    def swap_length(self, swap_tenor: Period | Date, end: Date | None = None) -> float:
+        """Convert a swap tenor to a float year-fraction.
 
-        # C++ parity: SwaptionVolatilityStructure::swapLength(Period).
-        Only ``Months`` and ``Years`` units are accepted.
+        Two C++ overloads collapse here:
+
+        * ``swapLength(const Period&)`` — swaptionvolstructure.cpp:47-58.
+          Only ``Months`` and ``Years`` units are accepted.
+        * ``swapLength(const Date& start, const Date& end)`` —
+          swaptionvolstructure.cpp:60-68. NOT a day-count year fraction:
+          ``(end - start) / 365.25 * 12`` rounded to the CLOSEST whole
+          month (``ClosestRounding(0)``, i.e. half away from zero) and
+          then divided by 12.
         """
+        if isinstance(swap_tenor, Date):
+            start = swap_tenor
+            qassert.require(end is not None, "swap end date must be given")
+            assert end is not None
+            qassert.require(
+                end > start,
+                f"swap end date ({end}) must be greater than start ({start})",
+            )
+            months = (end - start) / 365.25 * float(_MONTHS_PER_YEAR)
+            return _CLOSEST_ROUNDING(months) / float(_MONTHS_PER_YEAR)
+
         qassert.require(
             swap_tenor.length > 0,
             f"non-positive swap tenor ({swap_tenor}) given",

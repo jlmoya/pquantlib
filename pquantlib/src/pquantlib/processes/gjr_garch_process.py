@@ -17,7 +17,7 @@ folded into the moment constants. See gjrgarchprocess.hpp for the
 moment derivations.
 
 L11-W1-D scope: ports the `FullTruncation` semantics needed by
-`AnalyticGjrGarchEngine`. The `PartialTruncation` / `Reflection`
+`AnalyticGJRGARCHEngine`. The `PartialTruncation` / `Reflection`
 discretization branches are kept as enum members; their `evolve`
 behaviour for MC paths is implemented since the `evolve` override is
 needed by the test infrastructure (though the analytic engine doesn't
@@ -352,6 +352,91 @@ class GJRGARCHProcess(StochasticProcess):
             [float(x0[0]) * math.exp(float(dx[0])), float(x0[1]) + float(dx[1])],
             dtype=np.float64,
         )
+
+    def evolve(
+        self,
+        t0: float,
+        x0: npt.NDArray[np.float64],
+        dt: float,
+        dw: npt.NDArray[np.float64],
+    ) -> npt.NDArray[np.float64]:
+        """One discretized step of (S, V).
+
+        # C++ parity: ``GJRGARCHProcess::evolve`` (gjrgarchprocess.cpp:119-188).
+
+        Overriding matters: the inherited
+        ``apply(expectation(t0, x0, dt), stdDeviation(t0, x0, dt) * dw)`` is a
+        plain Euler step, and C++ does not simulate GJR-GARCH that way. Note in
+        particular that ``rho1`` / ``rho2`` here carry NO ``vol^2`` factor --
+        unlike their namesakes in :meth:`diffusion`, where the factor is folded
+        in -- because ``evolve`` multiplies by ``vol*vol`` at the call site.
+        """
+        s0 = float(x0[0])
+        v0 = float(x0[1])
+        dw0 = float(dw[0])
+        dw1 = float(dw[1])
+        sdt = math.sqrt(dt)
+
+        n_cdf, n_pdf, q2, q3 = self._moment_constants()
+        lam = self._lambda
+        sigma2 = 2.0 + 4.0 * lam * lam
+        eml_e4 = (
+            lam * lam * lam * n_pdf
+            + 5.0 * lam * n_pdf
+            + 3.0 * n_cdf
+            + lam * lam * lam * lam * n_cdf
+            + 6.0 * lam * lam * n_cdf
+        )
+        sigma3 = eml_e4 - q3 * q3
+        sigma12 = -2.0 * lam
+        sigma13 = -2.0 * n_pdf - 2.0 * lam * n_cdf
+        sigma23 = 2.0 * n_cdf + sigma12 * sigma13
+
+        dpy = self._days_per_year
+        sqrt_dpy = math.sqrt(dpy)
+        alpha = self._alpha
+        gamma = self._gamma
+        rho1 = sqrt_dpy * (alpha * sigma12 + gamma * sigma13)
+        rho2 = sqrt_dpy * math.sqrt(
+            alpha * alpha * (sigma2 - sigma12 * sigma12)
+            + gamma * gamma * (sigma3 - sigma13 * sigma13)
+            + 2.0 * alpha * gamma * (sigma23 - sigma12 * sigma13)
+        )
+
+        scheme = self._disc_scheme
+        if scheme == Discretization.Reflection:
+            vol = math.sqrt(abs(v0))
+        else:
+            vol = math.sqrt(v0) if v0 > 0.0 else 0.0
+
+        mu = self._forward_rate_spread(t0, dt) - 0.5 * vol * vol
+        # PartialTruncation keeps the raw (possibly negative) variance in the
+        # mean-reversion term; FullTruncation and Reflection use vol^2.
+        v_for_nu = v0 if scheme == Discretization.PartialTruncation else vol * vol
+        nu = dpy * dpy * self._omega + dpy * (
+            self._beta + alpha * q2 + gamma * q3 - 1.0
+        ) * v_for_nu
+
+        s1 = s0 * math.exp(mu * dt + vol * dw0 * sdt)
+        base = vol * vol if scheme == Discretization.Reflection else v0
+        v1 = base + nu * dt + sdt * vol * vol * (rho1 * dw0 + rho2 * dw1)
+        return np.array([s1, v1], dtype=np.float64)
+
+    def _forward_rate_spread(self, t0: float, dt: float) -> float:
+        """``r(t0, t0+dt) - q(t0, t0+dt)``, continuously compounded.
+
+        # C++ parity: the ``riskFreeRate_->forwardRate(t0, t0+dt, Continuous)
+        # - dividendYield_->forwardRate(t0, t0+dt, Continuous)`` pair in every
+        # branch of ``GJRGARCHProcess::evolve``. Unlike :meth:`drift`, this
+        # uses the actual step, so it needs no zero-window workaround.
+        """
+        r = self._risk_free_rate.forward_rate(
+            t0, t0 + dt, Compounding.Continuous, Frequency.NoFrequency, True
+        ).rate()
+        q = self._dividend_yield.forward_rate(
+            t0, t0 + dt, Compounding.Continuous, Frequency.NoFrequency, True
+        ).rate()
+        return r - q
 
     def time(self, date: Date) -> float:
         """Year fraction via the risk-free curve's day counter.

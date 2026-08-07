@@ -148,6 +148,82 @@ def black_formula_vol_derivative(
     ) * math.sqrt(ttm)
 
 
+def _zero_vol_forward_derivative(
+    option_type: OptionType, strike: float, forward: float, discount: float
+) -> float:
+    """``stdDev == 0`` branch shared by both forward-derivative formulas.
+
+    # C++ parity: blackformula.cpp:124-125 and :746-747 —
+    # ``sign * std::max(1.0 * boost::math::sign((forward - strike) * sign),
+    #                   0.0) * discount``.
+    # ``boost::math::sign(0) == 0``, so an exactly at-the-money zero-vol
+    # forward derivative is 0, not +/-discount.
+    """
+    sign = int(option_type)
+    moneyness = (forward - strike) * sign
+    unit = 0.0 if moneyness == 0.0 else math.copysign(1.0, moneyness)
+    return sign * max(unit, 0.0) * discount
+
+
+def black_formula_forward_derivative(
+    option_type: OptionType,
+    strike: float,
+    forward: float,
+    std_dev: float,
+    discount: float = 1.0,
+    displacement: float = 0.0,
+) -> float:
+    """Black derivative wrt the forward (Black delta on the forward).
+
+    # C++ parity: ``blackFormulaForwardDerivative(Option::Type, ...)``
+    # (blackformula.cpp:109-136, v1.43).
+    """
+    _check_parameters(strike, forward, displacement)
+    qassert.require(std_dev >= 0.0, f"stdDev ({std_dev}) must be non-negative")
+    qassert.require(discount > 0.0, f"discount ({discount}) must be positive")
+
+    sign = int(option_type)
+
+    if std_dev == 0.0:
+        return _zero_vol_forward_derivative(option_type, strike, forward, discount)
+
+    forward = forward + displacement
+    strike = strike + displacement
+
+    # Since displacement is non-negative, strike == 0 iff displacement == 0.
+    if strike == 0.0:
+        return discount if option_type == OptionType.Call else 0.0
+
+    d1 = math.log(forward / strike) / std_dev + 0.5 * std_dev
+    return sign * _PHI(sign * d1) * discount
+
+
+def bachelier_black_formula_forward_derivative(
+    option_type: OptionType,
+    strike: float,
+    forward: float,
+    std_dev: float,
+    discount: float = 1.0,
+) -> float:
+    """Bachelier derivative wrt the forward.
+
+    # C++ parity: ``bachelierBlackFormulaForwardDerivative``
+    # (blackformula.cpp:738-751, v1.43).
+
+    Unlike the lognormal variant there is no ``checkParameters`` call —
+    the normal model happily takes negative forwards and strikes.
+    """
+    qassert.require(std_dev >= 0.0, f"stdDev ({std_dev}) must be non-negative")
+    qassert.require(discount > 0.0, f"discount ({discount}) must be positive")
+
+    sign = int(option_type)
+    if std_dev == 0.0:
+        return _zero_vol_forward_derivative(option_type, strike, forward, discount)
+
+    h = (forward - strike) * sign / std_dev
+    return sign * _PHI(h) * discount
+
+
 def black_formula_implied_std_dev_approximation(
     option_type: OptionType,
     strike: float,
@@ -450,9 +526,11 @@ def bachelier_black_formula_implied_vol(
 
 __all__ = [
     "bachelier_black_formula",
+    "bachelier_black_formula_forward_derivative",
     "bachelier_black_formula_implied_vol",
     "bachelier_black_formula_std_dev_derivative",
     "black_formula",
+    "black_formula_forward_derivative",
     "black_formula_implied_std_dev",
     "black_formula_implied_std_dev_approximation",
     "black_formula_std_dev_derivative",

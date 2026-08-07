@@ -151,6 +151,8 @@ def test_orthogonal_polynomial(cpp: dict[str, Any], case: int) -> None:
 QUADRATURES: dict[str, Callable[[], GaussianQuadrature]] = {
     "laguerre_8": lambda: GaussLaguerreIntegration(8),
     "laguerre_16_s1_5": lambda: GaussLaguerreIntegration(16, 1.5),
+    # High order deliberately — see test_quadrature_nodes_and_weights.
+    "laguerre_64": lambda: GaussLaguerreIntegration(64),
     "hermite_8": lambda: GaussHermiteIntegration(8),
     "hermite_6_mu0_3": lambda: GaussHermiteIntegration(6, 0.3),
     "hermite_5": lambda: GaussHermiteIntegration(5),
@@ -169,19 +171,44 @@ def test_quadrature_names_cover_the_probe(cpp: dict[str, Any]) -> None:
     assert {e["name"] for e in cpp["quadratures"]} == set(QUADRATURES)
 
 
-@pytest.mark.parametrize("case", range(13))
+@pytest.mark.parametrize("case", range(14))
 def test_quadrature_nodes_and_weights(cpp: dict[str, Any], case: int) -> None:
     """Nodes and weights element-by-element, *in C++ order*.
 
-    This is the assertion that catches an eigen-solver delegation that hands
-    the spectrum back ascending: C++ ``TqrEigenDecomposition`` sorts
-    descending, LAPACK ascending, and ``x()`` / ``weights()`` are public API.
+    This is the assertion that catches an eigen-solver delegation. There are
+    two ways to get it wrong, and ``laguerre_64`` exists for the second:
 
-    TIGHT: both sides solve the same symmetric tridiagonal eigenproblem with a
-    backward-stable method, so the eigenvalues agree to ``O(eps * ||T||)`` and
-    the weights — built from the squared first eigenvector component — to
-    ``O(eps * ||T|| / gap)``. Both are far inside 1e-12 relative for these
-    orders.
+    * **Order.** C++ ``TqrEigenDecomposition`` sorts the spectrum descending,
+      LAPACK ascending, and ``x()`` / ``weights()`` are public API.
+    * **Magnitude.** The weight is ``mu_0 * v0_i**2 / w(x_i)``, and for
+      Laguerre ``w(x) = x**s * exp(-x)``, so the division multiplies by
+      ``exp(x_i)``. At order 64 the largest node is ~230, so the first
+      eigenvector component there is ~1e-50 — fifty decades below the unit
+      norm. Backward stability is a *norm-wise* guarantee and says nothing
+      about a component that small: LAPACK returns noise or an exact zero,
+      and squaring it and multiplying by ``exp(230)`` gives a weight that is
+      0 or ~1e38 times too large where C++ has O(10). C++'s iteration keeps
+      it because it multiplies Givens rotations into the first row and never
+      forms a cancelling difference, so tiny entries retain full *relative*
+      accuracy.
+
+      Orders 8 and 16 cannot see this — their largest nodes are ~22 and ~51,
+      where ``exp(-x/2)`` is still 1e-5 / 1e-12 and survives in double. That
+      is exactly how a LAPACK-backed implementation passed this file while
+      returning garbage at every order the Heston engines actually use, and
+      why 64 is pinned here.
+
+    Order 64 is also the highest order that holds TIGHT honestly. Above it
+    ``||T|| / lambda_min`` grows until the eigenproblem's own ``O(eps*||T||)``
+    *absolute* accuracy exceeds a 1e-12 *relative* criterion on the smallest
+    node — at order 144, ``||T|| ~ 5.5e2`` against a smallest node of 1.0e-2
+    is 1.2e-11 relative before anyone writes any code. Pinning 128/144/160
+    would measure the eigensolver rather than the port, so they are not
+    pinned; 64 discriminates the defect just as sharply.
+
+    TIGHT throughout: same algorithm, same matrix, and at this order both the
+    eigenvalues (``O(eps * ||T||)``) and the weights are inside 1e-12
+    relative.
     """
     block = cpp["quadratures"][case]
     quad = QUADRATURES[block["name"]]()
@@ -221,7 +248,7 @@ def _integral_bound(block: dict[str, Any], name: str, l1: float) -> float:
     return bound
 
 
-@pytest.mark.parametrize("case", range(13))
+@pytest.mark.parametrize("case", range(14))
 def test_quadrature_integrals(cpp: dict[str, Any], case: int) -> None:
     """Integrals of eight integrands, including two the rules cannot do well.
 

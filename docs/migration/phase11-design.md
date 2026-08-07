@@ -75,7 +75,7 @@ W1 is the **only wave with 4 parallel clusters** because `MarkovFunctional` is a
 **W1-D — Heston SLV + GjrGarch + time-dependent Heston (~4 classes)**
 - `HestonSlvFdmModel` (FDM stochastic local vol).
 - `HestonSlvMcModel` (MC stochastic local vol).
-- `GjrGarchModel` + `AnalyticGjrGarchEngine`.
+- `GjrGarchModel` + `AnalyticGJRGARCHEngine`.
 - `PiecewiseTimeDependentHestonModel` + companion analytic engine.
 
 **Carve-outs (W1):** none — port the full short-rate + Heston specialty set.

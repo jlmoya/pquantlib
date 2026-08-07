@@ -15,16 +15,15 @@ anywhere a ``BlackVolTermStructure`` is wanted. Two details that matter:
   the Fourier inversion has underflowed; C++ then returns ``sqrt(theta)``, the
   long-run Heston volatility, rather than failing.
 
-Divergence from v1.43 — the engine tuning knobs. C++'s constructor takes
+The constructor takes C++'s two engine tuning knobs —
 ``AnalyticHestonEngine::ComplexLogFormula`` (default ``AngledContour``) and
-``AnalyticHestonEngine::Integration`` (default ``gaussLaguerre(160)``).
-PQuantLib's ``AnalyticHestonEngine`` implements only the Gatheral complex-log
-branch and integrates with ``scipy.integrate.quad``, so there is nothing for
-those two arguments to select and they are not accepted here. They are
-quadrature settings, not model settings: they change the price by roughly the
-integrator's accuracy (~1e-9 relative on the probed grid) and nothing else.
-Once the engine grows the other branches this constructor should grow the two
-arguments with the C++ defaults.
+``AnalyticHestonEngine::Integration`` (default ``gaussLaguerre(160)``) — and
+forwards them verbatim. An earlier revision omitted both and built the engine
+from its default constructor, because ``AnalyticHestonEngine`` then implemented
+only the Gatheral complex-log branch over ``scipy.integrate.quad`` and had
+nothing for the arguments to select. The engine now implements the full set, so
+the divergence is closed: this surface picks the same contour and the same
+quadrature as C++, not merely a comparably accurate one.
 """
 
 from __future__ import annotations
@@ -37,7 +36,11 @@ from pquantlib.math.solvers1d.brent import Brent
 from pquantlib.models.equity.heston_model import HestonModel
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.pricingengines.black_formula import black_formula
-from pquantlib.pricingengines.vanilla.analytic_heston_engine import AnalyticHestonEngine
+from pquantlib.pricingengines.vanilla.analytic_heston_engine import (
+    AnalyticHestonEngine,
+    ComplexLogFormula,
+    Integration,
+)
 from pquantlib.termstructures.volatility.equity_fx.black_vol_term_structure import (
     BlackVolTermStructure,
 )
@@ -49,7 +52,19 @@ from pquantlib.time.date import Date
 class HestonBlackVolSurface(BlackVolTermStructure):
     """Black volatility surface backed by a Heston model."""
 
-    def __init__(self, heston_model: HestonModel) -> None:
+    def __init__(
+        self,
+        heston_model: HestonModel,
+        cpx_log_formula: ComplexLogFormula = ComplexLogFormula.AngledContour,
+        integration: Integration | None = None,
+    ) -> None:
+        """# C++ parity: ``HestonBlackVolSurface`` ctor
+        # (hestonblackvolsurface.hpp:36-41, .cpp:46-57).
+
+        ``integration`` defaults to ``Integration::gaussLaguerre(160)``, spelled
+        as ``None`` here only because a mutable default cannot be a class-level
+        expression; C++'s default argument is that same 160-point rule.
+        """
         process = heston_model.process()
         super().__init__(
             business_day_convention=BusinessDayConvention.Following,
@@ -58,6 +73,10 @@ class HestonBlackVolSurface(BlackVolTermStructure):
             day_counter=process.risk_free_rate().day_counter(),
         )
         self._heston_model: HestonModel = heston_model
+        self._cpx_log_formula: ComplexLogFormula = cpx_log_formula
+        self._integration: Integration = (
+            Integration.gauss_laguerre(160) if integration is None else integration
+        )
         self._heston_model.register_with(self)
 
     # --- TermStructure interface -------------------------------------------
@@ -96,7 +115,11 @@ class HestonBlackVolSurface(BlackVolTermStructure):
         return vol * vol * t
 
     def _black_vol_impl(self, t: float, strike: float) -> float:
-        heston_engine = AnalyticHestonEngine(self._heston_model)
+        # C++ parity: hestonblackvolsurface.cpp:84-85 — the engine is rebuilt
+        # per call from the stored formula and integration rule.
+        heston_engine = AnalyticHestonEngine.with_integration(
+            self._heston_model, self._cpx_log_formula, self._integration
+        )
         process = self._heston_model.process()
 
         df = process.risk_free_rate().discount(t, True)

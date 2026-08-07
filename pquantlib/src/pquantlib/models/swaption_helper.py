@@ -15,11 +15,13 @@ calibration target.
 
 Divergences from C++:
 
-- C++ exposes three constructor overloads (Period maturity / Date
-  exerciseDate / Date exerciseDate + Date endDate). PQuantLib
-  consolidates to a single ``__init__`` taking ``maturity`` (a
-  ``Period``); the explicit-Date variants are not exercised by
-  Phase 4 L4-E tests and can be added when a calibrator needs them.
+- C++ exposes three constructor overloads (``Period maturity`` /
+  ``Date exerciseDate`` + ``Period length`` / ``Date exerciseDate`` +
+  ``Date endDate``). Python has no overloading, so ``maturity`` accepts
+  a ``Period`` *or* a ``Date`` (an explicit exercise date) and ``length``
+  accepts a ``Period`` *or* a ``Date`` (an explicit end date) — the three
+  C++ signatures collapse onto one. ``BasketGeneratingEngine`` uses both
+  Date-valued forms.
 - ``addTimesTo`` (which fills the lattice/tree calibration grid)
   is deferred — Phase 5 territory.
 - ``RateAveraging`` is not yet ported in PQuantLib (no OIS calibration
@@ -54,6 +56,7 @@ from pquantlib.pricingengines.swaption.black_swaption_engine import (
 )
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.time.business_day_convention import BusinessDayConvention
+from pquantlib.time.date import Date
 from pquantlib.time.date_generation import DateGeneration
 from pquantlib.time.schedule import Schedule
 
@@ -74,8 +77,8 @@ class SwaptionHelper(BlackCalibrationHelper):
 
     def __init__(
         self,
-        maturity: Period,
-        length: Period,
+        maturity: Period | Date,
+        length: Period | Date,
         volatility: Quote,
         index: IborIndex,
         fixed_leg_tenor: Period,
@@ -89,8 +92,14 @@ class SwaptionHelper(BlackCalibrationHelper):
         shift: float = 0.0,
     ) -> None:
         super().__init__(volatility, error_type, volatility_type, shift)
-        self._maturity: Period = maturity
-        self._length: Period = length
+        # # C++ parity: swaptionhelper.cpp:35-107 — the Date-valued
+        # # overloads store exerciseDate_ / endDate_ and set maturity_ /
+        # # length_ to ``0 * Days``; here a Date lands in the dedicated
+        # # slot and the Period slot stays None.
+        self._exercise_date: Date | None = maturity if isinstance(maturity, Date) else None
+        self._end_date: Date | None = length if isinstance(length, Date) else None
+        self._maturity: Period | None = None if isinstance(maturity, Date) else maturity
+        self._length: Period | None = None if isinstance(length, Date) else length
         self._fixed_leg_tenor: Period = fixed_leg_tenor
         self._index: IborIndex = index
         self._term_structure: YieldTermStructureProtocol = term_structure
@@ -112,25 +121,34 @@ class SwaptionHelper(BlackCalibrationHelper):
         # # C++ parity: swaptionhelper.cpp:152-199 (v1.42.1).
         cal = self._index.fixing_calendar()
         ref_date = self._term_structure.reference_date()
-        # Exercise date = ref + maturity, adjusted with the index's BDC.
-        exercise_date = cal.advance(
-            ref_date,
-            self._maturity.length,
-            self._maturity.units,
-            self._index.business_day_convention(),
-        )
+        # Exercise date: explicit if given, else ref + maturity adjusted
+        # with the index's BDC.
+        if self._exercise_date is not None:
+            exercise_date = self._exercise_date
+        else:
+            assert self._maturity is not None
+            exercise_date = cal.advance(
+                ref_date,
+                self._maturity.length,
+                self._maturity.units,
+                self._index.business_day_convention(),
+            )
         # Swap start = index.value_date(adjusted exercise date).
         adjusted_exercise = self._index.fixing_calendar().adjust(
             exercise_date, BusinessDayConvention.Following
         )
         start_date = self._index.value_date(adjusted_exercise)
-        # Swap end = start + length, adjusted.
-        end_date = cal.advance(
-            start_date,
-            self._length.length,
-            self._length.units,
-            self._index.business_day_convention(),
-        )
+        # Swap end: explicit if given, else start + length, adjusted.
+        if self._end_date is not None:
+            end_date = self._end_date
+        else:
+            assert self._length is not None
+            end_date = cal.advance(
+                start_date,
+                self._length.length,
+                self._length.units,
+                self._index.business_day_convention(),
+            )
 
         bdc = self._index.business_day_convention()
         fixed_schedule = Schedule.from_rule(

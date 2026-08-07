@@ -1,21 +1,42 @@
-"""DiscretizedVanillaOption — lattice helper for plain vanilla options.
+"""DiscretizedVanillaOption — vanilla option as a lattice asset.
 
 # C++ parity: ql/pricingengines/vanilla/discretizedvanillaoption.{hpp,cpp}
-# (v1.43).
+# (v1.43) — ``class DiscretizedVanillaOption : public DiscretizedAsset``.
 
-Ported here because ``DiscretizedDoubleBarrierOption``
-(``ql/experimental/barrieroption/discretizeddoublebarrieroption.hpp``)
-holds one by value: for the knock-in variants the barrier check needs the
-value of the *un-barriered* option at the same lattice node, and the C++
-class obtains it by rolling a contained ``DiscretizedVanillaOption`` back
-alongside itself.
+The exercise-condition carrier used by the binomial/trinomial tree engines:
+``BinomialVanillaEngine<T>`` builds a ``BlackScholesLattice``, wraps the
+option's arguments in one of these, and rolls back.
+
+Three responsibilities, all inherited-hook shaped:
+
+``reset(size)``
+    zero-fill the value array, then immediately ``adjust_values()`` — which
+    is why a European option is worth its payoff at maturity rather than 0.
+
+``mandatory_times()``
+    the (grid-snapped) stopping times.
+
+``_post_adjust_values_impl()``
+    apply ``max(continuation, payoff(S))`` at the right slices, dispatching
+    on exercise type:
+
+    * American — ``stopping[0] <= now <= stopping[1]``: a **range** test, so
+      every slice in the window is exercisable.  It indexes ``stopping[1]``,
+      so an American exercise must carry two dates (earliest and latest).
+    * European — ``is_on_time(stopping[0])``: only the maturity slice.
+    * Bermudan — ``is_on_time`` for each stopping time.
+
+The constructor snaps every stopping time onto the supplied grid with
+``grid.closest_time(...)``; with no grid the raw ``process.time(date)``
+values are kept.  Snapping is observable whenever an exercise date does not
+land on a grid point, which the Bermudan cross-validation case exploits.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from pquantlib.exceptions import LibraryException
+from pquantlib import qassert
 from pquantlib.exercise import Exercise
 from pquantlib.methods.lattices.discretized_asset import DiscretizedAsset
 from pquantlib.option import OptionArguments
@@ -27,7 +48,7 @@ class DiscretizedVanillaOption(DiscretizedAsset):
     """Vanilla option discretized on a lattice.
 
     # C++ parity: ``class DiscretizedVanillaOption``
-    # (discretizedvanillaoption.hpp:34-51 + .cpp:25-82).
+    # (discretizedvanillaoption.hpp:33-49).
     """
 
     def __init__(
@@ -36,60 +57,78 @@ class DiscretizedVanillaOption(DiscretizedAsset):
         process: StochasticProcess,
         grid: TimeGrid | None = None,
     ) -> None:
+        """Build from the option's engine arguments.
+
+        ``grid`` defaults to C++'s ``TimeGrid()`` — the empty grid, meaning
+        "do not snap the stopping times".
+        """
         super().__init__()
+        qassert.require(args.exercise is not None, "no exercise given")
+        assert args.exercise is not None
+        qassert.require(args.payoff is not None, "no payoff given")
+        assert args.payoff is not None
+
         self._arguments: OptionArguments = args
-        exercise = args.exercise
-        if exercise is None:
-            raise LibraryException("no exercise given")
-        # # C++ parity: discretizedvanillaoption.cpp:29-38 — stopping times
-        # are the exercise dates mapped through ``process.time``, snapped to
-        # the supplied grid when one is given.
         self._stopping_times: list[float] = []
-        for d in exercise.dates():
-            t = process.time(d)
+        for date in args.exercise.dates():
+            t = process.time(date)
             if grid is not None and not grid.empty():
+                # adjust to the given grid
                 t = grid.closest_time(t)
             self._stopping_times.append(t)
 
-    # --- low-level interface ---------------------------------------------
+    # -- low-level DiscretizedAsset interface ------------------------------
 
     def reset(self, size: int) -> None:
-        """# C++ parity: ``DiscretizedVanillaOption::reset`` (.cpp:41-44)."""
+        """Zero-fill then adjust.
+
+        # C++ parity: ``DiscretizedVanillaOption::reset``.
+        """
         self._values = np.zeros(size, dtype=np.float64)
         self.adjust_values()
 
     def mandatory_times(self) -> list[float]:
-        """# C++ parity: ``mandatoryTimes`` (discretizedvanillaoption.hpp:41)."""
+        """Grid-snapped stopping times.
+
+        # C++ parity: ``mandatoryTimes() const override
+        # { return stoppingTimes_; }``.
+        """
         return list(self._stopping_times)
 
-    # --- adjustment ------------------------------------------------------
+    # -- adjustment hook ---------------------------------------------------
 
     def _post_adjust_values_impl(self) -> None:
-        """# C++ parity: ``postAdjustValuesImpl`` (.cpp:46-68)."""
-        exercise = self._arguments.exercise
-        assert exercise is not None
-        now = self._time
-        et = exercise.type()
-        if et == Exercise.Type.American:
+        """Apply the exercise condition at the appropriate slices.
+
+        # C++ parity: ``DiscretizedVanillaOption::postAdjustValuesImpl``.
+        """
+        now = self.time
+        assert self._arguments.exercise is not None
+        exercise_type = self._arguments.exercise.type()
+
+        if exercise_type == Exercise.Type.American:
             if now <= self._stopping_times[1] and now >= self._stopping_times[0]:
                 self._apply_specific_condition()
-        elif et == Exercise.Type.European:
+        elif exercise_type == Exercise.Type.European:
             if self.is_on_time(self._stopping_times[0]):
                 self._apply_specific_condition()
-        elif et == Exercise.Type.Bermudan:
+        elif exercise_type == Exercise.Type.Bermudan:
             for stopping_time in self._stopping_times:
                 if self.is_on_time(stopping_time):
                     self._apply_specific_condition()
-        else:
-            raise LibraryException("invalid option type")
+        else:  # pragma: no cover - Exercise.Type has no fourth member
+            qassert.fail("invalid option type")
 
     def _apply_specific_condition(self) -> None:
-        """# C++ parity: ``applySpecificCondition`` (.cpp:70-78)."""
+        """``values[j] = max(values[j], payoff(grid[j]))``.
+
+        # C++ parity: ``DiscretizedVanillaOption::applySpecificCondition``.
+        """
         method = self._require_method()
-        grid = method.grid(self._time)
+        grid = method.grid(self.time)
         payoff = self._arguments.payoff
         assert payoff is not None
-        for j in range(self._values.size):
+        for j in range(len(self._values)):
             self._values[j] = max(float(self._values[j]), payoff(float(grid[j])))
 
 

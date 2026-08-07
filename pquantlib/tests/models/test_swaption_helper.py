@@ -10,6 +10,7 @@ internal engine use the same Black vol, ``market_value()`` ==
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
 
@@ -20,6 +21,7 @@ from pquantlib.daycounters.thirty_360 import Convention, Thirty360
 from pquantlib.indexes.ibor.euribor import Euribor
 from pquantlib.models.calibration_helper import CalibrationErrorType
 from pquantlib.models.swaption_helper import SwaptionHelper
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.swaption.black_swaption_engine import BlackSwaptionEngine
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.protocols import YieldTermStructureProtocol
@@ -37,9 +39,31 @@ _REF_PATH = (
 )
 
 
+_EVAL_DATE = Date.from_ymd(17, Month.January, 2024)
+
+
 @pytest.fixture(scope="module")
 def cluster_refs() -> dict[str, dict[str, float]]:
     return json.loads(_REF_PATH.read_text())
+
+
+@pytest.fixture(autouse=True)
+def _eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the probe's evaluation date.
+
+    Previously missing: this file was silently wall-clock dependent. The
+    helper's BlackSwaptionEngine builds a ConstantSwaptionVolatility with
+    settlement_days=0 on a NullCalendar, so its reference date IS the
+    evaluation date and exerciseTime/stdDev are read off it
+    (blackswaptionengine.hpp:189-191 and :319).
+    """
+    settings = ObservableSettings()
+    saved = settings.evaluation_date
+    # cluster_l4e/probe.cpp:71-72 —
+    # Settings::instance().evaluationDate() = Date(17, January, 2024)
+    settings.evaluation_date = _EVAL_DATE
+    yield
+    settings.evaluation_date = saved
 
 
 def _make_helper(
@@ -62,7 +86,7 @@ def _make_helper(
 
 
 def _curve() -> YieldTermStructureProtocol:
-    eval_date = Date.from_ymd(17, Month.January, 2024)
+    eval_date = _EVAL_DATE
     return cast(
         YieldTermStructureProtocol,
         FlatForward.from_rate(

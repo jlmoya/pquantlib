@@ -54,6 +54,7 @@ import cmath
 from pquantlib.models.equity.bates_model import BatesModel
 from pquantlib.pricingengines.vanilla.analytic_heston_engine import (
     AnalyticHestonEngine,
+    ComplexLogFormula,
 )
 
 
@@ -85,9 +86,21 @@ class BatesEngine(AnalyticHestonEngine):
             integrand and whose jump parameters (lambda, nu, delta)
             drive the ``add_on_term`` compensator.
         integration_order:
-            Kept as a kwarg for API parity. Ignored at runtime.
+            Order of the Gauss-Laguerre quadrature, as in C++.
         """
         super().__init__(model, integration_order=integration_order)
+        # C++ does NOT delegate to ``AnalyticHestonEngine(model,
+        # integrationOrder)``: it names the three-argument constructor with
+        # ``Gatheral`` explicitly (batesengine.cpp:26-30). That distinction is
+        # load-bearing — the two-argument constructor selects ``OptimalCV``,
+        # whose control-variate value is derived from the *plain Heston*
+        # characteristic function and therefore ignores the Bates jump
+        # compensator that ``add_on_term`` contributes. Under ``Gatheral`` the
+        # add-on term enters the integrand directly, which is the only form
+        # that prices a jump-diffusion correctly here.
+        self._cpx_log = ComplexLogFormula.Gatheral
+        # The three-argument constructor's own default, unused under Gatheral.
+        self._andersen_piterbarg_epsilon = 1e-25
         # Narrow ``self._model``'s static type for the override below.
         # At runtime ``BatesModel`` is-a ``HestonModel`` so the base
         # class's stored reference is the same object.

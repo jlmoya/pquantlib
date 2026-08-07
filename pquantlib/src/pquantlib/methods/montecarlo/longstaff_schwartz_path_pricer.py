@@ -50,6 +50,7 @@ from pquantlib.math.statistics.incremental_statistics import IncrementalStatisti
 from pquantlib.methods.montecarlo.early_exercise_path_pricer import (
     EarlyExercisePathPricer,
 )
+from pquantlib.methods.montecarlo.multi_path import MultiPath
 from pquantlib.methods.montecarlo.path import Path
 from pquantlib.methods.montecarlo.path_pricer import PathPricer
 
@@ -247,8 +248,11 @@ class LongstaffSchwartzPathPricer[PathT, StateT](PathPricer[PathT]):
     def _clone_path(path: PathT) -> PathT:
         """Deep-copy the underlying ndarray so mutating-in-place doesn't lose history.
 
-        For ``Path``: rebuild with ``np.copy(path.values)``. For
-        ``MultiPath``: per-asset clone. We dispatch on type.
+        C++ stores ``paths_.push_back(path)`` — a by-value copy — because the
+        path generator reuses one buffer for every draw. Both path types are
+        supported: ``Path`` rebuilds from ``np.copy(path.values)``, and
+        ``MultiPath`` clones each asset path in turn (needed by
+        ``MCAmericanBasketEngine``, whose ``MC`` trait is ``MultiVariate``).
         """
         if isinstance(path, Path):
             # mypy: ndarray.copy() returns ndarray.
@@ -256,12 +260,15 @@ class LongstaffSchwartzPathPricer[PathT, StateT](PathPricer[PathT]):
             # Bypass typing — PathT is constrained to be Path-or-MultiPath
             # but the dispatch is dynamic.
             return cloned  # type: ignore[return-value]
-        # MultiPath cloning: assumes a ``paths`` list of Path objects.
-        # We only ship the Path variant in L6-A — MultiPath variant deferred.
-        raise NotImplementedError(
-            "MultiPath cloning not supported in L6-A — "
-            "LongstaffSchwartzMultiPathPricer deferred (Phase 6+ carve-out)"
-        )
+        if isinstance(path, MultiPath):
+            cloned_multi = MultiPath(
+                [
+                    Path(path[j].time_grid, np.copy(path[j].values))
+                    for j in range(path.asset_number())
+                ]
+            )
+            return cloned_multi  # type: ignore[return-value]
+        raise TypeError(f"cannot clone path of type {type(path).__name__}")
 
 
 __all__ = ["LongstaffSchwartzPathPricer"]

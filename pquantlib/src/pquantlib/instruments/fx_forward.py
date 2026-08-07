@@ -20,6 +20,7 @@ from __future__ import annotations
 from pquantlib import qassert
 from pquantlib.currencies.currency import Currency
 from pquantlib.instruments.instrument import Instrument, InstrumentResults
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.pricing_engine import (
     PricingEngineArguments,
     PricingEngineResults,
@@ -204,12 +205,20 @@ class FxForward(Instrument):
     def setup_arguments(self, args: PricingEngineArguments) -> None:
         """Copy fields to the engine arguments.
 
-        # C++ parity: ``FxForward::setupArguments``.  The settlement
-        # date is computed from the engine's source-curve reference
-        # date (Python divergence: C++ uses ``Settings::evaluationDate``
-        # but we have no Settings singleton).  The engine is expected
-        # to be a :class:`DiscountingFwdEngine` exposing the source
-        # discount curve.
+        # C++ parity: ``FxForward::setupArguments`` +
+        # ``FxForward::settlementDate()``, which is
+        # ``paymentCalendar_.advance(Settings::instance().evaluationDate(),
+        #   settlementDays_, Days)``.
+        #
+        # ALIGN (v1.43 bondswap wave): this used to derive the evaluation date
+        # from the *engine's source discount curve reference date*, on the
+        # stated premise that PQuantLib has "no Settings singleton". The
+        # premise is stale — ``ObservableSettings`` is the port's Settings and
+        # the rest of the library already reads it. The old inference made
+        # ``DiscountingFxForwardEngine``'s
+        # ``QL_REQUIRE(sourceRefDate <= settlementDate)`` unreachable, because
+        # the settlement date was *defined* as an advance of that very
+        # reference date.
         """
         qassert.require(
             isinstance(args, FxForwardArguments), "wrong argument type"
@@ -221,31 +230,9 @@ class FxForward(Instrument):
         args.target_currency = self._target_currency
         args.maturity_date = self._maturity_date
         args.pay_source_currency = self._pay_source_currency
-        # Settlement date: payment calendar advance of eval date by
-        # settlement_days.  Eval date defaults to the engine's source
-        # curve reference date.  Engines that don't provide a source
-        # curve will see ``Date()`` and fail validation.
-        eval_date = self._inferred_eval_date()
-        args.settlement_date = self._payment_calendar.advance(
-            eval_date, self._settlement_days, TimeUnit.Days
+        args.settlement_date = self.settlement_date(
+            ObservableSettings().evaluation_date_or_today()
         )
-
-    def _inferred_eval_date(self) -> Date:
-        """Best-effort evaluation date inference for setup_arguments.
-
-        Looks up the attached pricing engine and asks its
-        ``source_currency_discount_curve`` for ``reference_date``.
-        Returns ``Date()`` if the engine doesn't expose that hook;
-        engine validation will raise a clear error in that case.
-        """
-        engine = self._engine
-        if engine is None:
-            return Date()
-        source_curve_fn = getattr(engine, "source_currency_discount_curve", None)
-        if source_curve_fn is None:
-            return Date()
-        curve = source_curve_fn()
-        return curve.reference_date()
 
     def fetch_results(self, results: PricingEngineResults) -> None:
         """Pull FxForward-specific results out of the engine."""

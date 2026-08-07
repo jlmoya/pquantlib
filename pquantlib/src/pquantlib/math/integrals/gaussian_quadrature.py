@@ -15,25 +15,38 @@ Golub-Welsch algorithm:
 (G.H. Golub & J.H. Welsch, "Calculation of Gauss quadrature rules",
 Math. Comput. 23 (1969), 221-230.)
 
-Eigen-decomposition — QuantLib's own TQR, not scipy
---------------------------------------------------
+Why the eigen-decomposition is NOT delegated to LAPACK
+-----------------------------------------------------
 
-The C++ class runs ``TqrEigenDecomposition`` (implicit-shift QL with the
-"over-relaxation" Wilkinson shift, tracking only the first eigenvector row) on
-the Jacobi matrix. This module used to delegate that to
-``scipy.linalg.eigh_tridiagonal`` on the argument that "both are
-backward-stable solvers for the same matrix". They are — but backward
-stability is not the property the Golub-Welsch weight needs.
+C++ runs its own ``TqrEigenDecomposition`` (implicit-shift QL with the
+"over-relaxation" Wilkinson shift) in ``OnlyFirstRowEigenVector`` mode, and
+this port does the same. An earlier revision delegated the symmetric-
+tridiagonal eigenproblem to ``scipy.linalg.eigh_tridiagonal`` on the reasoning
+that both are backward-stable solvers for the same matrix. **They are, and
+that is not sufficient here.**
 
-The weight is ``mu_0 * ev[0][i]^2 / w(x_i)``. For Laguerre that divides by
-``exp(-x_i)``, and at ``n = 128`` the largest node is ``x ~ 484``, so the first
-eigenvector component has to be accurate down to about ``1e-105``. LAPACK
-delivers eigenvectors to *absolute* accuracy ``eps * ||T||``: those components
-are noise. QuantLib's TQR accumulates the Givens rotations into the first row
-alone, starting from the identity, and preserves their relative accuracy.
+A norm-wise backward-stable eigensolver guarantees each eigenvector to a small
+error *relative to the vector's norm*. This algorithm needs something much
+stronger: the weights are ``mu_0 * v0_i**2 / w(x_i)``, and for Gauss-Laguerre
+``w(x) = x**s * exp(-x)``, so dividing by ``w(x_i)`` multiplies by ``exp(x_i)``.
+At order 144 the largest node is ``x ~ 547``, and the first eigenvector
+component there is ``v0 ~ 5e-119`` — 119 decades below the unit norm. LAPACK
+returns noise (often an exact zero) in that position; squaring the noise and
+multiplying by ``exp(547) ~ 1e237`` yields weights that are either 0 or ~1e126
+where C++ has ``O(10)``. The quadrature then returns values like 1e72 for a
+Heston call worth ~12.
 
-The port therefore uses the ported ``TqrEigenDecomposition``, which also fixes
-the ordering for free (it sorts descending, as C++ does).
+The QL iteration keeps those components because it builds the first row by
+*multiplying* Givens rotations into it and never forms a difference that can
+cancel, so tiny entries retain full relative accuracy. That property, not
+backward stability, is what this formula depends on. The failure is invisible
+below order ~20 (``exp(-x_max/2)`` is still above 1e-16 there), which is why
+an 8- and a 16-point test can both pass over a broken implementation.
+
+Ordering follows from using the C++ algorithm: ``TqrEigenDecomposition`` sorts
+``(eigenvalue, eigenvector)`` pairs with ``std::greater<>``, so nodes come out
+descending, which is the order ``x()`` / ``weights()`` expose and the order
+``__call__`` accumulates in.
 """
 
 from __future__ import annotations
@@ -75,31 +88,9 @@ class GaussianQuadrature:
     __slots__ = ("_w", "_x")
 
     def __init__(self, n: int, orth_poly: GaussianOrthogonalPolynomial) -> None:
-        """Golub-Welsch, via QuantLib's own TQR — not ``scipy.eigh_tridiagonal``.
-
-        # C++ parity: gaussianquadratures.cpp:34-61.
-
-        **Divergence fixed here.** This constructor used to call
-        ``scipy.linalg.eigh_tridiagonal``. That is not C++'s
-        ``TqrEigenDecomposition(..., OnlyFirstRowEigenVector, Overrelaxation)``,
-        and the difference is not cosmetic. The Golub-Welsch weight is
-        ``mu_0 * ev[0][i]^2 / w(x_i)``; for Laguerre that divides by
-        ``exp(-x_i)``, so at ``n = 128`` the largest node is ``x ~ 484`` and the
-        first eigenvector component must be accurate down to ``1e-105``. LAPACK
-        computes eigenvectors to *absolute* accuracy ``eps * ||T||``, so those
-        components are pure noise; QuantLib's TQR accumulates the Givens
-        rotations into the first row only, starting from the identity, and keeps
-        their *relative* accuracy.
-
-        Measured at ``GaussLaguerreIntegration(128)``: C++ weights span
-        ``[0.0289, 25.26]`` and sum to 498.1; the scipy-based version produced
-        weights up to ``2.8e109`` summing to ``2.8e109``. The error was invisible
-        for integrands that decay like the weight function — ``int exp(-x)``
-        returned 1.0 either way — and catastrophic otherwise:
-        ``int 1/(1+x^2)`` returned ``1.85e104`` against the true ``pi/2``.
-        It was found because ``HestonProcess.pdf`` integrates a
-        polynomially-decaying characteristic function with exactly this rule.
-        """
+        # C++ parity: gaussianquadratures.cpp:34-61 — Golub-Welsch, with the
+        # eigenproblem solved by TqrEigenDecomposition and NOT by LAPACK. See
+        # the module docstring for why the substitution is not admissible.
         diag = np.empty(n, dtype=np.float64)
         off = np.empty(n - 1, dtype=np.float64)
         diag[0] = orth_poly.alpha(0)
@@ -114,10 +105,10 @@ class GaussianQuadrature:
             ShiftStrategy.OVERRELAXATION,
         )
         self._x: Array = np.ascontiguousarray(tqr.eigenvalues(), dtype=np.float64)
-        first_row = np.ascontiguousarray(tqr.eigenvectors()[0, :], dtype=np.float64)
 
         mu_0 = orth_poly.mu_0()
         w = np.empty(n, dtype=np.float64)
+        first_row = tqr.eigenvectors()[0]
         for i in range(n):
             w[i] = mu_0 * first_row[i] * first_row[i] / orth_poly.w(float(self._x[i]))
         self._w: Array = w

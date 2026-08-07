@@ -6,6 +6,7 @@ Reference values come from ``cluster/l3e.json`` emitted by
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -16,6 +17,7 @@ from pquantlib.currencies.europe import EURCurrency
 from pquantlib.daycounters.actual_360 import Actual360
 from pquantlib.exceptions import LibraryException
 from pquantlib.instruments.fx_forward import FxForward
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.forward.discounting_fwd_engine import (
     DiscountingFwdEngine,
 )
@@ -31,6 +33,26 @@ from tests.indexes._mock_curves import FlatForwardMock
 @pytest.fixture(scope="module")
 def ref() -> dict[str, Any]:
     return reference_reader.load("cluster/l3e")
+
+
+@pytest.fixture(autouse=True)
+def _eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the probe's evaluation date.
+
+    ALIGN (v1.43 bondswap wave): ``FxForward.setup_arguments`` now derives the
+    settlement date from ``ObservableSettings().evaluation_date``, as C++'s
+    ``FxForward::settlementDate()`` derives it from
+    ``Settings::instance().evaluationDate()``. It used to read the engine's
+    source-curve reference date instead, which insulated this module from the
+    global evaluation date — i.e. the module was wall-clock dependent in the
+    way the harness rules forbid, and only the divergence hid it.
+    """
+    settings = ObservableSettings()
+    saved = settings.evaluation_date
+    # cluster_l3e/probe.cpp:45 — Settings::instance().evaluationDate() = evalDate
+    settings.evaluation_date = Date.from_ymd(17, Month.January, 2024)
+    yield
+    settings.evaluation_date = saved
 
 
 # --- FxForward construction validation -------------------------------------

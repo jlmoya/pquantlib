@@ -18,20 +18,26 @@ Algorithm (matches gaussian1dnonstandardswaptionengine.cpp:30-496):
 4. The final result at ``y=0, t=0`` times ``N(0,0)`` is the swaption
    NPV.
 
+The engine also derives from
+:class:`~pquantlib.pricingengines.swaption.basket_generating_engine.BasketGeneratingEngine`
+(matching the C++ class hierarchy) and supplies its four hooks —
+``underlying_npv``, ``underlying_type``, ``underlying_last_date`` and
+``initial_guess`` — so that ``calibration_basket(...)`` works.
+
 Carve-outs (Phase 11 W1-B):
 
-- BasketGeneratingEngine.calibrationBasket method (deferred).
 - The ``Probabilities`` enum / additional ``probabilities`` result.
-- OAS Z-spread Handle<Quote>.
-- RebatedExercise rebate flows.
+- RebatedExercise rebate flows (``RebatedExercise`` is not ported; C++
+  ``dynamic_pointer_cast``s to it and falls back to rebate = 0 when the
+  cast fails, which is the branch every non-rebated exercise takes).
 """
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy.interpolate import CubicSpline  # type: ignore[import-untyped]
 
 from pquantlib import qassert
 from pquantlib.instruments.nonstandard_swaption import (
@@ -40,20 +46,35 @@ from pquantlib.instruments.nonstandard_swaption import (
 )
 from pquantlib.instruments.swap import SwapType
 from pquantlib.instruments.swaption import SettlementMethod
-from pquantlib.models.shortrate.gaussian1d_model import Gaussian1dModel
+from pquantlib.math.closeness import close
+from pquantlib.models.shortrate.gaussian1d_model import (
+    Gaussian1dModel,
+    payoff_interpolation,
+)
 from pquantlib.pricingengines.generic_engine import GenericEngine
+from pquantlib.pricingengines.swaption.basket_generating_engine import (
+    BasketGeneratingEngine,
+)
 
 if TYPE_CHECKING:
+    import numpy.typing as npt
+
+    from pquantlib.quotes.quote import Quote
     from pquantlib.termstructures.protocols import YieldTermStructureProtocol
+    from pquantlib.time.date import Date
 
 
-_EXTRAPOLATION_BOUND: float = 100.0
+EXTRAPOLATION_BOUND: float = 100.0
+_ZERO_NOMINAL_TOLERANCE: float = 1e-8
+"""# C++ parity: gaussian1dnonstandardswaptionengine.cpp:115 — periods with a
+nominal at or below this are excluded from the initial-guess average."""
 _OPTION_CALL: int = 1
 _OPTION_PUT: int = -1
 
 
 class Gaussian1dNonstandardSwaptionEngine(
-    GenericEngine[NonstandardSwaptionArguments, NonstandardSwaptionResults]
+    GenericEngine[NonstandardSwaptionArguments, NonstandardSwaptionResults],
+    BasketGeneratingEngine,
 ):
     """Gaussian1d engine for NonstandardSwaption.
 
@@ -69,10 +90,12 @@ class Gaussian1dNonstandardSwaptionEngine(
         extrapolate_payoff: bool = True,
         flat_payoff_extrapolation: bool = False,
         discount_curve: YieldTermStructureProtocol | None = None,
+        oas: Quote | None = None,
     ) -> None:
-        super().__init__(
-            NonstandardSwaptionArguments(), NonstandardSwaptionResults()
+        GenericEngine.__init__(  # pyright: ignore[reportUnknownMemberType]
+            self, NonstandardSwaptionArguments(), NonstandardSwaptionResults()
         )
+        BasketGeneratingEngine.__init__(self, model, oas, discount_curve)
         self._model: Gaussian1dModel = model
         self._integration_points: int = int(integration_points)
         self._stddevs: float = float(stddevs)
@@ -154,17 +177,22 @@ class Gaussian1dNonstandardSwaptionEngine(
                         expiry1_time, expiry0_time,
                         float(z[k]) if expiry0 > settlement else 0.0,
                     )
-                    payoff0 = CubicSpline(z, npv1, bc_type="natural", extrapolate=True)
+                    # C++ uses CubicInterpolation(Spline, monotonic=True,
+                    # Lagrange BC), NOT a natural cubic spline — see
+                    # gaussian1dnonstandardswaptionengine.cpp:98-104.
+                    payoff0 = payoff_interpolation(z, npv1)
                     for i in range(int(yg.size)):
-                        p[i] = float(payoff0(float(yg[i])))
-                    payoff1 = CubicSpline(z, p, bc_type="natural", extrapolate=True)
-                    coef = payoff1.c
+                        p[i] = payoff0(float(yg[i]), allow_extrapolation=True)
+                    payoff1 = payoff_interpolation(z, p)
+                    a_c = payoff1.a_coefficients()
+                    b_c = payoff1.b_coefficients()
+                    c_c = payoff1.c_coefficients()
                     for i in range(z_size - 1):
                         price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                             0.0,
-                            float(coef[0, i]),
-                            float(coef[1, i]),
-                            float(coef[2, i]),
+                            c_c[i],
+                            b_c[i],
+                            a_c[i],
                             float(p[i]),
                             float(z[i]),
                             float(z[i]),
@@ -177,25 +205,25 @@ class Gaussian1dNonstandardSwaptionEngine(
                             price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                                 0.0, 0.0, 0.0, 0.0,
                                 float(p[last_idx]), float(z[last_idx]),
-                                float(z[z_size - 1]), _EXTRAPOLATION_BOUND,
+                                float(z[z_size - 1]), EXTRAPOLATION_BOUND,
                             )
                             price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                                 0.0, 0.0, 0.0, 0.0,
                                 float(p[0]), float(z[0]),
-                                -_EXTRAPOLATION_BOUND, float(z[0]),
+                                -EXTRAPOLATION_BOUND, float(z[0]),
                             )
                         else:
                             # The C++ engine only extends the right tail
                             # for non-standard swaption (cpp:122-128).
                             price += Gaussian1dModel.gaussian_shifted_polynomial_integral(
                                 0.0,
-                                float(coef[0, last_idx]),
-                                float(coef[1, last_idx]),
-                                float(coef[2, last_idx]),
+                                c_c[last_idx],
+                                b_c[last_idx],
+                                a_c[last_idx],
                                 float(p[last_idx]),
                                 float(z[last_idx]),
                                 float(z[z_size - 1]),
-                                _EXTRAPOLATION_BOUND,
+                                EXTRAPOLATION_BOUND,
                             )
 
                 npv0[k] = price
@@ -258,6 +286,129 @@ class Gaussian1dNonstandardSwaptionEngine(
 
         results.value = float(npv1[0]) * self._model.numeraire(
             0.0, 0.0, self._discount_curve
+        )
+
+    # --- BasketGeneratingEngine hooks ---------------------------------
+
+    def underlying_npv(self, expiry: Date, y: float) -> float:
+        """NPV at ``expiry``, state ``y``, of the flows exercised into.
+
+        # C++ parity: ``Gaussian1dNonstandardSwaptionEngine::underlyingNpv``
+        # (gaussian1dnonstandardswaptionengine.cpp:31-88, v1.43).
+        """
+        args = self._arguments
+        cutoff = expiry - 1
+        fixed_idx = 0
+        while (
+            fixed_idx < len(args.fixed_reset_dates)
+            and args.fixed_reset_dates[fixed_idx] <= cutoff
+        ):
+            fixed_idx += 1
+        floating_idx = 0
+        while (
+            floating_idx < len(args.floating_reset_dates)
+            and args.floating_reset_dates[floating_idx] <= cutoff
+        ):
+            floating_idx += 1
+
+        oas = self._oas
+        dc = self._model.term_structure.day_counter()
+
+        npv = 0.0
+        for i in range(fixed_idx, len(args.fixed_reset_dates)):
+            z_spread = (
+                1.0
+                if oas is None
+                else math.exp(
+                    -oas.value() * dc.year_fraction(expiry, args.fixed_pay_dates[i])
+                )
+            )
+            npv -= (
+                args.fixed_coupons[i]
+                * self._model.zerobond_date(
+                    args.fixed_pay_dates[i], expiry, y, self._discount_curve
+                )
+                * z_spread
+            )
+
+        for i in range(floating_idx, len(args.floating_reset_dates)):
+            if args.floating_is_redemption_flow[i]:
+                amount = args.floating_coupons[i]
+            else:
+                amount = (
+                    args.floating_gearings[i]
+                    * self._model.forward_rate(
+                        args.floating_fixing_dates[i], expiry, y, args.ibor_index
+                    )
+                    + args.floating_spreads[i]
+                ) * args.floating_nominal[i] * args.floating_accrual_times[i]
+            z_spread = (
+                1.0
+                if oas is None
+                else math.exp(
+                    -oas.value() * dc.year_fraction(expiry, args.floating_pay_dates[i])
+                )
+            )
+            npv += (
+                amount
+                * self._model.zerobond_date(
+                    args.floating_pay_dates[i], expiry, y, self._discount_curve
+                )
+                * z_spread
+            )
+
+        return float(args.type) * npv
+
+    def underlying_type(self) -> SwapType:
+        """# C++ parity: gaussian1dnonstandardswaptionengine.cpp:90-92."""
+        return self._arguments.type
+
+    def underlying_last_date(self) -> Date:
+        """# C++ parity: gaussian1dnonstandardswaptionengine.cpp:95-97."""
+        return self._arguments.fixed_pay_dates[-1]
+
+    def initial_guess(self, expiry: Date) -> npt.NDArray[np.float64]:
+        """``(average nominal, remaining maturity, weighted fixed rate)``.
+
+        # C++ parity: gaussian1dnonstandardswaptionengine.cpp:100-132.
+        """
+        args = self._arguments
+        cutoff = expiry - 1
+        fixed_idx = 0
+        while (
+            fixed_idx < len(args.fixed_reset_dates)
+            and args.fixed_reset_dates[fixed_idx] <= cutoff
+        ):
+            fixed_idx += 1
+
+        nominal_sum = 0.0
+        weighted_rate = 0.0
+        ind = 0.0
+        for i in range(fixed_idx, len(args.fixed_reset_dates)):
+            nominal_sum += args.fixed_nominal[i]
+            rate = args.fixed_rate[i]
+            if close(rate, 0.0):
+                rate = 0.03  # this value is at least better than zero
+            weighted_rate += args.fixed_nominal[i] * rate
+            if args.fixed_nominal[i] > _ZERO_NOMINAL_TOLERANCE:
+                ind += 1.0
+
+        nominal_avg = nominal_sum / ind
+        qassert.require(
+            nominal_sum > 0.0,
+            f"sum of nominals on fixed leg must be positive ({nominal_sum})",
+        )
+        weighted_rate /= nominal_sum
+
+        ts = self._model.term_structure
+        return np.array(
+            [
+                nominal_avg,
+                ts.time_from_reference(self.underlying_last_date())
+                - ts.time_from_reference(expiry),
+                weighted_rate,
+            ],
+            dtype=np.float64,
         )
 
 

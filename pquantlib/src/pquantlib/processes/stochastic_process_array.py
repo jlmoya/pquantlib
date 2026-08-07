@@ -8,16 +8,9 @@ takes ``N`` independent Brownian increments ``dw``, premultiplies by
 the spectral-square-root of the correlation matrix to inject the
 correlation, and feeds component ``dz[i]`` into ``processes[i].evolve``.
 
-Python divergences vs C++:
-
-* C++ uses ``Matrix`` and the ``pseudoSqrt(Spectral)`` helper.  This port
-  has no free ``pseudo_sqrt``, so ``_spectral_sqrt`` below transcribes it,
-  including the ``SymmetricSchurDecomposition`` ordering and sign rules and
-  ``normalizePseudoRoot`` — see that function's docstring for why the earlier
-  inline ``eigh`` version reproduced ``M M^T`` but not ``M``.
-* The C++ ``stdDeviation`` and ``diffusion`` return ``Matrix`` whose
-  row ``i`` is ``sqrt_corr.row(i) * processes_[i]->...``.  We mirror
-  that by scaling the ``sqrt_corr`` rows in-place.
+The C++ ``stdDeviation`` and ``diffusion`` return ``Matrix`` whose row ``i``
+is ``sqrt_corr.row(i) * processes_[i]->...``.  We mirror that by scaling the
+``sqrt_corr`` rows in-place.
 """
 
 from __future__ import annotations
@@ -29,111 +22,67 @@ import numpy as np
 import numpy.typing as npt
 
 from pquantlib import qassert
+from pquantlib.math.matrixutilities.symmetric_schur_decomposition import (
+    SymmetricSchurDecomposition,
+)
 from pquantlib.processes.stochastic_process import StochasticProcess
 from pquantlib.processes.stochastic_process_1d import StochasticProcess1D
 from pquantlib.time.date import Date
 
 
-def _symmetric_schur(
-    m: npt.NDArray[np.float64],
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    """Eigen-decomposition ordered the way QuantLib's Jacobi solver orders it.
-
-    # C++ parity: ``SymmetricSchurDecomposition``
-    # (ql/math/matrixutilities/symmetricschurdecomposition.cpp:115-137) — the
-    # post-iteration sort, round-off zeroing and sign convention.
-
-    Three ordering rules, all of them observable in a pseudo-root:
-
-    1. eigenvalues DESCENDING;
-    2. on a TIE, ``std::sort(..., std::greater<>())`` on
-       ``pair<Real, vector<Real>>`` falls through to comparing the
-       EIGENVECTORS lexicographically, also descending. That is what keeps
-       ``pseudoSqrt(I)`` equal to ``I`` rather than to a permutation of it;
-    3. each eigenvector's sign is pinned so its FIRST component is
-       non-negative (applied after the sort, so it does not affect the
-       tie-break).
-
-    ``numpy.linalg.eigh`` (LAPACK divide-and-conquer) replaces the C++ cyclic
-    Jacobi iteration. Both compute the exact spectral decomposition; for a
-    DEGENERATE eigenvalue the two can still pick different bases of the
-    eigenspace, and no ordering rule can reconcile that. For the diagonal and
-    2x2 correlation matrices this class is used with, they agree.
-    """
-    eig_vals, eig_vecs = np.linalg.eigh(m)  # ascending
-    size = int(m.shape[0])
-    order = sorted(
-        range(size),
-        key=lambda k: (float(eig_vals[k]), tuple(float(v) for v in eig_vecs[:, k])),
-        reverse=True,
-    )
-    values = np.array([float(eig_vals[k]) for k in order], dtype=np.float64)
-    vectors = np.array(eig_vecs[:, order], dtype=np.float64)
-
-    max_ev = float(values[0])
-    for col in range(size):
-        if max_ev != 0.0 and abs(values[col] / max_ev) < 1e-16:
-            values[col] = 0.0
-        if vectors[0, col] < 0.0:
-            vectors[:, col] = -vectors[:, col]
-    return values, vectors
-
-
 def _normalize_pseudo_root(
     matrix: npt.NDArray[np.float64], pseudo: npt.NDArray[np.float64]
 ) -> None:
-    """Rescale each row of ``pseudo`` so its norm matches ``matrix``'s diagonal.
+    """Rescale each row of ``pseudo`` so its norm matches ``matrix``' diagonal.
 
-    # C++ parity: ``normalizePseudoRoot`` (pseudosqrt.cpp, in-place).
+    # C++ parity: ``normalizePseudoRoot`` (pseudosqrt.cpp, anonymous namespace).
     """
-    for i in range(int(matrix.shape[0])):
-        norm = float(np.dot(pseudo[i], pseudo[i]))
+    size = int(matrix.shape[0])
+    pseudo_cols = int(pseudo.shape[1])
+    for i in range(size):
+        norm = 0.0
+        for j in range(pseudo_cols):
+            norm += float(pseudo[i, j]) * float(pseudo[i, j])
         if norm > 0.0:
-            pseudo[i, :] *= math.sqrt(float(matrix[i, i]) / norm)
+            norm_adj = math.sqrt(float(matrix[i, i]) / norm)
+            for j in range(pseudo_cols):
+                pseudo[i, j] *= norm_adj
 
 
 def _spectral_sqrt(corr: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    """Spectral pseudo-square-root of a symmetric matrix.
+    """Spectral square root of a (possibly degenerate) symmetric matrix.
 
     # C++ parity: ``pseudoSqrt(corr, SalvagingAlgorithm::Spectral)``
-    # in ql/math/matrixutilities/pseudosqrt.cpp:180-187.
+    # (ql/math/matrixutilities/pseudosqrt.cpp:377-385):
+    #     for i: diagonal[i][i] = sqrt(max(jd.eigenvalues()[i], 0))
+    #     result = jd.eigenvectors() * diagonal
+    #     normalizePseudoRoot(matrix, result)
 
-    ALIGN(processes): this used to be an inline
-    ``numpy.linalg.eigh`` + ``clip`` + ``eigvecs * sqrt(eigvals)``. That
-    reproduces ``M @ M.T`` correctly — which is why ``correlation()`` and
-    ``covariance()`` matched C++ — but NOT ``M`` itself, and ``M`` is exactly
-    what ``diffusion`` / ``std_deviation`` / ``evolve`` hand to the caller:
-
-    * ``eigh`` returns eigenvalues ASCENDING; C++ returns them DESCENDING, so
-      the columns came out in reverse order;
-    * ``eigh`` picks each eigenvector's sign arbitrarily; C++ pins it so the
-      first component is non-negative;
-    * ``normalizePseudoRoot`` was missing entirely.
-
-    Concretely, for ``[[1, -0.35], [-0.35, 1]]`` the old code returned row 0 as
-    ``[0.570, 0.822]`` where C++ returns ``[0.822, 0.570]``. Every
-    ``evolve(dw)`` on a non-identity correlation was mixing the Brownian
-    increments differently from C++. Pinned by
-    ``migration-harness/references/v143/processes/tail.json`` -> ``spa`` and
-    ``end_euler_array``.
-
-    The decomposition is done by :func:`_symmetric_schur` here rather than by
-    ``models.marketmodels.models.pseudo_sqrt.rank_reduced_sqrt``, which is the
-    same computation for distinct eigenvalues but reverses ``eigh``'s output
-    unconditionally and so returns a PERMUTATION matrix for the identity —
-    exactly the input this class sees most often.
+    The *value* of this matrix is observable, not merely its Gram product:
+    ``StochasticProcessArray.evolve`` uses ``dz = M @ dw`` for a specific
+    ``dw``, so any other square root of the same correlation gives a
+    statistically equivalent but path-wise different simulation. It must
+    therefore be built exactly as C++ builds it —
+    :class:`SymmetricSchurDecomposition` (eigenvalues in *decreasing* order,
+    with C++'s eigenvector sign convention), not ``numpy.linalg.eigh``, whose
+    eigenvalues come out ascending and whose eigenvector signs differ. Pinned
+    against C++ by ``migration-harness/references/v143/pe/basket.json``
+    (``mc_spectral_pseudo_sqrt_*``).
     """
-    qassert.require(corr.ndim == 2 and corr.shape[0] == corr.shape[1], "correlation matrix must be square")
+    qassert.require(
+        corr.ndim == 2 and corr.shape[0] == corr.shape[1],
+        "correlation matrix must be square",
+    )
     qassert.require(
         np.allclose(corr, corr.T, atol=1e-14),
         "correlation matrix must be symmetric",
     )
     size = int(corr.shape[0])
-    values, vectors = _symmetric_schur(corr)
-    diagonal = np.zeros((size, size), dtype=np.float64)
+    jd = SymmetricSchurDecomposition(corr)
+    diagonal: npt.NDArray[np.float64] = np.zeros((size, size), dtype=np.float64)
     for i in range(size):
-        diagonal[i, i] = math.sqrt(max(float(values[i]), 0.0))
-    result: npt.NDArray[np.float64] = vectors @ diagonal
+        diagonal[i, i] = math.sqrt(max(float(jd.eigenvalues()[i]), 0.0))
+    result: npt.NDArray[np.float64] = jd.eigenvectors() @ diagonal
     _normalize_pseudo_root(corr, result)
     return result
 
