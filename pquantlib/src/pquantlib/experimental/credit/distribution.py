@@ -1,6 +1,6 @@
 """Distribution — discretised probability density + cumulative.
 
-# C++ parity: ql/experimental/credit/distribution.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/experimental/credit/distribution.{hpp,cpp} (v1.43).
 
 Bucket-based discretisation of a continuous distribution on a finite
 interval [xmin, xmax]. Buckets have equal width (except the last one,
@@ -24,12 +24,16 @@ and the cumulative arrays. ``normalize()`` is idempotent.
 
 # C++ parity divergence: the C++ class uses raw int sizes and friend-
 # class access for the ``ManipulateDistribution::convolve`` helper. The
-# Python port keeps these private fields accessible to ``convolve`` via
-# a free function in the same module rather than a friend declaration.
+# Python port keeps :class:`ManipulateDistribution` with the same static
+# ``convolve``, but the private-field access it needs goes through a
+# single ``Distribution.bind_internals()`` accessor rather than a friend
+# declaration. ``convolve_distributions`` is the module-level entry point
+# both share.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from pquantlib import qassert
@@ -270,6 +274,19 @@ class Distribution:
             expected += mid * self._dx[i] * self._density[i]
         return expected
 
+    def expected_value_of(self, f: Callable[[float], float]) -> float:
+        """``E[f(X)]`` over the bucketed density, sampling ``f`` at bucket mids.
+
+        # C++ parity: the member template ``Distribution::expectedValue(F& f)``
+        # at distribution.hpp:80-89.
+        """
+        self.normalize()
+        expected = 0.0
+        for i in range(self._size):
+            x = self._x[i] + self._dx[i] / 2.0
+            expected += f(x) * self._dx[i] * self._density[i]
+        return expected
+
     def tranche_expected_value(self, a: float, d: float) -> float:
         """Expected value of the tranche [a, d].
 
@@ -315,19 +332,86 @@ class Distribution:
         self.normalize()
         for i in range(self._size):
             if self._x[i] + self._dx[i] + tiny >= x:
+                # ``_cum_density_before`` carries the i == 0 out-of-bounds
+                # read; see its docstring.
                 return (
                     (x - self._x[i]) * self._cumulative_density[i]
-                    + (self._x[i] + self._dx[i] - x)
-                    * self._cumulative_density[i - 1]
+                    + (self._x[i] + self._dx[i] - x) * self._cum_density_before(i)
                 ) / self._dx[i]
         qassert.fail(
             f"x = {x} beyond distribution cutoff {self._x[-1] + self._dx[-1]}"
         )
 
+    def tranche(self, attachment_point: float, detachment_point: float) -> None:
+        """Transform this loss distribution into the tranche loss distribution.
+
+        For losses ``L_T = min(L, D) - min(L, A)``, i.e. shift left by ``A``,
+        cut off at ``D - A`` and pile the residual mass onto ``L_T = 0``.
+
+        Destructive; the C++ comment says it plainly: "Dangerous to perform
+        calls to members after this; transform and clone?".
+
+        # C++ parity: distribution.cpp:234-285.
+        """
+        qassert.require(
+            attachment_point < detachment_point,
+            "attachment >= detachment point",
+        )
+        qassert.require(
+            self._x[-1] > attachment_point
+            and self._x[-1] + self._dx[-1] >= detachment_point,
+            "attachment or detachment too large",
+        )
+
+        self.normalize()
+
+        # shift — drop every bucket entirely below the attachment point.
+        while self._x[0] < attachment_point:
+            del self._x[0]
+            del self._dx[0]
+            del self._count[0]
+            del self._density[0]
+            del self._cumulative_density[0]
+            del self._excess[0]
+
+        # remove losses over the detachment point
+        detach_posit = next(
+            (i for i, xi in enumerate(self._x) if xi > detachment_point), None
+        )
+        if detach_posit is not None:
+            del self._x[detach_posit + 1 :]
+
+        self._size = len(self._x)
+        del self._cumulative_density[self._size :]
+        self._cumulative_density[-1] = 1.0
+        del self._count[self._size :]
+        del self._dx[self._size :]
+
+        # truncate
+        for i in range(len(self._x)):
+            self._x[i] = min(
+                max(self._x[i] - attachment_point, 0.0),
+                detachment_point - attachment_point,
+            )
+
+        self._density.clear()
+        self._excess.clear()
+        self._cumulative_excess.clear()  # ? reuse?
+        self._density.append((self._cumulative_density[0] - 0.0) / self._dx[0])
+        self._excess.append(1.0)
+        for i in range(1, self._size - 1):
+            self._excess.append(1.0 - self._cumulative_density[i - 1])
+            self._density.append(
+                (self._cumulative_density[i] - self._cumulative_density[i - 1])
+                / self._dx[i]
+            )
+        self._excess.append(1.0 - self._cumulative_density[-1])
+        self._density.append((1.0 - self._cumulative_density[-1]) / self._dx[-1])
+
     def expected_shortfall(self, perc_value: float) -> float:
         """Expected value above the quantile at ``perc_value``.
 
-        # C++ parity: distribution.cpp:328-342.
+        # C++ parity: distribution.cpp:327-342.
         """
         qassert.require(0.0 <= perc_value <= 1.0, "Incorrect percentile")
         self.normalize()
@@ -339,9 +423,54 @@ class Distribution:
         expected = 0.0
         for i in range(i_val, self._size):
             expected += self._x[i] * (
-                self._cumulative_density[i] - self._cumulative_density[i - 1]
+                self._cumulative_density[i] - self._cum_density_before(i)
             )
         return expected / (1.0 - self._cumulative_density[i_val])
+
+    def _cum_density_before(self, i: int) -> float:
+        """``cumulativeDensity_[i-1]``, with C++'s out-of-bounds read at i == 0.
+
+        # C++ parity note (DEFECT, reproduced verbatim): both
+        # ``Distribution::expectedShortfall`` (distribution.cpp:338-340) and
+        # ``Distribution::cumulativeDensity`` (distribution.cpp:225-229) index
+        # ``cumulativeDensity_[i-1]`` inside a loop that starts at ``i == 0``::
+        #
+        #     for (int i = iVal; i < size_; i++)
+        #         expected += x_[i] *
+        #             (cumulativeDensity_[i] - cumulativeDensity_[i-1]);
+        #
+        # ``std::vector::operator[]`` does no bounds checking, so at ``i == 0``
+        # this reads the double immediately before the buffer — undefined
+        # behaviour. The value observed on arm64/libc++ is 0.0, solved for from
+        # the probe's ``homog_expected_shortfall_5y`` (a tranched distribution
+        # whose ``iVal`` is 0): only G == 0.0 reproduces 14.616955566384418;
+        # G == 1.0, which is what Python's negative-index wraparound would
+        # silently supply, gives 13.2. 0.0 is also the mathematically correct
+        # convention — there is no probability mass below the first bucket —
+        # so this port returns 0.0 rather than reading past the array.
+        """
+        return self._cumulative_density[i - 1] if i > 0 else 0.0
+
+
+class ManipulateDistribution:
+    """Namespace class holding the ``Distribution`` convolution.
+
+    # C++ parity: ``class ManipulateDistribution`` at distribution.hpp:129-133
+    # — a class with a single static member, declared a ``friend`` of
+    # ``Distribution`` (distribution.hpp:36 + :39) so ``convolve`` can reach
+    # the private vectors of both operands.
+    """
+
+    __slots__ = ()
+
+    @staticmethod
+    def convolve(d1: Distribution, d2: Distribution) -> Distribution:
+        """Convolve two distributions.
+
+        # C++ parity: ``ManipulateDistribution::convolve`` at
+        # distribution.cpp:287-324.
+        """
+        return convolve_distributions(d1, d2)
 
 
 def convolve_distributions(d1: Distribution, d2: Distribution) -> Distribution:

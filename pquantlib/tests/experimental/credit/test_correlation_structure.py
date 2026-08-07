@@ -1,5 +1,5 @@
 """Tests for CorrelationTermStructure + CompoundCorrelationStructure +
-BaseCorrelationStructure.
+BaseCorrelationTermStructure.
 
 # C++ parity: ql/experimental/credit/correlationstructure.{hpp,cpp}
 # + basecorrelationstructure.hpp. Tests are not cross-validated against the
@@ -16,7 +16,7 @@ import pytest
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.exceptions import LibraryException
 from pquantlib.experimental.credit.base_correlation_structure import (
-    BaseCorrelationStructure,
+    BaseCorrelationTermStructure,
 )
 from pquantlib.experimental.credit.correlation_structure import (
     CompoundCorrelationStructure,
@@ -122,11 +122,16 @@ def test_compound_correlation_returns_copy_of_children() -> None:
 
 
 # -----------------------------------------------------------------------------
-# BaseCorrelationStructure tests
+# BaseCorrelationTermStructure tests
 # -----------------------------------------------------------------------------
 
 
 def test_base_correlation_constructs_and_queries() -> None:
+    # NOTE: the quote matrix below is diagonal-symmetric in the sense that the
+    # values this test reads back are unchanged by the C++ row/column
+    # transposition defect. That defect is asserted on an ASYMMETRIC matrix in
+    # test_base_correlation_v143.py::
+    #     test_surface_on_node_reproduces_cpp_transposition
     cal = TARGET()
     dc = Actual365Fixed()
     tenors = [Period(1, TimeUnit.Years), Period(3, TimeUnit.Years), Period(5, TimeUnit.Years)]
@@ -136,7 +141,7 @@ def test_base_correlation_constructs_and_queries() -> None:
         [SimpleQuote(0.45), SimpleQuote(0.55), SimpleQuote(0.65)],  # tenor 3Y
         [SimpleQuote(0.50), SimpleQuote(0.60), SimpleQuote(0.70)],  # tenor 5Y
     ]
-    bcs = BaseCorrelationStructure(
+    bcs = BaseCorrelationTermStructure(
         settlement_days=2,
         calendar=cal,
         bdc=BusinessDayConvention.Following,
@@ -165,32 +170,36 @@ def test_base_correlation_constructs_and_queries() -> None:
     tolerance.tight(bcs.correlation_at_time(tmid, lmid), expected)
 
 
-def test_base_correlation_rejects_non_monotone_loss_levels() -> None:
-    quotes = [[SimpleQuote(0.40), SimpleQuote(0.50)] for _ in range(2)]
+def _bcs_with_loss_levels(loss_levels: list[float]) -> BaseCorrelationTermStructure:
+    return BaseCorrelationTermStructure(
+        settlement_days=2,
+        calendar=TARGET(),
+        bdc=BusinessDayConvention.Following,
+        tenors=[Period(1, TimeUnit.Years), Period(3, TimeUnit.Years)],
+        loss_levels=loss_levels,
+        correlation_quotes=[[SimpleQuote(0.40), SimpleQuote(0.50)] for _ in range(2)],
+        day_counter=Actual365Fixed(),
+    )
+
+
+def test_base_correlation_check_losses_rejects_non_monotone_loss_levels() -> None:
+    """The CONSTRUCTOR accepts them; only the explicit checker rejects.
+
+    # C++ parity: ``checkLosses`` (basecorrelationstructure.hpp:142-157) is a
+    # public member that the constructor (hpp:77-88) never calls — it runs
+    # checkTrancheTenors, initializeTrancheTimes, checkInputs, updateMatrix,
+    # registerWithMarketData and setupInterpolation, and nothing else.
+    """
+    bcs = _bcs_with_loss_levels([0.06, 0.03])  # non-monotone, accepted
     with pytest.raises(LibraryException, match="non-increasing loss level"):
-        BaseCorrelationStructure(
-            settlement_days=2,
-            calendar=TARGET(),
-            bdc=BusinessDayConvention.Following,
-            tenors=[Period(1, TimeUnit.Years), Period(3, TimeUnit.Years)],
-            loss_levels=[0.06, 0.03],  # non-monotone
-            correlation_quotes=quotes,
-            day_counter=Actual365Fixed(),
-        )
+        bcs.check_losses()
 
 
-def test_base_correlation_rejects_loss_level_above_one() -> None:
-    quotes = [[SimpleQuote(0.40), SimpleQuote(0.50)] for _ in range(2)]
+def test_base_correlation_check_losses_rejects_loss_level_above_one() -> None:
+    """Same story for a loss level above 100%."""
+    bcs = _bcs_with_loss_levels([0.03, 1.5])  # accepted at construction
     with pytest.raises(LibraryException, match="100%"):
-        BaseCorrelationStructure(
-            settlement_days=2,
-            calendar=TARGET(),
-            bdc=BusinessDayConvention.Following,
-            tenors=[Period(1, TimeUnit.Years), Period(3, TimeUnit.Years)],
-            loss_levels=[0.03, 1.5],
-            correlation_quotes=quotes,
-            day_counter=Actual365Fixed(),
-        )
+        bcs.check_losses()
 
 
 def test_base_correlation_quote_update_propagates() -> None:
@@ -203,7 +212,7 @@ def test_base_correlation_quote_update_propagates() -> None:
     q10 = SimpleQuote(0.45)
     q11 = SimpleQuote(0.55)
     quotes = [[q00, q01], [q10, q11]]
-    bcs = BaseCorrelationStructure(
+    bcs = BaseCorrelationTermStructure(
         settlement_days=2,
         calendar=cal,
         bdc=BusinessDayConvention.Following,
@@ -228,7 +237,7 @@ def test_base_correlation_max_date_is_last_tranche_date() -> None:
         [SimpleQuote(0.40), SimpleQuote(0.50)],
         [SimpleQuote(0.45), SimpleQuote(0.55)],
     ]
-    bcs = BaseCorrelationStructure(
+    bcs = BaseCorrelationTermStructure(
         settlement_days=2,
         calendar=cal,
         bdc=BusinessDayConvention.Following,
@@ -251,7 +260,7 @@ def test_base_correlation_correlation_size_is_one() -> None:
         [SimpleQuote(0.40), SimpleQuote(0.50)],
         [SimpleQuote(0.45), SimpleQuote(0.55)],
     ]
-    bcs = BaseCorrelationStructure(
+    bcs = BaseCorrelationTermStructure(
         settlement_days=2,
         calendar=cal,
         bdc=BusinessDayConvention.Following,
@@ -272,7 +281,7 @@ def test_base_correlation_matrix_copy_is_defensive() -> None:
         [SimpleQuote(0.40), SimpleQuote(0.50)],
         [SimpleQuote(0.45), SimpleQuote(0.55)],
     ]
-    bcs = BaseCorrelationStructure(
+    bcs = BaseCorrelationTermStructure(
         settlement_days=2,
         calendar=cal,
         bdc=BusinessDayConvention.Following,

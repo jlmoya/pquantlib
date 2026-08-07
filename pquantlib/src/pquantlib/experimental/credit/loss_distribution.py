@@ -1,10 +1,10 @@
-"""LossDistribution — probability formulas + bucketed convolution algorithms.
+"""LossDist — probability formulas + bucketed convolution algorithms.
 
-# C++ parity: ql/experimental/credit/lossdistribution.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/experimental/credit/lossdistribution.{hpp,cpp} (v1.43).
 
 Top-level abstractions:
 
-  - ``LossDistribution`` — abstract base; subclasses build a
+  - ``LossDist`` — abstract base; subclasses build a
     ``Distribution`` from per-name (notional, probability) arrays.
   - ``LossDistBinomial`` — binomial loss distribution with constant
     per-name notional + probability (uses p[0]/n).
@@ -27,39 +27,34 @@ Plus the static helpers exposed at module scope (mirrors C++
 # C++ parity divergence: the C++ MersenneTwisterUniformRng is replaced by
 # pquantlib.math.randomnumbers.mt19937_uniform_rng to match the EXACT-tier
 # RNG porting policy in MEMORY.md.
+
+Two C++ defects are reproduced verbatim; see
+``binomial_probability_of_at_least_n_events`` and ``LossDistBinomial.__call__``.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-
-from scipy.stats import binom  # pyright: ignore[reportMissingTypeStubs, reportUnknownVariableType]
+from typing import Final
 
 from pquantlib import qassert
 from pquantlib.experimental.credit.distribution import Distribution
+from pquantlib.math.distributions.binomial_distribution import (
+    BinomialDistribution,
+    CumulativeBinomialDistribution,
+)
 from pquantlib.math.randomnumbers.mersenne_twister import MersenneTwisterUniformRng
 
-
-# C++ parity: the C++ ``BinomialDistribution`` (PMF) + ``CumulativeBinomialDistribution``
-# (CDF) classes live at ql/math/distributions/binomialdistribution.hpp. Python uses
-# scipy.stats.binom — algebraically the same since both rely on log-gamma based
-# binomial coefficients. Phase 1 left ``BinomialDistribution`` as an L1 carve-out
-# (no test path exercised it yet); using scipy here closes that carve-out at
-# the call sites that need it without inflating Phase 1 scope.
-def _binom_pmf(p: float, n: int, k: int) -> float:
-    """PMF of Binomial(n, p) at k.
-
-    # C++ parity: BinomialDistribution(p, n)(k).
-    """
-    return float(binom.pmf(k, n, p))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+# ``BigNatural`` is ``unsigned QL_BIG_INTEGER`` (ql/types.hpp), 64-bit on every
+# platform this port targets. Only the *sign* of the wrap matters below: any
+# negative int becomes a value far above any realistic pool size.
+_BIG_NATURAL_MASK: Final[int] = (1 << 64) - 1
 
 
-def _binom_cdf(p: float, n: int, k: int) -> float:
-    """CDF of Binomial(n, p) at k (= P(X <= k)).
+def _to_big_natural(k: int) -> int:
+    """Reproduce C++'s implicit ``int`` -> ``BigNatural`` conversion."""
+    return k & _BIG_NATURAL_MASK
 
-    # C++ parity: CumulativeBinomialDistribution(p, n)(k).
-    """
-    return float(binom.cdf(k, n, p))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
 
 # ----- module-level static helpers --------------------------------------------
 
@@ -68,18 +63,30 @@ def binomial_probability_of_n_events(n: int, p: list[float]) -> float:
     """P(N=n) under Binomial(p[0], len(p)).
 
     # C++ parity: LossDist::binomialProbabilityOfNEvents at
-    # lossdistribution.cpp:28-32.
+    # lossdistribution.cpp:27-32.
     """
-    return _binom_pmf(p[0], len(p), n)
+    return BinomialDistribution(p[0], len(p))(n)
 
 
 def binomial_probability_of_at_least_n_events(n: int, p: list[float]) -> float:
     """P(N>=n) under Binomial(p[0], len(p)).
 
     # C++ parity: LossDist::binomialProbabilityOfAtLeastNEvents at
-    # lossdistribution.cpp:35-46.
+    # lossdistribution.cpp:34-46::
+
+        CumulativeBinomialDistribution binomial(p[0], p.size());
+        return 1.0 - binomial(n-1);
+
+    # C++ parity note (DEFECT, reproduced verbatim): ``operator()`` takes a
+    # ``BigNatural`` (binomialdistribution.hpp:71), so at ``n == 0`` the
+    # argument ``n-1 == -1`` converts to the largest unsigned value, the guard
+    # ``if (k >= n_) return 1.0;`` (hpp:72-73) fires, and the function returns
+    # ``1.0 - 1.0 == 0.0`` — i.e. **P(N >= 0) comes out 0 instead of 1**.
+    # Pinned by ``lossdist_binom_prob_at_least_n_events[0] == 0``. The wrap is
+    # made explicit here because Python ints do not overflow.
     """
-    return 1.0 - _binom_cdf(p[0], len(p), n - 1)
+    binomial = CumulativeBinomialDistribution(p[0], len(p))
+    return 1.0 - binomial(_to_big_natural(n - 1))
 
 
 def probability_of_n_events_vec(p: list[float]) -> list[float]:
@@ -173,7 +180,7 @@ class BinomialProbabilityOfAtLeastNEvents:
 # ----- abstract base + concretes ----------------------------------------------
 
 
-class LossDistribution(ABC):
+class LossDist(ABC):
     """Abstract base for bucketed loss-distribution algorithms.
 
     Each subclass produces a ``Distribution`` from per-name volume +
@@ -194,7 +201,7 @@ class LossDistribution(ABC):
     def maximum(self) -> float: ...
 
 
-class LossDistBinomial(LossDistribution):
+class LossDistBinomial(LossDist):
     """Binomial loss distribution with constant volume + probability.
 
     Treats the input as a Binomial(probabilities[0], len(volumes)) with
@@ -248,9 +255,16 @@ class LossDistBinomial(LossDistribution):
         self._n = n
         self._probability = [0.0] * (n + 1)
         dist = Distribution(self._n_buckets, 0.0, self._maximum)
+        binomial = BinomialDistribution(probability, n)
         for i in range(n + 1):
+            # # C++ parity note (DEFECT, reproduced verbatim): the guard reads
+            # the MEMBER ``volume_``, not the ``volume`` parameter
+            # (lossdistribution.cpp:155). ``volume_`` is declared without an
+            # initialiser (lossdistribution.hpp:111) and neither operator()
+            # ever assigns it, so C++ tests an indeterminate value. See the
+            # note on :meth:`__call__`.
             if self._volume * i <= self._maximum:
-                self._probability[i] = _binom_pmf(probability, n, i)
+                self._probability[i] = binomial(i)
                 bucket = dist.locate(volume * i)
                 dist.add_density(bucket, self._probability[i] / dist.dx(bucket))
                 dist.add_average(bucket, volume * i)
@@ -270,18 +284,28 @@ class LossDistBinomial(LossDistribution):
     ) -> Distribution:
         """Variant overload using parallel arrays — picks the head as the binomial pair.
 
-        # C++ parity: lossdistribution.cpp:175-179 — delegates to the
-        # 3-arg overload (n, volumes[0], probabilities[0]). Note the C++
-        # implementation does NOT set ``volume_`` here, which leaves
-        # ``volume()`` returning uninitialised memory if called after
-        # this overload. The Python port plugs that hole by writing
-        # ``self._volume = volumes[0]``.
+        # C++ parity: lossdistribution.cpp:174-179 — delegates to the 3-arg
+        # overload ``(nominals.size(), nominals[0], probabilities[0])``.
+
+        # C++ parity note (DEFECT, reproduced verbatim): neither this overload
+        # nor the 3-arg one ever assigns ``volume_``, which
+        # lossdistribution.hpp:111 declares as a bare ``mutable Real volume_;``
+        # with no initialiser — yet lossdistribution.cpp:155 reads it as the
+        # loop guard ``if (volume_ * i <= maximum_)``. C++ therefore branches on
+        # an indeterminate value and ``volume()`` returns garbage. Measured over
+        # 25 runs of the v1.43 probe on arm64/libc++ the value is a different
+        # denormal near 2.14e-314 every time, so the guard never binds; the
+        # probe pins that outcome as ``lossdist_binomial_defect_guard_binds ==
+        # false`` rather than pinning the unpinnable float. Leaving
+        # ``self._volume`` at its 0.0 default puts this port in exactly that
+        # regime. An earlier revision of this file assigned
+        # ``self._volume = volumes[0]`` to "plug the hole"; that silently
+        # changed the guard (it can then bind) and is NOT what C++ does.
         """
-        self._volume = volumes[0]
         return self.for_uniform(len(volumes), volumes[0], probabilities[0])
 
 
-class LossDistHomogeneous(LossDistribution):
+class LossDistHomogeneous(LossDist):
     """Exact loss distribution for equal-volume names with varying probabilities.
 
     # C++ parity: lossdistribution.hpp:138 + cpp:182-224. Implementation
@@ -366,7 +390,7 @@ class LossDistHomogeneous(LossDistribution):
         return self.for_volume(volumes[0], probabilities)
 
 
-class LossDistBucketing(LossDistribution):
+class LossDistBucketing(LossDist):
     """Hull-White bucketing for arbitrary notionals + independent probabilities.
 
     # C++ parity: lossdistribution.hpp:170 + cpp:227-298.
@@ -446,7 +470,7 @@ class LossDistBucketing(LossDistribution):
         return dist
 
 
-class LossDistMonteCarlo(LossDistribution):
+class LossDistMonteCarlo(LossDist):
     """Monte-Carlo sampling for independent default events.
 
     # C++ parity: lossdistribution.hpp:193 + cpp:302-322.

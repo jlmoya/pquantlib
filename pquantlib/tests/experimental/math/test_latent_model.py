@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from pquantlib.experimental.math.gaussian_copula_policy import GaussianCopulaPolicy
-from pquantlib.experimental.math.latent_model import LatentModel
+from pquantlib.experimental.math.latent_model import LatentModel, LMIntegration
 from pquantlib.experimental.math.multidim_integrator import MultidimIntegral
 from pquantlib.experimental.math.t_copula_policy import TCopulaPolicy
 from pquantlib.math.integrals.trapezoid import TrapezoidIntegral
@@ -81,7 +81,7 @@ def test_latent_inconsistent_factor_rows() -> None:
         LatentModel([[0.5, 0.1], [0.4]], GaussianCopulaPolicy([[0.5, 0.1]]))
 
 
-class _TrapLMIntegration:
+class _TrapLMIntegration(LMIntegration):
     """Single-axis trapezoid integration facility over [-8, 8]."""
 
     def __init__(self) -> None:

@@ -1,12 +1,17 @@
-"""BaseCorrelationStructure — 2-D base-correlation surface.
+"""BaseCorrelationTermStructure — 2-D base-correlation surface.
 
-# C++ parity: ql/experimental/credit/basecorrelationstructure.hpp (v1.42.1).
+# C++ parity: ql/experimental/credit/basecorrelationstructure.hpp:50-198
+# + basecorrelationstructure.cpp:28-47 (v1.43).
 
 Base-correlation surfaces map (tranche-tenor, loss-level) -> correlation
 quote. The C++ class is templated on a 2-D interpolator (bilinear or
 bicubic-spline); the Python port keeps the same surface but takes the
 interpolator as a constructor argument (delegated to
 ``pquantlib.math.interpolations.bilinear.BilinearInterpolation`` by default).
+
+Two C++ defects are reproduced verbatim; both are pinned by the
+``bcts_*`` block of ``migration-harness/references/v143/experimental/creditloss.json``.
+See :class:`BaseCorrelationTermStructure` for the derivations.
 """
 
 from __future__ import annotations
@@ -39,7 +44,7 @@ def _default_interpolator(xs: Array, ys: Array, z: Matrix) -> BilinearInterpolat
     return BilinearInterpolation(xs, ys, z)
 
 
-class BaseCorrelationStructure(CorrelationTermStructure):
+class BaseCorrelationTermStructure(CorrelationTermStructure):
     """Matrix-based base-correlation term structure.
 
     Tranche tenors and loss levels are passed at construction; the correlation
@@ -52,6 +57,42 @@ class BaseCorrelationStructure(CorrelationTermStructure):
     # so the runtime can swap interpolators without re-instantiating the
     # class — this matches downstream uses (`bilinear` for arbitrage-safe,
     # `bicubic_spline` for smoother surfaces).
+
+    # C++ parity note (DEFECT 1, reproduced verbatim): the constructor calls
+    # ``checkInputs(correlations_.rows(), correlations_.columns())``
+    # (basecorrelationstructure.hpp:84) — that is ``(nTenors, nLosses)``,
+    # since ``correlations_`` is built as
+    # ``Matrix(correls.size(), correls.front().size())`` (hpp:71). But
+    # ``checkInputs`` asserts
+    #     QL_REQUIRE(nLosses_==volRows, ...)
+    #     QL_REQUIRE(nTrancheTenors_==volsColumns, ...)
+    # (hpp:168-175), i.e. ``nLosses == nTenors`` AND ``nTenors == nLosses``.
+    # A perfectly well-formed non-square surface therefore always throws.
+    # Pinned by ``bcts_defect_non_square_throws`` (true).
+
+    # C++ parity note (DEFECT 2, reproduced verbatim): the documented layout
+    # is ``correls[iYear][iLoss]`` (hpp:54) and ``updateMatrix`` fills
+    # ``correlations_[i][j] = correlHandles_[i][j]`` with i = tenor,
+    # j = loss (hpp:193-198). But ``setupInterpolation`` hands that matrix to
+    #     BilinearInterpolation(trancheTimes_.begin(), trancheTimes_.end(),
+    #                           lossLevel_.begin(), lossLevel_.end(),
+    #                           correlations_)
+    # (basecorrelationstructure.cpp:31-34), and ``Interpolation2D`` indexes
+    # its z as ``zData_[y_index][x_index]`` — so row i is read as the LOSS
+    # index and column j as the TENOR index. The surface therefore comes out
+    # TRANSPOSED: ``correlation(t_i, l_j) == correls[j][i]``. Only the
+    # square-shape accident of defect 1 keeps this from being a size error.
+    # Pinned by ``bcts_on_node``: quotes {{.1,.2,.3},{.4,.5,.6},{.7,.8,.9}}
+    # read back, walking (tenor-major, loss-minor), as
+    # [.1,.4,.7, .2,.5,.8, .3,.6,.9] rather than [.1,.2,.3, .4,.5,.6, ...].
+
+    # C++ parity note: ``checkLosses`` (hpp:143-157) is public but the C++
+    # constructor never calls it (hpp:77-88 runs checkTrancheTenors,
+    # initializeTrancheTimes, checkInputs, updateMatrix,
+    # registerWithMarketData, setupInterpolation — and nothing else). So an
+    # unsorted / out-of-range loss-level vector is accepted at construction.
+    # Reproduced: :meth:`check_losses` exists and is callable, but the
+    # constructor does not invoke it.
     """
 
     __slots__ = (
@@ -95,50 +136,63 @@ class BaseCorrelationStructure(CorrelationTermStructure):
             else _default_interpolator
         )
 
-        # Validate inputs.
-        # # C++ parity: basecorrelationstructure.hpp checkTrancheTenors/checkLosses/checkInputs.
-        self._check_tranche_tenors()
-        self._check_losses()
-        qassert.require(
-            len(self._corr_quotes) == self._n_tranche_tenors,
-            f"correl_quotes row count {len(self._corr_quotes)} != n_tranche_tenors {self._n_tranche_tenors}",
-        )
-        for row in self._corr_quotes:
-            qassert.require(
-                len(row) == self._n_losses,
-                f"correl_quotes row width {len(row)} != n_losses {self._n_losses}",
-            )
+        # The C++ constructor body, in order (basecorrelationstructure.hpp:77-88).
+        self.check_tranche_tenors()
 
-        # Compute tranche dates + times.
         self._tranche_dates = [
             calendar.advance_period(self.reference_date(), t, bdc) for t in tenors
         ]
         self._tranche_times = [
             self.time_from_reference(d) for d in self._tranche_dates
         ]
+
+        # ``correlations_`` is Matrix(correls.size(), correls.front().size())
+        # = (rows = n_tranche_tenors, cols = n_losses) — hpp:71.
         self._correlations: Matrix = np.zeros(
-            (self._n_losses, self._n_tranche_tenors), dtype=np.float64
+            (len(self._corr_quotes), len(self._corr_quotes[0])), dtype=np.float64
         )
-        self._update_matrix()
+        # DEFECT 1: the arguments are (rows, columns) = (nTenors, nLosses),
+        # but check_inputs compares them the other way round.
+        self.check_inputs(
+            self._correlations.shape[0], self._correlations.shape[1]
+        )
+        self.update_matrix()
 
         # Register as observer of every quote so a quote update invalidates us.
+        # # C++ parity: registerWithMarketData (hpp:178-184).
         for row in self._corr_quotes:
             for q in row:
                 q.register_with(self)
 
-        # Build the interpolator.
-        # # C++ parity divergence: matrix is in (loss, tenor) layout in C++.
-        # The Python ``BilinearInterpolation`` expects shape (len(ys), len(xs))
-        # which in our case is (n_losses, n_tranche_tenors); ys=loss_levels
-        # x-axis=tranche_times. We pass them in that order.
+        # DEFECT 2: x = tranche times, y = loss levels, z = correlations_ as
+        # filled — i.e. z is read as z[i_loss][i_tenor] but was written as
+        # [i_tenor][i_loss]. # C++ parity: basecorrelationstructure.cpp:31-34.
         self._interpolation = self._interpolator_factory(
             np.asarray(self._tranche_times, dtype=np.float64),
             np.asarray(self._loss_levels, dtype=np.float64),
             self._correlations,
         )
 
-    def _check_tranche_tenors(self) -> None:
-        # # C++ parity: basecorrelationstructure.hpp:131-140.
+    def check_inputs(self, vol_rows: int, vols_columns: int) -> None:
+        """Validate the correlation-matrix shape.
+
+        # C++ parity: basecorrelationstructure.hpp:165-176. See the DEFECT 1
+        # note on the class: the comparison is transposed relative to the
+        # arguments the constructor supplies, so only square surfaces pass.
+        """
+        qassert.require(
+            self._n_losses == vol_rows,
+            f"mismatch between number of loss levels ({self._n_losses}) and "
+            f"number of rows ({vol_rows}) in the correl matrix",
+        )
+        qassert.require(
+            self._n_tranche_tenors == vols_columns,
+            f"mismatch between number of tranche tenors ({self._n_tranche_tenors}) "
+            f"and number of columns ({vols_columns}) in the correl matrix",
+        )
+
+    def check_tranche_tenors(self) -> None:
+        # # C++ parity: basecorrelationstructure.hpp:130-140.
         qassert.require(
             self._tenors[0].length > 0,
             f"first tranche tenor is non-positive ({self._tenors[0]})",
@@ -149,8 +203,9 @@ class BaseCorrelationStructure(CorrelationTermStructure):
                 f"non-increasing tranche tenor at index {i}",
             )
 
-    def _check_losses(self) -> None:
-        # # C++ parity: basecorrelationstructure.hpp:143-157.
+    def check_losses(self) -> None:
+        # # C++ parity: basecorrelationstructure.hpp:142-157. Public in C++
+        # and never called by the constructor; see the class note.
         qassert.require(
             self._loss_levels[0] > 0.0,
             f"first loss level is non-positive ({self._loss_levels[0]})",
@@ -169,17 +224,24 @@ class BaseCorrelationStructure(CorrelationTermStructure):
                 f"loss level {i} > 100%: {self._loss_levels[i]}",
             )
 
-    def _update_matrix(self) -> None:
-        # # C++ parity: basecorrelationstructure.hpp:193-198.
-        for i in range(self._n_tranche_tenors):
-            for j in range(self._n_losses):
-                self._correlations[j, i] = self._corr_quotes[i][j].value()
+    def update_matrix(self) -> None:
+        """Re-read every quote into the correlation matrix.
+
+        # C++ parity: basecorrelationstructure.hpp:192-198 —
+        # ``correlations_[i][j] = correlHandles_[i][j]->value()`` with
+        # i = tenor index and j = loss index. Copied index-for-index; the
+        # transposition against the interpolator (DEFECT 2) happens at
+        # lookup, not here.
+        """
+        for i in range(len(self._corr_quotes)):
+            for j in range(len(self._corr_quotes[0])):
+                self._correlations[i, j] = self._corr_quotes[i][j].value()
 
     def update(self) -> None:
         """Refresh quote-driven matrix and forward to TermStructure observers."""
-        # # C++ parity: basecorrelationstructure.hpp:187-190 — updateMatrix +
+        # # C++ parity: basecorrelationstructure.hpp:186-190 — updateMatrix +
         # TermStructure::update.
-        self._update_matrix()
+        self.update_matrix()
         super().update()
 
     def correlation_size(self) -> int:
@@ -190,14 +252,28 @@ class BaseCorrelationStructure(CorrelationTermStructure):
         # # C++ parity: basecorrelationstructure.hpp:107.
         return self._tranche_dates[-1]
 
-    def correlation(self, d: Date, loss_level: float) -> float:
-        """Return the correlation at (date, loss-level) via interpolation."""
-        return self.correlation_at_time(self.time_from_reference(d), loss_level)
+    def correlation(
+        self, d: Date, loss_level: float, extrapolate: bool = False
+    ) -> float:
+        """Return the correlation at (date, loss-level) via interpolation.
 
-    def correlation_at_time(self, t: float, loss_level: float) -> float:
-        """Same as ``correlation`` but skips the date->time conversion."""
-        # We always allow_extrapolation=True to mirror C++ which passes
-        # ``extrapolate=true`` to the interpolator (basecorrelationstructure.hpp:114).
+        # C++ parity: basecorrelationstructure.hpp:108-110.
+        """
+        return self.correlation_at_time(
+            self.time_from_reference(d), loss_level, extrapolate
+        )
+
+    def correlation_at_time(
+        self, t: float, loss_level: float, extrapolate: bool = False
+    ) -> float:
+        """Same as ``correlation`` but skips the date->time conversion.
+
+        # C++ parity: basecorrelationstructure.hpp:111-115. The
+        # ``extrapolate`` argument is accepted and DISCARDED in C++ too —
+        # the body passes a hard-coded ``true`` to the interpolator. Kept
+        # for signature parity.
+        """
+        del extrapolate
         return float(self._interpolation(t, loss_level, allow_extrapolation=True))  # pyright: ignore[reportCallIssue, reportUnknownArgumentType]
 
     def tenors(self) -> list[Period]:

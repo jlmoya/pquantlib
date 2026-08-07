@@ -156,6 +156,36 @@ class Basket(Observable):
     def detachment_amount(self) -> float:
         return self._detachment_amount
 
+    def exposure(self, name: str, d: Date | None = None) -> float:
+        """Total notional this basket has against counterparty ``name``.
+
+        # C++ parity: ``Basket::exposure`` (basket.cpp:226-246). ``names_``
+        # may contain duplicates while ``pool->names()`` does not, so C++
+        # walks every match and sums the corresponding notionals; the date
+        # argument is accepted and ignored (the C++ expected-exposure call is
+        # commented out as "NOT IMPLEMENTED YET").
+        """
+        del d
+        pool_names = self._pool.names()
+        qassert.require(name in pool_names, "Name not in basket.")
+        total = 0.0
+        for i, n in enumerate(pool_names):
+            if n == name:
+                total += self._notionals[i]
+        return total
+
+    def remaining_size(self) -> int:
+        """Number of counterparties alive at the evaluation date.
+
+        # C++ parity: ``Basket::remainingSize`` (basket.cpp:275-277) returns
+        # ``evalDateLiveList_.size()``.
+
+        # C++ parity divergence: this port carries no defaulted-name
+        # accounting (see :meth:`remaining_notional`), so every name is live
+        # and this is ``size()``.
+        """
+        return self.size()
+
     def remaining_notional(self) -> float:
         """Basket notional after settled defaults (eval-date snapshot).
 

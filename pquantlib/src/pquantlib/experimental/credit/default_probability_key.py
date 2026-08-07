@@ -89,6 +89,57 @@ class DefaultProbKey:
         )
 
 
+class NorthAmericaCorpDefaultKey(DefaultProbKey):
+    """ISDA standard contractual default key for North-American corporate US debt.
+
+    # C++ parity: ql/experimental/credit/defaultprobabilitykey.hpp:71-81 +
+    # .cpp:73-91 (v1.43).
+
+    Always includes ``FailureToPay(grace, amount)`` then
+    ``Bankruptcy(XR)``. Appends a ``Restructuring(restructuring_type)``
+    entry iff ``restructuring_type != NoRestructuring`` — so the key holds
+    three event types by default and two when restructuring is switched off.
+
+    Equality and hashing come from :class:`DefaultProbKey`, so an instance of
+    this class compares equal to a hand-built ``DefaultProbKey`` carrying the
+    same currency / seniority / event-type set (matching the C++ free
+    ``operator==``, which takes ``DefaultProbKey`` references).
+    """
+
+    __slots__ = ()
+
+    def __init__(
+        self,
+        currency: Currency,
+        seniority: Seniority,
+        grace_failure_to_pay: Period | None = None,
+        amount_failure: float = 1.0e6,
+        restructuring_type: Restructuring = Restructuring.FullRestructuring,
+    ) -> None:
+        # # C++ parity note: the C++ default for ``graceFailureToPay`` is
+        # ``Period(30, Days)`` and for ``resType`` is ``Restructuring::CR``
+        # (== FullRestructuring). ``Period()`` — the null period the C++
+        # test-suite passes explicitly — is a *different* value and is
+        # reachable here by passing ``Period()``, not by omitting the arg.
+        grace = (
+            grace_failure_to_pay
+            if grace_failure_to_pay is not None
+            else Period(30, TimeUnit.Days)
+        )
+        events: list[DefaultType] = [
+            FailureToPay(grace_period=grace, amount_required=amount_failure),
+            # No specifics for Bankruptcy.
+            DefaultType(AtomicDefault.Bankruptcy, Restructuring.NoRestructuring),
+        ]
+        if restructuring_type != Restructuring.NoRestructuring:
+            events.append(DefaultType(AtomicDefault.Restructuring, restructuring_type))
+        super().__init__(
+            event_types=tuple(events),
+            currency=currency,
+            seniority=seniority,
+        )
+
+
 def make_north_america_corp_default_key(
     currency: Currency,
     seniority: Seniority,
@@ -96,31 +147,21 @@ def make_north_america_corp_default_key(
     amount_failure: float = 1.0e6,
     restructuring_type: Restructuring = Restructuring.FullRestructuring,
 ) -> DefaultProbKey:
-    """ISDA standard contractual default key for North-American corporate US debt.
+    """Deprecated factory kept for callers written before the class existed.
 
-    # C++ parity: ql/experimental/credit/defaultprobabilitykey.cpp:73 —
-    # the C++ NorthAmericaCorpDefaultKey is a DefaultProbKey subclass that
-    # populates the event_types vector. Python collapses this to a free
-    # factory function since the result is just a populated DefaultProbKey
-    # (no behavioural override).
-
-    Always includes FailureToPay(grace, amount) + Bankruptcy(XR). Adds a
-    Restructuring(restructuring_type) entry iff
-    ``restructuring_type != NoRestructuring``.
+    Prefer :class:`NorthAmericaCorpDefaultKey` — it is the exact C++ name.
     """
-    grace = (
-        grace_failure_to_pay
-        if grace_failure_to_pay is not None
-        else Period(30, TimeUnit.Days)
+    return NorthAmericaCorpDefaultKey(
+        currency,
+        seniority,
+        grace_failure_to_pay,
+        amount_failure,
+        restructuring_type,
     )
-    events: list[DefaultType] = [
-        FailureToPay(grace_period=grace, amount_required=amount_failure),
-        DefaultType(AtomicDefault.Bankruptcy, Restructuring.NoRestructuring),
-    ]
-    if restructuring_type != Restructuring.NoRestructuring:
-        events.append(DefaultType(AtomicDefault.Restructuring, restructuring_type))
-    return DefaultProbKey(
-        event_types=tuple(events),
-        currency=currency,
-        seniority=seniority,
-    )
+
+
+__all__ = [
+    "DefaultProbKey",
+    "NorthAmericaCorpDefaultKey",
+    "make_north_america_corp_default_key",
+]
