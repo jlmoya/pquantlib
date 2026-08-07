@@ -738,25 +738,27 @@ def test_normal_branch_divergence_is_known() -> None:
     assert stripper.optionlet_volatilities(0)[2] == 0.0  # DIVERGENCE
 
 
-def test_cap_floor_term_vol_lookup_divergence_is_known() -> None:
-    """``CapFloorTermVolSurface`` interpolates the TIME axis differently.
+def test_cap_floor_term_vol_lookup_matches_cpp_at_and_between_pillars() -> None:
+    """The term vols the stripper reads back, at EVERY cap length.
 
-    The probe emits the very term vols the stripper reads back
+    The probe emits the very numbers ``OptionletStripper1`` reads
     (optionletstripper1.cpp:128-129) for every ``capFloorLengths_[i]`` of the
-    ``euribor6m_holiday_evaldate`` scenario. The pattern is unambiguous:
+    ``euribor6m_holiday_evaldate`` scenario -- 19 lengths x 3 strikes, only 5
+    of which sit on a surface pillar.
 
-    * at a pillar tenor (12M/24M/36M/60M/84M, i.e. i in {0, 2, 4, 8, 12}) the
-      two agree bit-for-bit — TIGHT below;
-    * between pillars they differ by up to 3.0e-3 relative (worst at
-      48M: 0.20500000000000002 here vs 0.2043870577586211 in C++).
+    This test was written as a DIVERGENCE pin: at the pillars the two agreed
+    bit-for-bit, and between them they differed by up to 3.0e-3 relative
+    (worst at 48M, 0.20500000000000002 against C++'s 0.2043870577586211).
+    The cause was the surface's interpolator default, not its time axis:
+    ``CapFloorTermVolSurface::interpolate`` (capfloortermvolsurface.cpp:
+    186-193) hard-codes ``BicubicSpline`` and takes no interpolator parameter,
+    while this port defaulted to bilinear -- which is exactly why the two
+    agreed at the pillars, where every interpolation agrees, and nowhere else.
 
-    So the abscissa PQuantLib interpolates on is not C++'s. That is upstream
-    of every stripper: it is
-    ``pquantlib/src/pquantlib/termstructures/volatility/capfloor/
-    cap_floor_term_vol_surface.py``, and it is what makes the stripped vols of
-    this scenario diverge by up to 1.6e-2 relative. Flagged for
-    align(termstructures/volatility/capfloor); NOT a base-class issue, which
-    is why the whole date grid of this same scenario still matches EXACTLY.
+    With the default corrected the worst off-pillar deviation is 1.4e-16, so
+    every row is now asserted TIGHT and the off-pillar rows are asserted to be
+    a MAJORITY of the sample, so the test cannot pass by only checking
+    pillars.
     """
     expected, _ = _euribor6m_holiday()
     eval_date = Date(expected["eval_date_serial"])
@@ -780,21 +782,17 @@ def test_cap_floor_term_vol_lookup_divergence_is_known() -> None:
     )
     strikes = [0.01, 0.03, 0.05]
     at_pillar = {0, 2, 4, 8, 12}  # 12M, 24M, 36M, 60M, 84M
-    off_pillar_deviations: list[float] = []
+    off_pillar = 0
     for i in range(19):
         length = Period((i + 2) * 6, _M)
         row = [surface.volatility(length, k, True) for k in strikes]
         want_row = expected["cap_floor_term_vols"][i]
-        if i in at_pillar:
-            for got, want in zip(row, want_row, strict=True):
-                tolerance.tight(got, want)
-        else:
-            off_pillar_deviations.extend(
-                abs(g - w) / abs(w) for g, w in zip(row, want_row, strict=True)
-            )
-    worst_off_pillar = max(off_pillar_deviations)
-    # DIVERGENCE: pinned so it cannot silently widen (or be "fixed" unnoticed).
-    assert 1.0e-5 < worst_off_pillar < 4.0e-3
+        for got, want in zip(row, want_row, strict=True):
+            tolerance.tight(got, want)
+        if i not in at_pillar:
+            off_pillar += 1
+    # The pillars alone would prove nothing: every interpolation agrees there.
+    assert off_pillar == 14
 
 
 def test_moving_reference_vol_divergence_is_known() -> None:
@@ -803,10 +801,19 @@ def test_moving_reference_vol_divergence_is_known() -> None:
     Flat 18% inputs: PQuantLib strips 0.18 for every row, C++ ranges from
     0.181968 (row 0) down to 0.180104 (row 18). The date grid, ATM forwards
     and switch strike of this same scenario all match EXACTLY (see the tests
-    above), so the base class is not implicated — the moving-reference
-    surface's time axis is, which is the same root cause as
-    ``test_cap_floor_term_vol_lookup_divergence_is_known``. Recorded with both
-    numbers; flagged for align(termstructures/volatility/capfloor).
+    above), so the base class is not implicated.
+
+    This was originally attributed to the same cause as
+    ``test_cap_floor_term_vol_lookup_matches_cpp_at_and_between_pillars`` --
+    the surface's interpolator default. That cause has since been found and
+    fixed (the default is now ``BicubicSpline``, matching
+    capfloortermvolsurface.cpp:186-193), and this scenario still diverges, so
+    the attribution was wrong. A flat surface is exactly where the
+    interpolator cannot matter: every interpolation through equal pillars
+    returns the same constant. Whatever makes C++ read a NON-flat vol off a
+    flat moving-reference surface is something else, still unidentified.
+    Recorded with both numbers so the gap can neither widen nor close
+    unnoticed; the cause needs its own investigation.
     """
     expected, stripper = _euribor3m_moving()
     tolerance.exact(float(expected["optionlet_volatilities"][0][0]), 0.18196777241015452)

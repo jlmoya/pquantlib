@@ -1,27 +1,38 @@
 """CapFloorTermVolSurface — 2-D ATM cap/floor vol surface.
 
 # C++ parity: ql/termstructures/volatility/capfloor/capfloortermvolsurface.{hpp,cpp}
-# (v1.42.1).
+# (v1.43).
 
 A grid of (option_tenor x strike) ATM cap/floor vols. Strikes form the
-x-axis, times form the y-axis. The C++ port hard-wires
-``BicubicSpline`` as the interpolator. The Python port defaults to
-``BilinearInterpolation`` for backward compatibility with the L8-C
-landing; pass ``interpolator=BicubicSpline`` (from L9-A) to recover
-the C++ default. At node points the two interpolations agree (both
-pass through pillars); intermediate values on locally linear smiles
-also agree; off-node values diverge in the cubic-spline corrections.
-Existing L8-C tests assert TIGHT at nodes (preserved by both
-interpolators).
+x-axis, times form the y-axis.
 
-**Interpolator opt-in (L9-A).** C++ uses a templated
-``Interpolator = Bilinear`` parameter so callers can substitute
-``BicubicSpline``. PQuantLib exposes the same via an ``interpolator``
-kwarg accepting any class with a 3-arg ``(xs, ys, z)`` constructor
-and a ``(x, y)`` ``__call__`` signature (default
-``BilinearInterpolation``). Pass ``BicubicSpline`` (from L9-A's
-``pquantlib.math.interpolations.bicubic_spline``) to match the C++
-default.
+**The interpolation is a bicubic spline, and C++ gives no choice about it.**
+``CapFloorTermVolSurface::interpolate()`` (capfloortermvolsurface.cpp:186-193)
+is
+
+    interpolation_ = BicubicSpline(strikes_.begin(), strikes_.end(),
+                                   optionTimes_.begin(), optionTimes_.end(),
+                                   vols_);
+
+and the header declares no ``Interpolator`` template parameter at all.
+
+An earlier revision defaulted this port to ``BilinearInterpolation``
+"for backward compatibility with the L8-C landing", under a note claiming
+"C++ uses a templated ``Interpolator = Bilinear`` parameter so callers can
+substitute ``BicubicSpline``". That is not so in v1.43, and the note also said
+``BicubicSpline`` was pending when it had already landed
+(math/interpolations/bicubic_spline.py). Both interpolations pass through the
+pillars, so node-anchored tests could not see it; BETWEEN pillars the surface
+disagreed with C++ by up to 3.0e-3 relative, and the optionlet volatilities
+stripped off it by up to 1.6e-2. Measured on the ``euribor6m_holiday_evaldate``
+scenario of migration-harness/references/v143/ts/optionletstripper.json: at the
+48M cap length C++ reports 0.2043870577586211 where bilinear gives exactly the
+midpoint 0.20500000000000002.
+
+The default is now ``BicubicSpline``, matching C++. The ``interpolator`` kwarg
+stays -- it costs nothing and the surface is a natural place to experiment --
+but it is a PQuantLib extension with no C++ counterpart, not a mirror of a
+template parameter.
 """
 
 from __future__ import annotations
@@ -34,7 +45,7 @@ from pquantlib import qassert
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.math.array import Array
-from pquantlib.math.interpolations.bilinear import BilinearInterpolation
+from pquantlib.math.interpolations.bicubic_spline import BicubicSpline
 from pquantlib.math.matrix import Matrix
 from pquantlib.termstructures.volatility.capfloor.cap_floor_term_volatility_structure import (
     CapFloorTermVolatilityStructure,
@@ -65,7 +76,7 @@ class CapFloorTermVolSurface(CapFloorTermVolatilityStructure):
         day_counter: DayCounter | None = None,
         reference_date: Date | None = None,
         settlement_days: int | None = None,
-        interpolator: _Interp2DFactory = BilinearInterpolation,
+        interpolator: _Interp2DFactory = BicubicSpline,
     ) -> None:
         dc = day_counter if day_counter is not None else Actual365Fixed()
         super().__init__(

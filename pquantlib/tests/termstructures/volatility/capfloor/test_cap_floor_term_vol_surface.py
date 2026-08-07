@@ -87,27 +87,35 @@ def test_volatility_intermediate_strike_at_node_tenor_matches_probe() -> None:
     tolerance.tight(surf.volatility(d2y, 0.03, True), _SURF["v_2y_3pct"])
 
 
-def test_volatility_intermediate_time_diverges_with_bilinear() -> None:
-    # The C++ surface uses BicubicSpline on the time axis as well, so
-    # the off-node time value 0.16935 differs from our bilinear value
-    # 0.17. We assert internal coherence with the bilinear
-    # expectation.
+def test_volatility_at_an_off_node_time_matches_cpp() -> None:
+    """The off-node time value the bilinear default used to miss.
+
+    C++ ``CapFloorTermVolSurface::interpolate`` (capfloortermvolsurface.cpp:
+    186-193) hard-codes ``BicubicSpline`` and offers no interpolator parameter.
+    This port defaulted to bilinear, so at t = 2.5y it returned the linear
+    blend 0.17 where C++ returns 0.16935225825198075 -- and the probe had
+    recorded that number all along, under a test that asserted the bilinear
+    value instead and explained the gap in a comment.
+
+    With the default corrected the two agree to TIGHT. The bilinear blend is
+    recomputed here and asserted to be a DIFFERENT number, so this cannot pass
+    again by accident if the default regresses.
+    """
     surf = _new_surface()
     d2_5y = TARGET().advance_period(
         _eval_date(),
         Period(30, TimeUnit.Months),
         BusinessDayConvention.ModifiedFollowing,
     )
-    # Bilinear at t=2.5y on column strike=0.04: between (t_2y, 0.18)
-    # and (t_3y, 0.16). The fraction along t is (2.5y - 2y) /
-    # (3y - 2y) using actual day-counts.
+    tolerance.tight(surf.volatility(d2_5y, 0.04, True), _SURF["v_2_5y_4pct"])
+
     dc = Actual365Fixed()
     t_2y = dc.year_fraction(_eval_date(), Date(_SURF["d2y_serial"]))
     t_3y = dc.year_fraction(_eval_date(), Date(_SURF["d3y_serial"]))
     t_2_5y = dc.year_fraction(_eval_date(), d2_5y)
     u = (t_2_5y - t_2y) / (t_3y - t_2y)
-    expected_bilinear = (1 - u) * 0.18 + u * 0.16
-    tolerance.tight(surf.volatility(d2_5y, 0.04, True), expected_bilinear)
+    bilinear = (1 - u) * 0.18 + u * 0.16
+    assert abs(bilinear - _SURF["v_2_5y_4pct"]) > 1e-4
 
 
 def test_max_date_returns_last_tenor() -> None:
