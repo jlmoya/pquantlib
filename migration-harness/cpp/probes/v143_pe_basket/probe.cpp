@@ -123,7 +123,11 @@
 #include <ql/instruments/payoffs.hpp>
 #include <ql/math/array.hpp>
 #include <ql/math/matrix.hpp>
+#include <ql/math/statistics/generalstatistics.hpp>
+#include <ql/math/matrixutilities/pseudosqrt.hpp>
 #include <ql/math/randomnumbers/rngtraits.hpp>
+#include <ql/methods/montecarlo/longstaffschwartzpathpricer.hpp>
+#include <ql/methods/montecarlo/montecarlomodel.hpp>
 #include <ql/methods/montecarlo/multipathgenerator.hpp>
 #include <ql/pricingengines/asian/choiasianengine.hpp>
 #include <ql/pricingengines/basket/bjerksundstenslandspreadengine.hpp>
@@ -1513,6 +1517,34 @@ void emitMcDiagnostics() {
         addCase("mc_rng_pseudo_random_dim6_seed7", in, ex);
     }
 
+    // pseudoSqrt(rho, SalvagingAlgorithm::Spectral) -- the matrix
+    // StochasticProcessArray uses to correlate the Brownian increments. Its
+    // *value* (not just its Gram product) is observable through the generated
+    // paths: any other square root of the same rho gives a statistically
+    // equivalent but path-wise different simulation. C++ builds it from
+    // SymmetricSchurDecomposition (eigenvalues DESCENDING, C++'s own sign
+    // convention) and then row-normalises. A port that reaches for
+    // numpy.linalg.eigh (eigenvalues ASCENDING, different signs) produces a
+    // different matrix and cannot reproduce a single MC number below.
+    {
+        for (Size nAssets : {Size(2), Size(3)})
+            for (Real rho : {0.5, 0.0, -0.5}) {
+                const Matrix corr = mcCorrelation(nAssets, rho);
+                const Matrix root = pseudoSqrt(corr, SalvagingAlgorithm::Spectral);
+                Obj in;
+                in.i("n_assets", static_cast<long long>(nAssets))
+                    .n("correlation", rho)
+                    .m("rho", corr)
+                    .s("salvaging_algorithm", "Spectral");
+                Obj ex;
+                ex.m("pseudo_sqrt", root);
+                std::ostringstream nm;
+                nm << "mc_spectral_pseudo_sqrt_n" << nAssets << "_rho" << std::fixed
+                   << std::setprecision(2) << rho;
+                addCase(nm.str(), in, ex);
+            }
+    }
+
     // StochasticProcessArray::evolve with a fixed dw -- this is where the
     // spectral pseudo-square-root of the correlation matrix enters.
     {
@@ -1752,6 +1784,16 @@ struct McAmRow {
     long long seed;
 };
 
+// Exposes the protected regression state of LongstaffSchwartzPathPricer so the
+// Python port's LSM can be bisected against C++ instead of only its NPV.
+class ExposedLsmPricer : public LongstaffSchwartzPathPricer<MultiPath> {
+  public:
+    using LongstaffSchwartzPathPricer<MultiPath>::LongstaffSchwartzPathPricer;
+    const Array& coeffAt(Size i) const { return coeff_[i]; }
+    DiscountFactor dfAt(Size i) const { return dF_[i]; }
+    Size len() const { return len_; }
+};
+
 LsmBasisSystem::PolynomialType polyTypeOf(const std::string& s) {
     if (s == "Monomial")
         return LsmBasisSystem::Monomial;
@@ -1834,6 +1876,117 @@ void emitMcAmericanBasketEngine() {
             ex.n("exercise_probability",
                  ext::any_cast<Real>(extra.at("exerciseProbability")));
         addCase(r.name, in, ex);
+    }
+
+    // ---- LSM internals, so a wrong NPV is bisectable ----------------------
+    // Pins the engine's TimeGrid, the per-period discount factors dF_, the
+    // first CALIBRATION path (drawn with seed + 1768237423), and every
+    // regression coefficient array produced by calibrate(). A port whose NPV is
+    // close-but-not-equal is almost always failing one of these.
+    {
+        const Size steps = 8, calibrationSamples = 512;
+        const BigNatural seed = 1;
+        const auto pa = mcProcessArray(2, 0.5);
+
+        // MCLongstaffSchwartzEngine::timeGrid() for an American exercise.
+        const std::vector<Time> requiredTimes(1, pa->time(kMcMaturity));
+        const TimeGrid grid(requiredTimes.begin(), requiredTimes.end(), steps);
+
+        const auto payoff = ext::make_shared<MaxBasketPayoff>(
+            ext::make_shared<PlainVanillaPayoff>(Option::Put, 100.0));
+        const auto earlyPricer = ext::make_shared<AmericanBasketPathPricer>(
+            2, payoff, 2, LsmBasisSystem::Monomial);
+
+        const auto process = ext::dynamic_pointer_cast<GeneralizedBlackScholesProcess>(
+            pa->process(0));
+        const auto lsm = ext::make_shared<ExposedLsmPricer>(
+            grid, earlyPricer, process->riskFreeRate().currentLink());
+
+        // NOT seed + 1768237423. MCLongstaffSchwartzEngine computes
+        //     seedCalibration_ = (seedCalibration != Null<Real>())
+        //                            ? seedCalibration
+        //                            : (seed == 0 ? 0 : seed + 1768237423L);
+        // and that condition is ALWAYS true: seedCalibration is a BigNatural,
+        // Null<Real>() is FLT_MAX (3.40282e38), so they can never compare
+        // equal. The `seed + 1768237423` branch is dead code. What reaches the
+        // calibration generator is the parameter's own default, Null<Size>() --
+        // and Null<T> for integral T is numeric_limits<int>::max() == 2147483647
+        // -- independent of the pricing seed. Reproduced verbatim: a port that
+        // uses seed + 1768237423 gets 3.5591 where C++ gets 3.7504.
+        const BigNatural seedCalibration = Null<Size>();
+        auto calGen = PseudoRandom::make_sequence_generator(2 * (grid.size() - 1),
+                                                            seedCalibration);
+        const auto calPathGen =
+            ext::make_shared<MultiPathGenerator<PseudoRandom::rsg_type>>(pa, grid, calGen,
+                                                                        false);
+
+        std::vector<Real> firstPath;
+        {
+            auto probeGen = PseudoRandom::make_sequence_generator(2 * (grid.size() - 1),
+                                                                  seedCalibration);
+            MultiPathGenerator<PseudoRandom::rsg_type> pg(pa, grid, probeGen, false);
+            const MultiPath& mp = pg.next().value;
+            for (Size j = 0; j < mp.assetNumber(); ++j)
+                for (Size t = 0; t < mp.pathSize(); ++t)
+                    firstPath.push_back(mp[j][t]);
+        }
+
+        MonteCarloModel<MultiVariate, PseudoRandom, Statistics> calModel(
+            calPathGen, lsm, Statistics(), false);
+        calModel.addSamples(calibrationSamples);
+        lsm->calibrate();
+
+        Obj in = mcInputs(2, 0.5);
+        in.s("payoff_kind", "max")
+            .s("option_type", "Put")
+            .n("strike", 100.0)
+            .i("steps", static_cast<long long>(steps))
+            .i("calibration_samples", static_cast<long long>(calibrationSamples))
+            .i("polynomial_order", 2)
+            .s("polynomial_type", "Monomial")
+            .i("seed", static_cast<long long>(seed))
+            .i("seed_calibration", static_cast<long long>(seedCalibration));
+
+        std::vector<Real> times(grid.begin(), grid.end());
+        std::vector<Real> dfs;
+        for (Size i = 0; i + 1 < grid.size(); ++i)
+            dfs.push_back(lsm->dfAt(i));
+
+        Obj ex;
+        ex.a("time_grid", times)
+            .i("len", static_cast<long long>(lsm->len()))
+            .a("discount_factors", dfs)
+            .a("first_calibration_path", firstPath);
+        for (Size i = 0; i + 2 < grid.size(); ++i)
+            ex.a("coeff_" + std::to_string(i), lsm->coeffAt(i));
+
+        // The first few PRICING paths (seed = 1) and the value the calibrated
+        // LSM pricer assigns to each: this separates "wrong paths" from "wrong
+        // exercise rule" when the NPV disagrees.
+        {
+            auto priceGen =
+                PseudoRandom::make_sequence_generator(2 * (grid.size() - 1), seed);
+            MultiPathGenerator<PseudoRandom::rsg_type> pg(pa, grid, priceGen, false);
+            std::vector<Real> pathValues, prices;
+            GeneralStatistics stats;
+            for (int draw = 0; draw < 2048; ++draw) {
+                const MultiPath& mp = pg.next().value;
+                if (draw < 4)
+                    for (Size j = 0; j < mp.assetNumber(); ++j)
+                        for (Size t = 0; t < mp.pathSize(); ++t)
+                            pathValues.push_back(mp[j][t]);
+                const Real price = (*lsm)(mp);
+                if (draw < 256)
+                    prices.push_back(price);
+                stats.add(price);
+            }
+            ex.a("first_pricing_paths", pathValues)
+                .a("first_pricing_prices", prices)
+                .n("hand_npv", stats.mean())
+                .n("hand_error_estimate", stats.errorEstimate())
+                .n("hand_exercise_probability", lsm->exerciseProbability());
+        }
+        addCase("mcab_lsm_internals", in, ex);
     }
 
     // AmericanBasketPathPricer's own surface: the basis system size and the

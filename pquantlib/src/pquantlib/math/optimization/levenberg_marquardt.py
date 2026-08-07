@@ -49,6 +49,8 @@ Divergences and approximations:
 
 from __future__ import annotations
 
+import math
+import sys
 from typing import TYPE_CHECKING, Any, Final, cast
 
 import numpy as np
@@ -57,6 +59,10 @@ from scipy.optimize import least_squares  # pyright: ignore[reportMissingTypeStu
 
 from pquantlib.math.optimization.end_criteria import Type
 from pquantlib.math.optimization.optimization_method import OptimizationMethod
+
+_MACHINE_EPS: Final[float] = sys.float_info.epsilon
+"""# C++ parity: MINPACK's ``epsmch`` — the lower bound lmdif clamps
+``epsfcn`` to before taking the square root."""
 
 if TYPE_CHECKING:
     from pquantlib.math.optimization.end_criteria import EndCriteria
@@ -145,8 +151,23 @@ class LevenbergMarquardt(OptimizationMethod):
 
         # ftol mirrors C++'s ``functionEpsilon``, xtol mirrors
         # ``rootEpsilon``, gtol mirrors ``gradientNormEpsilon``.
-        # ``diff_step`` is scipy's analogue to C++'s ``epsfcn`` — the
-        # relative step size for the forward-difference jacobian.
+        #
+        # ``diff_step`` is NOT the same quantity as C++'s ``epsfcn``.
+        # MINPACK's lmdif treats ``epsfcn`` as the relative error in the
+        # FUNCTION VALUES and derives the forward-difference step from it
+        # as ``eps = sqrt(max(epsfcn, machine_eps))``, ``h = eps * |x|``
+        # (minpack lmdif.f / fdjac2.f). SciPy's ``diff_step`` is the
+        # relative step ITSELF. Passing ``epsfcn`` straight through
+        # therefore uses a step of 1e-8 where C++ uses 1e-4 — four orders
+        # of magnitude too small, which swamps the jacobian with
+        # cancellation noise whenever the residual is itself computed by
+        # finite differences. Take the square root to map one convention
+        # onto the other.
+        diff_step = math.sqrt(max(self._epsfcn, _MACHINE_EPS))
+        # C++ parity: levenbergmarquardt.cpp:58 —
+        # ``maxfev = endCriteria.maxIterations() * (n + 1)``. lmdif counts
+        # FUNCTION evaluations, of which each iteration needs n + 1.
+        max_nfev = end_criteria.max_iterations * (int(x0.size) + 1)
         result = cast(
             "Any",
             least_squares(
@@ -156,8 +177,8 @@ class LevenbergMarquardt(OptimizationMethod):
                 xtol=self._xtol,
                 ftol=end_criteria.function_epsilon,
                 gtol=self._gtol,
-                max_nfev=end_criteria.max_iterations,
-                diff_step=self._epsfcn,
+                max_nfev=max_nfev,
+                diff_step=diff_step,
             ),
         )
 
