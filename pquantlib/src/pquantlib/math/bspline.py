@@ -69,16 +69,40 @@ class BSpline:
     def _basis(self, i: int, p: int, x: float) -> float:
         """Cox-de Boor recursion.
 
-        # C++ parity: ``BSpline::N`` — bspline.cpp:51-58. The divisions go
-        # through :func:`_ieee_div` so a repeated knot yields NaN as it does
-        # in C++ rather than raising.
+        # C++ parity: ``BSpline::N`` — bspline.cpp:49-57:
+        #
+        #     return ((x - knots_[i])/(knots_[i+p] - knots_[i])) * N(i,p-1,x) +
+        #            ((knots_[i+p+1]-x)/(knots_[i+p+1]-knots_[i+1])) * N(i+1,p-1,x);
+        #
+        # The divisions go through :func:`_ieee_div` so a repeated knot yields
+        # NaN as it does in C++ rather than raising.
+        #
+        # The outer `a*u + b*v` is a single ``math.fma``, because Clang at its
+        # default ``-ffp-contract=on`` fuses exactly that pattern into one FMA:
+        # the second product is rounded, the first is not. Written as separate
+        # operations the port disagreed with C++ on 4 of 80 probed basis values
+        # and on 4 of 20 CubicBSplinesFitting discount rows, and a
+        # CubicBSplinesFitting fit took 858 simplex evaluations where C++ takes
+        # 855. With the contraction all three are exact. Same policy as
+        # experimental/math/std_random.py:301-309.
         """
         knots = self._knots
         if p == 0:
             return 1.0 if knots[i] <= x < knots[i + 1] else 0.0
-        return _ieee_div(x - knots[i], knots[i + p] - knots[i]) * self._basis(i, p - 1, x) + _ieee_div(
+        left = _ieee_div(x - knots[i], knots[i + p] - knots[i])
+        right = _ieee_div(
             knots[i + p + 1] - x, knots[i + p + 1] - knots[i + 1]
         ) * self._basis(i + 1, p - 1, x)
+        try:
+            return math.fma(left, self._basis(i, p - 1, x), right)
+        except ValueError:
+            # Python's math.fma RAISES on an IEEE invalid operation whose NaN
+            # is produced from non-NaN arguments — reached here as inf * 0.0
+            # when a clamped knot vector makes ``left`` infinite and the
+            # degree-0 basis is 0. C++ propagates the NaN silently, so return
+            # it. (A NaN that merely PASSES THROUGH does not raise, so this is
+            # exactly the inf*0 case.)
+            return math.nan
 
 
 __all__ = ["BSpline"]
