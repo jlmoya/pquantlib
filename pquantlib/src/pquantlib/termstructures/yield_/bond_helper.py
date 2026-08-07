@@ -23,11 +23,11 @@ pricing engine on it.**
 from __future__ import annotations
 
 from collections.abc import Sequence
-from enum import IntEnum
 from typing import TYPE_CHECKING
 
 from pquantlib import qassert
 from pquantlib.daycounters.day_counter import DayCounter
+from pquantlib.instruments.bond import BondPriceType as _BondPriceType
 from pquantlib.quotes.quote import Quote
 from pquantlib.termstructures.bootstrap_helper import BootstrapHelper
 from pquantlib.termstructures.protocols import YieldTermStructureProtocol
@@ -40,11 +40,16 @@ if TYPE_CHECKING:
     from pquantlib.instruments.bond import Bond
 
 
-class BondPriceType(IntEnum):
-    """C++ parity: ``Bond::Price::Type``."""
-
-    Clean = 0
-    Dirty = 1
+# C++ parity: ``Bond::Price::Type`` (ql/instruments/bond.hpp:64) is
+# ``enum Type { Dirty, Clean }``, i.e. Dirty == 0. This module used to declare
+# a SECOND enum of the same name with the values the other way round. Each was
+# internally consistent, so nothing broke until a value crossed between them --
+# which is exactly what ``FittingMethod::init()`` does
+# (fittedbonddiscountcurve.cpp:211: ``Bond::Price price(amount,
+# bondHelpers_[i]->priceType())``). Both call sites that needed it had to map
+# by NAME to stay correct. The duplicate is gone; this is a re-export of the
+# one definition, whose integers match C++.
+BondPriceType = _BondPriceType
 
 
 class BondHelper(BootstrapHelper[YieldTermStructureProtocol]):
