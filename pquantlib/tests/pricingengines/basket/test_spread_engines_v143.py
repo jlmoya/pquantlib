@@ -507,10 +507,11 @@ def test_engines_report_only_the_value(cpp: dict[str, Any]) -> None:
 
     C++ leaves every field of the Greeks block at ``Null<Real>()``, so
     ``option.delta()`` throws "delta not provided" and
-    ``additionalResults()`` is empty. This port's ``BasketOptionResults``
-    carries no Greeks at all — the L5-E carve-out — so the *observable*
-    surface is the same: nothing but the value. Asserted here so a future
-    "helpful" addition cannot silently diverge from C++.
+    ``additionalResults()`` is empty. ``BasketOptionResults`` now mirrors
+    ``MultiAssetOption::results`` (``Instrument::results`` + ``Greeks``)
+    because ``Fd2dBlackScholesVanillaEngine`` fills delta/gamma/theta there,
+    so the observable surface is the C++ one exactly: ``delta()`` exists and
+    raises "delta not provided" for an engine that did not fill it.
     """
     risk_free = _flat_curve(RISK_FREE)
 
@@ -526,7 +527,7 @@ def test_engines_report_only_the_value(cpp: dict[str, Any]) -> None:
         what="pearson_no_extra_results",
         abs_floor=_ABS_TOL,
     )
-    assert not hasattr(pearson, "delta")
+    assert _throws(pearson.delta)
 
     copula_expected = cpp["copula_no_extra_results"]["expected"]
     assert int(copula_expected["additional_results_count"]) == 0
@@ -540,7 +541,7 @@ def test_engines_report_only_the_value(cpp: dict[str, Any]) -> None:
         what="copula_no_extra_results",
         abs_floor=_copula_npv_floor(b1, b2, risk_free.discount(MATURITY)),
     )
-    assert not hasattr(copula, "delta")
+    assert _throws(copula.delta)
 
 
 # --- guards ------------------------------------------------------------------
