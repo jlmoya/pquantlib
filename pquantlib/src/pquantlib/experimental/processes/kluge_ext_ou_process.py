@@ -1,7 +1,7 @@
 """KlugeExtOUProcess — correlated Kluge + extended OU two-asset process.
 
 # C++ parity: ql/experimental/processes/klugeextouprocess.{hpp,cpp}
-# (v1.42.1).
+# (v1.43).
 
 Three-factor model with two correlated asset-spot processes
 (electricity ``P`` modelled as Kluge ``ExtOUWithJumps``; gas ``G``
@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from typing import final
 
+import numpy as np
+
 from pquantlib import qassert
 from pquantlib.experimental.processes.ext_ou_with_jumps_process import (
     ExtOUWithJumpsProcess,
@@ -35,6 +37,7 @@ from pquantlib.experimental.processes.ext_ou_with_jumps_process import (
 from pquantlib.experimental.processes.extended_ornstein_uhlenbeck_process import (
     ExtendedOrnsteinUhlenbeckProcess,
 )
+from pquantlib.math.array import Array
 
 
 @final
@@ -76,6 +79,32 @@ class KlugeExtOUProcess:
     def get_kluge_process(self) -> ExtOUWithJumpsProcess:
         # C++ parity: getKlugeProcess().
         return self._kluge
+
+    def size(self) -> int:
+        """Number of state variables.
+
+        # C++ parity: ``KlugeExtOUProcess::size`` -> klugeProcess_->size() + 1
+        # (klugeextouprocess.cpp:38-40).
+        """
+        return self._kluge.size() + 1
+
+    def factors(self) -> int:
+        """Number of driving factors.
+
+        # C++ parity: ``KlugeExtOUProcess::factors``
+        # (klugeextouprocess.cpp:42-44).
+        """
+        return self._kluge.factors() + 1
+
+    def initial_values(self) -> Array:
+        """``[x0, y0, u0]`` — the Kluge state followed by the ExtOU factor.
+
+        # C++ parity: ``KlugeExtOUProcess::initialValues``
+        # (klugeextouprocess.cpp:46-53).
+        """
+        return np.append(
+            self._kluge.initial_values(), self._ext_ou.x0()
+        )
 
     def get_ext_ou_process(self) -> ExtendedOrnsteinUhlenbeckProcess:
         # C++ parity: getExtOUProcess().

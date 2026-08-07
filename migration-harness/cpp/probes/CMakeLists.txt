@@ -1074,3 +1074,5 @@ add_executable(v143_experimental_interp_probe v143_experimental_interp/probe.cpp
 target_link_libraries(v143_experimental_interp_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_experimental_cdsntd_probe v143_experimental_cdsntd/probe.cpp)
 target_link_libraries(v143_experimental_cdsntd_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_experimental_extoufd_probe v143_experimental_extoufd/probe.cpp)
+target_link_libraries(v143_experimental_extoufd_probe PRIVATE ${QUANTLIB_LIBRARY})

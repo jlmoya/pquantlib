@@ -1,89 +1,93 @@
 """FdmKlugeExtOUSolver — solver wrapper for the FdmKlugeExtOUOp.
 
 # C++ parity: ql/experimental/finitedifferences/fdmklugeextousolver.hpp
-# (v1.42.1).
+# (v1.43) — header-only ``template <Size N=3> class FdmKlugeExtOUSolver``.
 
-The C++ class is a thin lazy-object wrapper around
-``FdmNdimSolver<N>`` (default N=3) for the 3-D Kluge + ExtOU op.
+A lazy-object wrapper around :class:`FdmNdimSolver`: it builds an
+:class:`FdmKlugeExtOUOp` over the description's mesher and hands it to the
+generic n-dimensional backward solver, whose tensor cubic spline answers
+``value_at(x)``.
 
-**Carve-out (Phase 11 W5-A):** the multi-D backward FDM framework
-is deferred (see ``fdm_ext_ou_jump_solver.py`` for rationale). The
-class accepts the same parameters as the C++ class but
-``value_at(x)`` raises ``NotImplementedError`` for now.
+The integro-integration order is hardcoded to 16 in C++
+(fdmklugeextousolver.hpp:63) — note this differs from the 32 that
+:class:`FdmExtOUJumpSolver` passes — and is not a constructor parameter.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import final
 
 from pquantlib import qassert
+from pquantlib.experimental.finitedifferences.fdm_kluge_ext_ou_op import (
+    FdmKlugeExtOUOp,
+)
 from pquantlib.experimental.processes.kluge_ext_ou_process import KlugeExtOUProcess
-from pquantlib.methods.finitedifferences.meshers.fdm_mesher import FdmMesher
-from pquantlib.methods.finitedifferences.operators.fdm_linear_op_layout import (
-    FdmLinearOpIterator,
-)
 from pquantlib.methods.finitedifferences.schemes.fdm_scheme_desc import FdmSchemeDesc
-from pquantlib.methods.finitedifferences.step_conditions.fdm_step_condition_composite import (
-    FdmStepConditionComposite,
-)
+from pquantlib.methods.finitedifferences.solvers.fdm_ndim_solver import FdmNdimSolver
+from pquantlib.methods.finitedifferences.solvers.fdm_solver_desc import FdmSolverDesc
+from pquantlib.patterns.lazy_object import LazyObject
 from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 
-InnerValueCalculator = Callable[[FdmLinearOpIterator, float], float]
+#: # C++ parity: the literal 16 at fdmklugeextousolver.hpp:63.
+_INTEGRO_INTEGRATION_ORDER = 16
 
 
 @final
-class FdmKlugeExtOUSolver:
+class FdmKlugeExtOUSolver(LazyObject):
     """Backward FD solver for the correlated Kluge + ExtOU op.
 
     # C++ parity: ``template <Size N=3> class FdmKlugeExtOUSolver``.
 
-    The Python port collapses the N=3 default and exposes the same
-    constructor signature. ``N`` is restricted to ``>= 3`` (matching
-    the C++ ``BOOST_STATIC_ASSERT``).
-
-    **Carve-out:** runtime ``value_at`` requires the multi-D
-    backward FDM framework (deferred).
+    Python has no template parameter, so ``n`` is an ordinary argument
+    defaulting to 3 and reproducing the C++ ``BOOST_STATIC_ASSERT(N >= 3)``
+    — the operator writes into three directions and cannot act on a
+    lower-rank mesh.
     """
 
     def __init__(
         self,
         kluge_ext_ou_process: KlugeExtOUProcess,
         r_ts: YieldTermStructure,
-        mesher: FdmMesher,
-        condition: FdmStepConditionComposite | None,
-        calculator: InnerValueCalculator,
-        maturity: float,
-        time_steps: int,
-        damping_steps: int = 0,
+        solver_desc: FdmSolverDesc,
         scheme_desc: FdmSchemeDesc | None = None,
         n: int = 3,
     ) -> None:
+        super().__init__()
         qassert.require(n >= 3, f"KlugeExtOU solver requires N >= 3, got {n}")
         self._process: KlugeExtOUProcess = kluge_ext_ou_process
         self._r_ts: YieldTermStructure = r_ts
-        self._mesher: FdmMesher = mesher
-        self._condition: FdmStepConditionComposite | None = condition
-        self._calculator: InnerValueCalculator = calculator
-        self._maturity: float = maturity
-        self._time_steps: int = time_steps
-        self._damping_steps: int = damping_steps
-        self._scheme_desc: FdmSchemeDesc | None = scheme_desc
+        self._solver_desc: FdmSolverDesc = solver_desc
+        # C++ default argument: FdmSchemeDesc::Hundsdorfer().
+        self._scheme_desc: FdmSchemeDesc = (
+            scheme_desc if scheme_desc is not None else FdmSchemeDesc.hundsdorfer()
+        )
         self._n: int = n
+        self._solver: FdmNdimSolver | None = None
+        # C++ parity divergence: the C++ ctor does registerWith(klugeOUProcess_).
+        # The Python KlugeExtOUProcess is a plain value object, not an
+        # Observable, so there is nothing to observe. See FdmExtOUJumpSolver.
+
+    def _perform_calculations(self) -> None:
+        """# C++ parity: ``FdmKlugeExtOUSolver::performCalculations``."""
+        op = FdmKlugeExtOUOp(
+            self._solver_desc.mesher,
+            self._process,
+            self._r_ts,
+            _INTEGRO_INTEGRATION_ORDER,
+        )
+        self._solver = FdmNdimSolver(
+            self._solver_desc, self._scheme_desc, op, self._n
+        )
 
     def value_at(self, x: Sequence[float]) -> float:
         """Interpolate the rolled-back value at the given multi-D state.
 
         # C++ parity: ``FdmKlugeExtOUSolver::valueAt(const std::vector<Real>&)``.
-
-        **Carve-out:** raises ``NotImplementedError`` until the
-        multi-D backward FDM framework is ported.
         """
-        raise NotImplementedError(
-            "FdmKlugeExtOUSolver.value_at requires the multi-D backward FDM "
-            "framework (FdmNdimSolver + multi-direction Hundsdorfer scheme) "
-            "which is deferred to a follow-up Phase 11 cluster."
-        )
+        self.calculate()
+        assert self._solver is not None
+        return self._solver.interpolate_at(x)
 
 
 __all__ = ["FdmKlugeExtOUSolver"]

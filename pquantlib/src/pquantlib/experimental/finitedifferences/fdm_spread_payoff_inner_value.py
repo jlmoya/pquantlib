@@ -23,11 +23,19 @@ from pquantlib.methods.finitedifferences.operators.fdm_linear_op_layout import (
 
 
 class _InnerValueCalculator(Protocol):
-    """Inner-value calc protocol — same as ``FdmExpExtOUInnerValueCalculator``."""
+    """Inner-value calc protocol — the C++ ``FdmInnerValueCalculator`` surface.
 
-    def inner_value(self, iter_: FdmLinearOpIterator, t: float) -> float: ...
+    Both methods are declared POSITIONAL-ONLY. Without that, structural
+    matching also compares parameter names, and the two calculators C++
+    actually pairs here — ``FdmExtOUJumpModelInnerValue`` (which names its
+    first parameter ``iterator``) and ``FdmExpExtOUInnerValueCalculator``
+    (``iter_``) — cannot both satisfy one protocol. Same reasoning as
+    ``FdmInnerValueCalculatorLike`` in the step_conditions package.
+    """
 
-    def avg_inner_value(self, iter_: FdmLinearOpIterator, t: float) -> float: ...
+    def inner_value(self, iter_: FdmLinearOpIterator, t: float, /) -> float: ...
+
+    def avg_inner_value(self, iter_: FdmLinearOpIterator, t: float, /) -> float: ...
 
 
 @final
