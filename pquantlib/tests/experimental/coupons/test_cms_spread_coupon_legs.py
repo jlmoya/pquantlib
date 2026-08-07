@@ -388,8 +388,11 @@ def test_capped_floored_negative_gearing_swaps_cap_and_floor(
         0.020, 0.010, start, end, market.ibor.day_counter(),
     )
     # constructor cap = 0.020, floor = 0.010 — but:
-    exact(coupon.cap() if coupon.cap() is not None else 0.0, ref["C_neg_gearing_collar_cap"])
-    exact(coupon.floor() if coupon.floor() is not None else 0.0, ref["C_neg_gearing_collar_floor"])
+    cap, floor = coupon.cap(), coupon.floor()
+    assert cap is not None
+    assert floor is not None
+    exact(cap, ref["C_neg_gearing_collar_cap"])
+    exact(floor, ref["C_neg_gearing_collar_floor"])
     assert coupon.cap() == 0.020
     assert coupon.floor() == 0.010
     # effectiveCap = (cap_ - spread)/gearing = (0.010 - 0.02)/(-1) = 0.010
