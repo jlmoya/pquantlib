@@ -22,19 +22,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass
-class _Data:
-    """Flyweight payload (parity with C++ ``CommodityType::Data``)."""
-
-    name: str
-    code: str
-
-
-# Module-level flyweight registry (parity with C++ static commodityTypes_ map,
-# keyed on code).
-_commodity_types: dict[str, _Data] = {}
-
-
 class CommodityType:
     """Commodity type (e.g. name ``"Heating Oil"``, code ``"HO"``).
 
@@ -45,9 +32,20 @@ class CommodityType:
     quirk that this class faithfully reproduces.
     """
 
+    @dataclass
+    class Data:
+        """Flyweight payload.
+
+        # C++ parity: ``struct CommodityType::Data`` in
+        # commoditytype.hpp:62 (declaration) + :65-70 (definition).
+        """
+
+        name: str
+        code: str
+
     def __init__(self, name: str | None = None, code: str | None = None) -> None:
         if name is None and code is None:
-            self._data: _Data | None = None
+            self._data: CommodityType.Data | None = None
             return
         # Both must be present for a non-empty type.
         assert name is not None
@@ -56,7 +54,7 @@ class CommodityType:
         if existing is not None:
             self._data = existing
         else:
-            data = _Data(name, code)
+            data = CommodityType.Data(name, code)
             _commodity_types[code] = data
             self._data = data
 
@@ -99,6 +97,13 @@ class CommodityType:
 
     def __repr__(self) -> str:
         return f"CommodityType({self.__str__()!r})"
+
+
+# Module-level flyweight registry (parity with C++ static commodityTypes_ map,
+# keyed on code). Constructing a second CommodityType with an already-registered
+# code silently discards the new name (commoditytype.cpp:28-38; pinned by
+# ``ct_again_name``).
+_commodity_types: dict[str, CommodityType.Data] = {}
 
 
 class NullCommodityType(CommodityType):

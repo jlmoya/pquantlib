@@ -171,7 +171,7 @@ class NormalCLVModel(LazyObject):
         s = np.empty((n_nodes, n_mat), dtype=np.float64)
         for j in range(n_mat):
             s[:, j] = self.collocation_points_y(self._maturity_dates[j])
-        self._g = _MappingFunction(
+        self._g = MappingFunction(
             sigma=self._sigma,
             ou_process=self._ou_process,
             x=self._x,
@@ -180,7 +180,7 @@ class NormalCLVModel(LazyObject):
         )
 
 
-class _MappingFunction:
+class MappingFunction:
     """CLV mapping function g(t, x).
 
     # C++ parity: ``NormalCLVModel::MappingFunction`` in
@@ -190,9 +190,52 @@ class _MappingFunction:
     underlying collocation y-values across maturities; a single
     ``LagrangeInterpolation`` over the kernel node abscissae provides the
     polynomial mapping at a given maturity.
+
+    C++ keeps the grid state behind ``ext::shared_ptr<InterpolationData>``
+    so that the copies ``std::function`` makes when the functor is stored
+    (normalclvmodel.cpp:135) all share one grid. PQuantLib's
+    :class:`InterpolationData` is an ordinary object, and Python's
+    reference semantics give the same sharing.
     """
 
-    __slots__ = ("_interpl", "_lagrange", "_ou_process", "_sigma", "_x", "_y")
+    class InterpolationData:
+        """Grid state for :class:`MappingFunction`.
+
+        # C++ parity: ``NormalCLVModel::MappingFunction::InterpolationData``
+        # in normalclvmodel.hpp:87-100.
+
+        * ``s`` — the ``(nodes x maturities)`` collocation-y matrix.
+        * ``interpl`` — one ``LinearInterpolation`` in t per node (row of ``s``).
+        * ``x`` / ``t`` — the kernel abscissae and the maturity times.
+        * ``lagrange_interpl`` — the Lagrange interpolation over ``x``
+          (built as ``(x, x)``; the ordinates are supplied per call).
+        """
+
+        __slots__ = ("interpl", "lagrange_interpl", "s", "t", "x")
+
+        def __init__(
+            self,
+            *,
+            x: Array,
+            maturity_times: list[float],
+            collocation_y: Array,
+        ) -> None:
+            # C++ parity: normalclvmodel.hpp:88-92 — s_ is sized
+            # (x_.size(), maturityDates_.size()) and lagrangeInterpl_ is
+            # built over (x_, x_).
+            self.s: Array = collocation_y
+            self.x: Array = x
+            self.t: list[float] = maturity_times
+            self.lagrange_interpl: LagrangeInterpolation = LagrangeInterpolation(x, x)
+            # C++ parity: normalclvmodel.cpp:110-113 — one LinearInterpolation
+            # per row of s_ over the maturity times.
+            t_arr = np.asarray(maturity_times, dtype=np.float64)
+            self.interpl: list[LinearInterpolation] = [
+                LinearInterpolation(t_arr, collocation_y[i, :])
+                for i in range(x.shape[0])
+            ]
+
+    __slots__ = ("_data", "_ou_process", "_sigma", "_y")
 
     def __init__(
         self,
@@ -203,29 +246,31 @@ class _MappingFunction:
         maturity_times: list[float],
         collocation_y: Array,
     ) -> None:
+        # C++ parity: normalclvmodel.cpp:100-116.
         self._sigma: float = sigma
         self._ou_process: OrnsteinUhlenbeckProcess = ou_process
-        self._x: Array = x
         self._y: Array = np.empty(x.shape[0], dtype=np.float64)
-        # Lagrange interpolation over (x_, x_) — node abscissae are x_; the
-        # y-vector is supplied fresh per call via value_with.
-        self._lagrange: LagrangeInterpolation = LagrangeInterpolation(x, x)
-        # One time-interpolation per node row (rows of collocation_y).
-        t_arr = np.asarray(maturity_times, dtype=np.float64)
-        n_nodes = x.shape[0]
-        self._interpl: list[LinearInterpolation] = [
-            LinearInterpolation(t_arr, collocation_y[i, :]) for i in range(n_nodes)
-        ]
+        self._data: MappingFunction.InterpolationData = (
+            MappingFunction.InterpolationData(
+                x=x, maturity_times=maturity_times, collocation_y=collocation_y
+            )
+        )
+
+    @property
+    def data(self) -> MappingFunction.InterpolationData:
+        """The shared grid state (C++ ``data_``)."""
+        return self._data
 
     def __call__(self, t: float, x: float) -> float:
         # C++ parity: normalclvmodel.cpp:119-132.
+        data = self._data
         for i in range(self._y.shape[0]):
-            self._y[i] = self._interpl[i](t, allow_extrapolation=True)
+            self._y[i] = data.interpl[i](t, allow_extrapolation=True)
         x0 = self._ou_process.x0()
         expectation = self._ou_process.expectation_1d(0.0, x0, t)
         std_dev = self._ou_process.std_deviation_1d(0.0, x0, t)
         r = self._sigma * (x - expectation) / std_dev
-        return self._lagrange.value_with(self._y, r)
+        return data.lagrange_interpl.value_with(self._y, r)
 
 
-__all__ = ["NormalCLVModel"]
+__all__ = ["MappingFunction", "NormalCLVModel"]

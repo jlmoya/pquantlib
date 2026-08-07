@@ -107,8 +107,70 @@ class _ParabolicColumn:
         return float(self._y[j] + d * (self._a[j] + d * (self._b[j] + d * self._c[j])))
 
 
+class Polynomial2DSplineImpl:
+    """The parabolic-in-y / natural-spline-in-x algorithm itself.
+
+    # C++ parity: ``detail::Polynomial2DSplineImpl<I1,I2,M>`` in
+    # polynomial2Dspline.hpp:36-76 — the ``Interpolation2D::templateImpl``
+    # subclass that :class:`Polynomial2DSpline` installs as its ``impl_``.
+    # The C++ class is a template purely to erase the iterator/matrix types
+    # behind ``Interpolation2D``; PQuantLib keeps it as a separate object
+    # because ``calculate`` (the per-column Parabolic build) and ``value``
+    # (the section + spline evaluation) are two distinct steps worth naming.
+
+    Indexing follows :class:`Interpolation2D`: ``z[y_index, x_index]`` —
+    the same orientation as the C++ ``zData_`` (``column_begin(i)`` walks
+    down a fixed-x column, i.e. across y).
+    """
+
+    __slots__ = ("_polynomials", "_xs", "_ys", "_z")
+
+    def __init__(self, xs: Array, ys: Array, z: Matrix) -> None:
+        self._xs: Array = xs
+        self._ys: Array = ys
+        self._z: Matrix = z
+        self._polynomials: list[_ParabolicColumn] = []
+        self.calculate()
+
+    def calculate(self) -> None:
+        """Build one ``Parabolic`` interpolation per z column (fixed x).
+
+        # C++ parity: ``Polynomial2DSplineImpl::calculate``
+        # (polynomial2Dspline.hpp:47-56), including the row-count check.
+        """
+        qassert.require(
+            self._z.shape[0] == self._ys.shape[0],
+            "size mismatch of the interpolation data",
+        )
+        self._polynomials = [
+            _ParabolicColumn(self._ys, self._z[:, k]) for k in range(self._xs.shape[0])
+        ]
+
+    @property
+    def polynomials(self) -> list[_ParabolicColumn]:
+        """The per-column Parabolic interpolations (C++ ``polynomials_``)."""
+        return self._polynomials
+
+    def value(self, x: float, y: float) -> float:
+        """Sample every column at ``y``, then natural-spline in ``x``.
+
+        # C++ parity: ``Polynomial2DSplineImpl::value``
+        # (polynomial2Dspline.hpp:57-73).
+        """
+        section = np.array([col(y) for col in self._polynomials], dtype=np.float64)
+        qassert.require(
+            section.shape[0] == self._xs.shape[0],
+            "size mismatch of the interpolation data",
+        )
+        spline = CubicNaturalSpline(self._xs, section)
+        return spline(x, allow_extrapolation=True)
+
+
 class Polynomial2DSpline(Interpolation2D):
     """Parabolic-in-y, natural-cubic-spline-in-x 2-D interpolation.
+
+    # C++ parity: ``class Polynomial2DSpline : public Interpolation2D`` in
+    # polynomial2Dspline.hpp:81-92.
 
     Args mirror :class:`Interpolation2D`: ``xs`` (x grid, the spline
     direction), ``ys`` (y grid, the parabolic direction), ``z`` indexed
@@ -117,14 +179,37 @@ class Polynomial2DSpline(Interpolation2D):
 
     def __init__(self, xs: Array, ys: Array, z: Matrix) -> None:
         super().__init__(xs, ys, z, required_points=2)
-        # Build one Parabolic column per x value (over the y grid).
-        # z is [y, x] so column k (fixed x) is z[:, k].
-        self._columns: list[_ParabolicColumn] = [
-            _ParabolicColumn(self._ys, self._z[:, k]) for k in range(self._xs.shape[0])
-        ]
+        # C++ parity: polynomial2Dspline.hpp:88-90 — impl_ = new
+        # detail::Polynomial2DSplineImpl<I1,I2,M>(...).
+        self._impl: Polynomial2DSplineImpl = Polynomial2DSplineImpl(
+            self._xs, self._ys, self._z
+        )
+
+    @property
+    def impl(self) -> Polynomial2DSplineImpl:
+        """The algorithm object (C++ ``Interpolation2D::impl_``)."""
+        return self._impl
 
     def _value(self, x: float, y: float) -> float:
-        # # C++ parity: Polynomial2DSplineImpl::value (polynomial2Dspline.hpp:57-73).
-        section = np.array([col(y) for col in self._columns], dtype=np.float64)
-        spline = CubicNaturalSpline(self._xs, section)
-        return spline(x, allow_extrapolation=True)
+        return self._impl.value(x, y)
+
+
+class Polynomial:
+    """polynomial2D-spline-interpolation factory / traits object.
+
+    # C++ parity: ``class Polynomial`` in polynomial2Dspline.hpp:95-103 —
+    # a stateless factory whose only member is the ``interpolate`` template.
+    # Mirrors the shape of :class:`~pquantlib.math.interpolations.bicubic_spline.Bicubic`
+    # and :class:`~pquantlib.math.interpolations.bilinear.Bilinear`.
+    """
+
+    @staticmethod
+    def interpolate(xs: Array, ys: Array, z: Matrix) -> Polynomial2DSpline:
+        """Build a :class:`Polynomial2DSpline` over ``(xs, ys, z)``.
+
+        # C++ parity: polynomial2Dspline.hpp:97-102.
+        """
+        return Polynomial2DSpline(xs, ys, z)
+
+
+__all__ = ["Polynomial", "Polynomial2DSpline", "Polynomial2DSplineImpl"]

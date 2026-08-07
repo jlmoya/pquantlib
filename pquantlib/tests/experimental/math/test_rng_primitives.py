@@ -173,33 +173,13 @@ def test_levy_min(cpp_ref: dict[str, Any]) -> None:
     tolerance.exact(d1.min(), float(lf["xm1"]))
 
 
-def test_levy_variate_inverse_transform(cpp_ref: dict[str, Any]) -> None:
-    """xm*u^{-1/alpha} variate matches the closed form for a uniform grid.
-
-    Drives the distribution off a stub engine returning the probe's
-    deterministic uniforms, confirming the transform is identical to
-    C++ (only the uniform source differs — see module docstring).
-    """
-    lf = cpp_ref["levy_flight"]
-    d1 = LevyFlightDistribution(float(lf["xm1"]), float(lf["alpha1"]))
-    d2 = LevyFlightDistribution(float(lf["xm2"]), float(lf["alpha2"]))
-    us = lf["us"]
-
-    class _StubEngine:
-        def __init__(self, vals: list[float]) -> None:
-            self._vals = list(vals)
-            self._i = 0
-
-        def next_real(self) -> float:
-            v = self._vals[self._i]
-            self._i += 1
-            return v
-
-    eng1 = _StubEngine([float(u) for u in us])
-    eng2 = _StubEngine([float(u) for u in us])
-    for i in range(len(us)):
-        tolerance.tight(d1(eng1), float(lf["variate1"][i]), reason=f"levy variate1[{i}]")
-        tolerance.tight(d2(eng2), float(lf["variate2"][i]), reason=f"levy variate2[{i}]")
+# NOTE: the C++ ``LevyFlightDistribution::operator()(Engine&)`` draws its
+# uniform from ``std::uniform_real_distribution<Real>(0,1)`` over a
+# ``std::mt19937`` — two engine words, not QuantLib's one-word ``nextReal``.
+# An earlier revision of this file drove the transform off a stub engine
+# exposing ``next_real()``, which checked the algebra but not the stream. The
+# variates are now pinned against the real C++ engine in
+# ``test_swarm_strategies.py::test_levy_variates_over_std_engine``.
 
 
 def test_levy_pdf_below_support_is_zero() -> None:
@@ -287,15 +267,21 @@ def test_isotropic_step_radius_consistency() -> None:
     )
 
 
-def test_isotropic_weighted_final_component_reuses_weight() -> None:
-    """C++ parity: the final ``sin`` component reuses ``weights[widx]``.
+def test_isotropic_weighted_final_component_uses_its_own_weight() -> None:
+    """Each component is scaled by its own weight, the last one included.
 
-    For ``dim == 2`` the dim-2 loop runs zero times, so ``out[0]`` and
-    ``out[1]`` both use ``weights[0]``. With weights ``[1.0, 0.5]`` the
-    *second* weight (0.5) is never read — both components scale by 1.0 —
-    and the two-component norm is therefore the full unit radius. This
-    pins the deliberate iterator-not-advanced behaviour documented in
-    the module.
+    The C++ writes the penultimate component with ``*weight++`` (a POST-
+    increment), so the final ``sin`` term reads ``weights[dim-1]``. For
+    ``dim == 2`` that means ``out[0]`` scales by ``weights[0]`` and
+    ``out[1]`` by ``weights[1]``.
+
+    An earlier revision of this port reused ``weights[0]`` for both, which
+    would leave the norm at the full unit radius here. With weights
+    ``[1.0, 0.5]`` the correct norm is
+    ``sqrt(cos^2(2phi) + 0.25 sin^2(2phi))`` instead, so the two behaviours
+    are distinguishable by construction. Cross-validated against the C++
+    box-weighted case in
+    ``migration-harness/references/v143/experimental/pso.json``.
     """
     weights = np.array([1.0, 0.5], dtype=np.float64)
     walk = IsotropicRandomWalk(
@@ -307,11 +293,18 @@ def test_isotropic_weighted_final_component_reuses_weight() -> None:
     )
     out = np.zeros(2, dtype=np.float64)
     walk.next_real(out)
-    # Both components used weights[0]==1.0, so norm == radius == 1.0.
-    norm = float(np.sqrt(np.sum(out * out)))
+    # out = (cos(2 phi) * 1.0, sin(2 phi) * 0.5) for radius 1.
+    cos_part = float(out[0])
+    sin_part = float(out[1]) / 0.5
     tolerance.custom(
-        norm, 1.0, abs_tol=1e-12, rel_tol=0.0, reason="final-weight-reuse keeps unit norm"
+        cos_part * cos_part + sin_part * sin_part,
+        1.0,
+        abs_tol=1e-12,
+        rel_tol=0.0,
+        reason="per-component weights recover the unit circle",
     )
+    # And the second weight really was applied.
+    assert abs(float(out[1])) <= 0.5
 
 
 def test_isotropic_bounded_weights_normalised() -> None:

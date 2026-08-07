@@ -38,7 +38,7 @@ from pquantlib.math.interpolations.interpolation import Interpolation
 from pquantlib.math.interpolations.linear import LinearInterpolation
 from pquantlib.math.interpolations.log_linear import LogLinearInterpolation
 from pquantlib.termstructures.bootstrap.iterative_bootstrap import IterativeBootstrap
-from pquantlib.termstructures.credit.default_probability_helpers import CdsHelper
+from pquantlib.termstructures.bootstrap_helper import BootstrapHelper
 from pquantlib.termstructures.credit.default_probability_term_structure import (
     DefaultProbabilityTermStructure,
 )
@@ -76,8 +76,13 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
     - ``traits``: ``SurvivalProbability`` / ``HazardRate`` /
       ``DefaultDensity`` (class or instance).
     - ``reference_date``: curve reference date.
-    - ``instruments``: list of :class:`CdsHelper` instances (spread or
-      upfront CDS helpers).
+    - ``instruments``: list of default-probability bootstrap helpers.
+      # C++ parity: ``std::vector<ext::shared_ptr<typename Traits::helper> >``
+      # where ``Traits::helper`` is ``DefaultProbabilityHelper`` ==
+      # ``BootstrapHelper<DefaultProbabilityTermStructure>``
+      # (piecewisedefaultcurve.hpp:47). Any such helper qualifies, not
+      # only the CDS ones — ``AssetSwapHelper`` is the other concrete
+      # implementation C++ ships.
     - ``day_counter``: day counter for date → time conversion.
     - ``calendar``: optional, defaults to None.
     - ``interpolator``: optional override; default depends on the
@@ -94,7 +99,7 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
         self,
         traits: Any,
         reference_date: Date,
-        instruments: Sequence[CdsHelper],
+        instruments: Sequence[BootstrapHelper[DefaultProbabilityTermStructure]],
         day_counter: DayCounter,
         calendar: Calendar | None = None,
         interpolator: InterpolationFactory | None = None,
@@ -111,7 +116,9 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
         )
         self._traits: Any = _instantiate(traits)
         self._traits_class: type = traits if isinstance(traits, type) else type(traits)
-        self._instruments: list[CdsHelper] = list(instruments)
+        self._instruments: list[BootstrapHelper[DefaultProbabilityTermStructure]] = list(
+            instruments
+        )
         # TermStructure already stores day_counter; keep a typed copy
         # here for ``bootstrap_install_grid``.
         self._dc_stored: DayCounter = day_counter
@@ -133,7 +140,7 @@ class PiecewiseDefaultCurve(DefaultProbabilityTermStructure):
     def traits(self) -> type:
         return self._traits_class
 
-    def instruments(self) -> list[CdsHelper]:
+    def instruments(self) -> list[BootstrapHelper[DefaultProbabilityTermStructure]]:
         return list(self._instruments)
 
     def max_date(self) -> Date:

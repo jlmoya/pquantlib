@@ -1,7 +1,7 @@
 """TenorSwaptionVTS — tenor-rescaled swaption volatility term structure.
 
-# C++ parity: ql/experimental/basismodels/tenorswaptionvts.hpp + .cpp (v1.42.1,
-# 099987f0).
+# C++ parity: ql/experimental/basismodels/tenorswaptionvts.hpp:37-125 +
+# tenorswaptionvts.cpp:37-135 (v1.43).
 
 Transforms a *base*-tenor swaption normal-vol surface into a *target*-tenor
 surface by an affine-TSR model: each smile section rebuilds base/target/final
@@ -35,10 +35,15 @@ from pquantlib.time.schedule import Schedule
 from pquantlib.time.time_unit import TimeUnit
 
 
-class _TenorSwaptionSmileSection(SmileSection):
+class TenorSwaptionSmileSection(SmileSection):
     """Affine-TSR-rescaled smile section for a target tenor.
 
-    # C++ parity: ``TenorSwaptionVTS::TenorSwaptionSmileSection``.
+    # C++ parity: ``TenorSwaptionVTS::TenorSwaptionSmileSection``
+    # (tenorswaptionvts.hpp:39-64, tenorswaptionvts.cpp:37-135).
+
+        vol(K) = A * volBase((K - C) / A)
+        A      = annuityScaling * (1 + lambda)
+        C      = swapRateTarg - (1 + lambda) * swapRateBase
     """
 
     def __init__(
@@ -58,6 +63,8 @@ class _TenorSwaptionSmileSection(SmileSection):
         one_day_as_year = vol_ts.day_counter().year_fraction(
             vol_ts.reference_date(), vol_ts.reference_date() + 1
         )
+        # # C++ parity note: raw day arithmetic off the reference date, with NO
+        # calendar adjustment (tenorswaptionvts.cpp:42-45).
         exercise_date = vol_ts.reference_date() + int(
             ClosestRounding(0)(option_time / one_day_as_year)
         )
@@ -66,9 +73,14 @@ class _TenorSwaptionSmileSection(SmileSection):
         effective_date = base_index.fixing_calendar().advance(
             exercise_date, base_index.fixing_days(), TimeUnit.Days
         )
+        # # C++ parity note: ``((BigInteger)swapLength * 12.0) * Months``
+        # (tenorswaptionvts.cpp:48-49) casts swapLength to an integer number of
+        # YEARS *first*, then multiplies by 12 — it does NOT round the swap
+        # length to the nearest month. A 7.5y swap length therefore builds an
+        # 84-month (7y) swap, not a 90-month one. Reproduced verbatim.
         maturity_date = base_index.fixing_calendar().advance(
             effective_date,
-            int(swap_length * 12.0),
+            int(swap_length) * 12,
             TimeUnit.Months,
             BusinessDayConvention.Unadjusted,
             False,
@@ -148,10 +160,42 @@ class _TenorSwaptionSmileSection(SmileSection):
         self._lambda: float = sum_targ - sum_base
         self._annuity_scaling: float = targ_swap.fixed_leg_bps() / finl_swap.fixed_leg_bps()
 
+    # --- inspectors ------------------------------------------------------------
+
+    def base_smile_section(self) -> SmileSection:
+        """# C++ parity: ``baseSmileSection_``."""
+        return self._base_smile_section
+
+    def swap_rate_base(self) -> float:
+        """# C++ parity: ``swapRateBase_`` — fair rate of the base-tenor swap."""
+        return self._swap_rate_base
+
+    def swap_rate_targ(self) -> float:
+        """# C++ parity: ``swapRateTarg_`` — base fixed leg vs target float leg."""
+        return self._swap_rate_targ
+
+    def swap_rate_finl(self) -> float:
+        """# C++ parity: ``swapRateFinl_`` — the fully target-tenor swap."""
+        return self._swap_rate_finl
+
+    def lambda_(self) -> float:
+        """# C++ parity: ``lambda_`` — affine-TSR float-leg weight difference."""
+        return self._lambda
+
+    def annuity_scaling(self) -> float:
+        """# C++ parity: ``annuityScaling_`` = targSwap BPS / finlSwap BPS."""
+        return self._annuity_scaling
+
     # --- SmileSection interface ------------------------------------------------
 
     def _volatility_impl(self, strike: float) -> float:
-        """# C++ parity: TenorSwaptionSmileSection::volatilityImpl."""
+        """# C++ parity: TenorSwaptionSmileSection::volatilityImpl (.cpp:129-135).
+
+        C++ reads the base section with ``volatility(strikeBase, Normal, 0.0)``;
+        that overload short-circuits to plain ``volatility(strikeBase)`` when
+        the base section is already Normal with zero shift
+        (smilesection.cpp:119-122), which is the designed configuration.
+        """
         strike_base = (
             (strike - (self._swap_rate_targ - (1.0 + self._lambda) * self._swap_rate_base))
             / (1.0 + self._lambda)
@@ -161,12 +205,15 @@ class _TenorSwaptionSmileSection(SmileSection):
         return self._annuity_scaling * (1.0 + self._lambda) * vol_base
 
     def min_strike(self) -> float:
+        """# C++ parity: tenorswaptionvts.hpp:57-59."""
         return self._base_smile_section.min_strike() + self._swap_rate_targ - self._swap_rate_base
 
     def max_strike(self) -> float:
+        """# C++ parity: tenorswaptionvts.hpp:60-62."""
         return self._base_smile_section.max_strike() + self._swap_rate_targ - self._swap_rate_base
 
     def atm_level(self) -> float:
+        """# C++ parity: tenorswaptionvts.hpp:63 — the target-tenor swap rate."""
         return self._swap_rate_finl
 
 
@@ -249,29 +296,37 @@ class TenorSwaptionVTS(SwaptionVolatilityStructure):
         option_expiry: Period | Date | float,
         swap_tenor: Period | float,
         extrapolate: bool = False,
-    ) -> SmileSection:
-        """# C++ parity: TenorSwaptionVTS::smileSectionImpl."""
-        del extrapolate
-        option_time = self._to_option_time(option_expiry)
+    ) -> TenorSwaptionSmileSection:
+        """# C++ parity: ``SwaptionVolatilityStructure::smileSection`` dispatch
+        # (swaptionvolstructure.hpp:400-460) onto
+        # ``TenorSwaptionVTS::smileSectionImpl`` (tenorswaptionvts.hpp:113-117).
+        """
+        self.check_swap_tenor(swap_tenor, extrapolate)
+        if isinstance(option_expiry, Period):
+            option_date = self.option_date_from_tenor(option_expiry)
+            self.check_range(option_date, extrapolate)
+            option_time = self.time_from_reference(option_date)
+        elif isinstance(option_expiry, Date):
+            self.check_range(option_expiry, extrapolate)
+            option_time = self.time_from_reference(option_expiry)
+        else:
+            self.check_time_range(option_expiry, extrapolate)
+            option_time = float(option_expiry)
         swap_length = (
             self.swap_length(swap_tenor) if isinstance(swap_tenor, Period) else swap_tenor
         )
-        return _TenorSwaptionSmileSection(self, option_time, swap_length)
+        return TenorSwaptionSmileSection(self, option_time, swap_length)
 
     def _volatility_impl(
         self, option_time: float, swap_length: float, strike: float
     ) -> float:
-        """# C++ parity: TenorSwaptionVTS::volatilityImpl — section vol at strike."""
-        return _TenorSwaptionSmileSection(self, option_time, swap_length).volatility(strike)
+        """# C++ parity: TenorSwaptionVTS::volatilityImpl (hpp:119-121).
 
-    # --- helpers ---------------------------------------------------------------
-
-    def _to_option_time(self, option_expiry: Period | Date | float) -> float:
-        if isinstance(option_expiry, Period):
-            return self.time_from_reference(self.option_date_from_tenor(option_expiry))
-        if isinstance(option_expiry, Date):
-            return self.time_from_reference(option_expiry)
-        return float(option_expiry)
+        C++ calls ``smileSectionImpl(...)`` (no range check — the public
+        ``volatility`` already did one) and reads it with
+        ``volatility(strike, Normal, 0.0)``, which short-circuits.
+        """
+        return TenorSwaptionSmileSection(self, option_time, swap_length).volatility(strike)
 
 
 def _sched(
@@ -295,5 +350,6 @@ def _sched(
 
 
 __all__ = [
+    "TenorSwaptionSmileSection",
     "TenorSwaptionVTS",
 ]

@@ -105,12 +105,28 @@ class QuantoEngine[ArgsT: OptionArguments](GenericEngine[ArgsT, QuantoOptionResu
         foreign_risk_free_rate: YieldTermStructure,
         exchange_rate_volatility: BlackVolTermStructure,
         correlation: Quote,
-        *,
         arguments: ArgsT,
         engine_factory: Callable[
             [GeneralizedBlackScholesProcess], GenericEngine[ArgsT, OneAssetOptionResults]
-        ],
+        ]
+        | None = None,
+        *,
+        inner_engine_factory: Callable[
+            [GeneralizedBlackScholesProcess], GenericEngine[ArgsT, OneAssetOptionResults]
+        ]
+        | None = None,
     ) -> None:
+        # Two waves of the port reached this constructor differently: one
+        # passes `arguments`/`engine_factory` by keyword, the other passes the
+        # arguments carrier and the factory positionally under the name
+        # `inner_engine_factory`. Both have cross-validated tests. C++ takes the
+        # delegate as a template parameter (`QuantoEngine<Instr, Engine>`), so
+        # neither spelling is the C++ one and there is nothing to defer to —
+        # both are accepted rather than breaking one caller to tidy the other.
+        factory = engine_factory if engine_factory is not None else inner_engine_factory
+        qassert.require(factory is not None, "QuantoEngine needs an inner engine factory")
+        assert factory is not None
+        engine_factory = factory
         super().__init__(arguments, QuantoOptionResults())
         self._process: GeneralizedBlackScholesProcess = process
         self._foreign_risk_free_rate: YieldTermStructure = foreign_risk_free_rate
@@ -159,6 +175,16 @@ class QuantoEngine[ArgsT: OptionArguments](GenericEngine[ArgsT, QuantoOptionResu
         original_engine = self._engine_factory(quanto_process)
         original_engine.reset()
         original_arguments = original_engine.get_arguments()
+        # C++ dynamic_casts the delegate's argument carrier to the instrument's
+        # own arguments type and QL_REQUIREs the cast succeeded
+        # (quantoengine.hpp:119-121). Without the equivalent check
+        # `_copy_arguments` below happily merges the fields of two unrelated
+        # carriers, so pairing an instrument with the wrong delegate produced a
+        # silently malformed bundle instead of an error.
+        qassert.require(
+            isinstance(original_arguments, type(args)),
+            "wrong engine type",
+        )
         _copy_arguments(args, original_arguments)
         original_arguments.validate()
         original_engine.calculate()

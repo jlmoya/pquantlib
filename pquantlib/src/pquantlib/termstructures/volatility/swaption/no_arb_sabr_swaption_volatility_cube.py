@@ -1,11 +1,14 @@
 """NoArbSabrSwaptionVolatilityCube — no-arb SABR-fitted swaption vol cube.
 
 # C++ parity: ql/experimental/volatility/noarbsabrswaptionvolatilitycube.hpp
-# = ``XabrSwaptionVolatilityCube<SwaptionVolCubeNoArbSabrModel>`` (v1.42.1).
+# = ``XabrSwaptionVolatilityCube<SwaptionVolCubeNoArbSabrModel>`` (v1.43).
 
-Thin wrapper around :class:`XabrSwaptionVolatilityCube` that fixes
-``model_kind`` to :attr:`XabrModelKind.NOARB_SABR`. Each grid cell is
-fitted with :class:`NoArbSabrInterpolation` and the smile section is a
+:class:`SwaptionVolCubeNoArbSabrModel` is the model-policy type the C++
+cube template is instantiated with; :class:`NoArbSabrSwaptionVolatilityCube`
+is that instantiation. The cube is a thin wrapper around
+:class:`XabrSwaptionVolatilityCube` that fixes ``model_kind`` to
+:attr:`XabrModelKind.NOARB_SABR`. Each grid cell is fitted with
+:class:`NoArbSabrInterpolation` and the smile section is a
 :class:`NoArbSabrSmileSection` (Doust 2012 no-arbitrage SABR).
 
 Same public surface as :class:`SabrSwaptionVolatilityCube`. Documented
@@ -20,7 +23,14 @@ keep the per-cell fit well-determined and fast.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any, Final
 
+from pquantlib.experimental.volatility.no_arb_sabr_interpolation import (
+    NoArbSabrInterpolation,
+)
+from pquantlib.experimental.volatility.no_arb_sabr_smile_section import (
+    NoArbSabrSmileSection,
+)
 from pquantlib.indexes.swap_index import SwapIndex
 from pquantlib.quotes.quote import Quote
 from pquantlib.termstructures.volatility.swaption.swaption_volatility_cube import (
@@ -33,7 +43,131 @@ from pquantlib.termstructures.volatility.swaption.xabr_swaption_volatility_cube 
     XabrModelKind,
     XabrSwaptionVolatilityCube,
 )
+from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 from pquantlib.time.period import Period
+
+
+class SwaptionVolCubeNoArbSabrModel:
+    """No-arbitrage SABR model specification for the XABR swaption cube.
+
+    # C++ parity: ``struct SwaptionVolCubeNoArbSabrModel`` +
+    # ``struct XabrModelTraits<SwaptionVolCubeNoArbSabrModel>``
+    # (noarbsabrswaptionvolatilitycube.hpp:36-80).
+
+    In C++ this is two pieces: a two-typedef tag struct naming the
+    interpolation and smile-section types, and an explicit specialisation of
+    ``XabrModelTraits`` on that tag carrying the behaviour. Python has no
+    template specialisation, so the two collapse into one class: the
+    :attr:`Interpolation` / :attr:`SmileSection` attributes are the typedefs
+    and the classmethods are the traits members.
+
+    The specialisation exists for one reason, and it is load-bearing:
+    ``NoArbSabrInterpolation``'s constructor takes no ``volatilityType``
+    argument (the primary ``XabrModelTraits`` template passes one), so the
+    cube would not compile against it. :meth:`create_interpolation`
+    therefore *drops* ``volatility_type`` — a NOARB_SABR cube built as
+    ``Normal`` produces exactly the same interpolation as one built as
+    ``ShiftedLognormal``. Cross-validated by ``F2`` of
+    ``references/v143/experimental/volatility.json``.
+    """
+
+    #: C++ ``typedef NoArbSabrInterpolation Interpolation``.
+    Interpolation = NoArbSabrInterpolation
+    #: C++ ``typedef NoArbSabrSmileSection SmileSection``.
+    SmileSection = NoArbSabrSmileSection
+
+    #: C++ ``static constexpr Size nParams = 4``.
+    n_params: Final[int] = 4
+
+    __slots__ = ()
+
+    @classmethod
+    def create_interpolation(
+        cls,
+        strikes: Sequence[float],
+        volatilities: Sequence[float],
+        t: float,
+        forward: float,
+        params: Sequence[float],
+        param_is_fixed: Sequence[bool],
+        vega_weighted: bool,
+        end_criteria: Any = None,
+        optimization_method: Any = None,
+        error_accept: float = 0.0020,
+        use_max_error: bool = False,
+        max_guesses: int = 50,
+        shift: float = 0.0,
+        volatility_type: VolatilityType = VolatilityType.ShiftedLognormal,
+    ) -> NoArbSabrInterpolation:
+        """Fit one cube cell.
+
+        # C++ parity: ``XabrModelTraits<SwaptionVolCubeNoArbSabrModel>::
+        # createInterpolation`` (noarbsabrswaptionvolatilitycube.hpp:49-66).
+
+        # C++ parity note: ``volatilityType`` is accepted and DISCARDED —
+        # the C++ parameter is spelled ``VolatilityType /* volatilityType */``
+        # precisely because ``NoArbSabrInterpolation`` has no such argument.
+        # ``shift`` IS forwarded, and a non-zero shift is rejected.
+        """
+        del end_criteria, optimization_method, error_accept, use_max_error
+        del volatility_type
+        if shift != 0.0:
+            raise ValueError(
+                "NoArbSabrInterpolation for non zero shift not implemented"
+            )
+        return NoArbSabrInterpolation(
+            strikes,
+            volatilities,
+            t,
+            forward,
+            alpha=params[0],
+            beta=params[1],
+            nu=params[2],
+            rho=params[3],
+            alpha_is_fixed=param_is_fixed[0],
+            beta_is_fixed=param_is_fixed[1],
+            nu_is_fixed=param_is_fixed[2],
+            rho_is_fixed=param_is_fixed[3],
+            vega_weighted=vega_weighted,
+            max_guesses=max_guesses,
+        )
+
+    @classmethod
+    def extract_gamma(cls, interpolation: NoArbSabrInterpolation) -> float:
+        """Always 0.0 — no-arb SABR has no gamma parameter.
+
+        # C++ parity: ``extractGamma``
+        # (noarbsabrswaptionvolatilitycube.hpp:68-71). With ``nParams == 4``
+        # the cube guards the call behind ``if constexpr (nParams >= 5)``, so
+        # this is never reached in practice; the traits member still exists.
+        """
+        del interpolation
+        return 0.0
+
+    @classmethod
+    def create_smile_section(
+        cls,
+        option_time: float,
+        forward: float,
+        params: Sequence[float],
+        shift: float = 0.0,
+        volatility_type: VolatilityType = VolatilityType.ShiftedLognormal,
+    ) -> NoArbSabrSmileSection:
+        """Build the per-cell smile section.
+
+        # C++ parity: ``createSmileSection``
+        # (noarbsabrswaptionvolatilitycube.hpp:73-79). Unlike
+        # :meth:`create_interpolation` this one DOES forward
+        # ``volatilityType`` — ``NoArbSabrSmileSection`` accepts it.
+        """
+        alpha, beta, nu, rho = (float(p) for p in params[:4])
+        return NoArbSabrSmileSection(
+            forward=forward,
+            sabr_params=(alpha, beta, nu, rho),
+            exercise_time=option_time,
+            shift=shift,
+            volatility_type=volatility_type,
+        )
 
 
 class NoArbSabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
@@ -96,4 +230,4 @@ class NoArbSabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
         return params[0], params[1], params[2], params[3]
 
 
-__all__ = ["NoArbSabrSwaptionVolatilityCube"]
+__all__ = ["NoArbSabrSwaptionVolatilityCube", "SwaptionVolCubeNoArbSabrModel"]

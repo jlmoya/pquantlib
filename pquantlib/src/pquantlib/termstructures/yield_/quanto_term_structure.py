@@ -1,19 +1,15 @@
-"""QuantoTermStructure — dividend curve adjusted for the quanto effect.
+"""QuantoTermStructure — quanto-adjusted dividend curve.
 
-# C++ parity: ql/termstructures/yield/quantotermstructure.hpp (v1.43)
+# C++ parity: ql/termstructures/yield/quantotermstructure.hpp (v1.43).
 
-The quanto-adjusted "dividend" zero yield seen from the evaluation date::
+Ported as a dependency of ``QuantoEngine``: pricing a quanto option is
+pricing the *same* option under a dividend curve shifted by the domestic /
+foreign rate differential plus the quanto convexity term
 
     q(t) + r(t) - r_f(t) + rho * sigma_S(t, K) * sigma_X(t, X_atm)
 
-where q is the underlying's dividend curve, r the domestic risk-free curve,
-r_f the foreign risk-free curve, sigma_S the underlying's Black vol at the
-option strike, sigma_X the exchange rate's Black vol at its ATM level, and
-rho their correlation.
-
-C++ notes in a comment that all term structures are ASSUMED to share a day
-counter without requiring it; this port keeps that behaviour rather than
-tightening it, because tightening would reject inputs C++ accepts.
+The structure stays linked to the five inputs, so any change in them
+propagates.
 """
 
 from __future__ import annotations
@@ -31,7 +27,11 @@ from pquantlib.time.frequency import Frequency
 
 
 class QuantoTermStructure(ZeroYieldStructure):
-    """Quanto-adjusted dividend term structure."""
+    """Quanto-adjusted dividend term structure.
+
+    # C++ parity: ``class QuantoTermStructure``
+    # (quantotermstructure.hpp:42-70 + the inline definitions at :75-135).
+    """
 
     def __init__(
         self,
@@ -44,59 +44,68 @@ class QuantoTermStructure(ZeroYieldStructure):
         exch_rate_atm_level: float,
         underlying_exch_rate_correlation: float,
     ) -> None:
-        ZeroYieldStructure.__init__(
-            self, day_counter=underlying_dividend_ts.day_counter()
-        )
+        # # C++ parity: base ctor is ``ZeroYieldStructure(underlyingDividendTS->dayCounter())``.
+        super().__init__(day_counter=underlying_dividend_ts.day_counter())
         self._underlying_dividend_ts: YieldTermStructure = underlying_dividend_ts
         self._risk_free_ts: YieldTermStructure = risk_free_ts
         self._foreign_risk_free_ts: YieldTermStructure = foreign_risk_free_ts
         self._underlying_black_vol_ts: BlackVolTermStructure = underlying_black_vol_ts
         self._exch_rate_black_vol_ts: BlackVolTermStructure = exch_rate_black_vol_ts
+        self._underlying_exch_rate_correlation: float = underlying_exch_rate_correlation
         self._strike: float = strike
         self._exch_rate_atm_level: float = exch_rate_atm_level
-        self._underlying_exch_rate_correlation: float = underlying_exch_rate_correlation
+
         underlying_dividend_ts.register_with(self)
         risk_free_ts.register_with(self)
         foreign_risk_free_ts.register_with(self)
         underlying_black_vol_ts.register_with(self)
         exch_rate_black_vol_ts.register_with(self)
 
-    # ---- TermStructure overrides -------------------------------------------
+    # --- YieldTermStructure interface -------------------------------------
 
     def day_counter(self) -> DayCounter:
+        """# C++ parity: ``dayCounter()`` (quantotermstructure.hpp:99-101)."""
         return self._underlying_dividend_ts.day_counter()
 
     def calendar(self) -> Calendar:
+        """# C++ parity: ``calendar()`` (quantotermstructure.hpp:103-105)."""
         return self._underlying_dividend_ts.calendar()
 
     def settlement_days(self) -> int:
+        """# C++ parity: ``settlementDays()`` (quantotermstructure.hpp:107-109)."""
         return self._underlying_dividend_ts.settlement_days()
 
     def reference_date(self) -> Date:
+        """# C++ parity: ``referenceDate()`` (quantotermstructure.hpp:111-113)."""
         return self._underlying_dividend_ts.reference_date()
 
     def max_date(self) -> Date:
-        return min(
-            self._underlying_dividend_ts.max_date(),
-            self._risk_free_ts.max_date(),
-            self._foreign_risk_free_ts.max_date(),
-            self._underlying_black_vol_ts.max_date(),
-            self._exch_rate_black_vol_ts.max_date(),
+        """# C++ parity: ``maxDate()`` (quantotermstructure.hpp:115-123)."""
+        max_date = min(
+            self._underlying_dividend_ts.max_date(), self._risk_free_ts.max_date()
         )
+        max_date = min(max_date, self._foreign_risk_free_ts.max_date())
+        max_date = min(max_date, self._underlying_black_vol_ts.max_date())
+        return min(max_date, self._exch_rate_black_vol_ts.max_date())
 
-    # ---- ZeroYieldStructure implementation ---------------------------------
+    # --- ZeroYieldStructure hook -------------------------------------------
 
     def _zero_yield_impl(self, t: float) -> float:
-        # C++ parity: ``QuantoTermStructure::zeroYieldImpl``.
+        """# C++ parity: ``zeroYieldImpl`` (quantotermstructure.hpp:125-133).
+
+        # C++ parity note: the C++ comment flags that all five structures are
+        # *assumed* to share a day counter and that the assumption is not
+        # QL_REQUIREd. Reproduced as-is.
+        """
         return (
             self._underlying_dividend_ts.zero_rate(
-                t, Compounding.Continuous, Frequency.NoFrequency, extrapolate=True
+                t, Compounding.Continuous, Frequency.NoFrequency, True
             ).rate()
             + self._risk_free_ts.zero_rate(
-                t, Compounding.Continuous, Frequency.NoFrequency, extrapolate=True
+                t, Compounding.Continuous, Frequency.NoFrequency, True
             ).rate()
             - self._foreign_risk_free_ts.zero_rate(
-                t, Compounding.Continuous, Frequency.NoFrequency, extrapolate=True
+                t, Compounding.Continuous, Frequency.NoFrequency, True
             ).rate()
             + self._underlying_exch_rate_correlation
             * self._underlying_black_vol_ts.black_vol_at_time(t, self._strike, True)
@@ -104,3 +113,6 @@ class QuantoTermStructure(ZeroYieldStructure):
                 t, self._exch_rate_atm_level, True
             )
         )
+
+
+__all__ = ["QuantoTermStructure"]

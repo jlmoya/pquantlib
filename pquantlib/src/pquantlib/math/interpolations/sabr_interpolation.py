@@ -42,6 +42,7 @@ from collections.abc import Sequence
 from typing import Any, Final
 
 import numpy as np
+import numpy.typing as npt
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from pquantlib import qassert
@@ -56,6 +57,39 @@ from pquantlib.termstructures.volatility.volatility_type import VolatilityType
 # C++ ``Null<Real>()`` is ``std::numeric_limits<float>::max()`` — the sentinel
 # SABRSpecs::defaultValues tests against (ql/utilities/null.hpp).
 NULL_REAL: Final[float] = float(np.finfo(np.float32).max)
+
+
+def as_null(value: float | None) -> float:
+    """Map the Pythonic ``None`` onto the C++ ``Null<Real>()`` sentinel.
+
+    # C++ parity: none — bridges Python's ``None`` onto the sentinel the XABR
+    # ``*Specs`` classes test against (ql/utilities/null.hpp).
+    """
+    return NULL_REAL if value is None else float(value)
+
+
+def xabr_interpolation_error(
+    residuals: npt.NDArray[np.float64], weights: npt.NDArray[np.float64]
+) -> float:
+    """RMS-like fit error every XABR interpolation reports.
+
+    # C++ parity: ``XABRInterpolationImpl::interpolationError``
+    # (xabrinterpolation.hpp:246-251 @ v1.43)::
+    #
+    #     squaredError = sum_i w_i * e_i^2
+    #     error        = sqrt(n * squaredError / (n == 1 ? 1 : n - 1))
+    #
+    # Note the ``n - 1`` denominator: this is NOT ``sqrt(mean(e^2))``. With
+    # the default flat weights ``w_i = 1/n`` it collapses to
+    # ``sqrt(sum(e^2) / (n - 1))``, which is larger than the plain RMS by
+    # ``sqrt(n / (n - 1))``.
+    """
+    n = residuals.size
+    if n == 0:
+        return 0.0
+    squared_error = float(np.sum(residuals * residuals * weights))
+    return math.sqrt(n * squared_error / (1 if n == 1 else n - 1))
+
 
 # Reasonable default initial guesses for unconstrained params (mirrors
 # the C++ ``SABRSpecs::defaultValues`` and Hagan's typical starting
@@ -832,4 +866,6 @@ __all__ = [
     "SABRSpecs",
     "SABRWrapper",
     "SabrInterpolation",
+    "as_null",
+    "xabr_interpolation_error",
 ]

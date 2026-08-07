@@ -190,18 +190,20 @@ class SquareRootCLVModel(LazyObject):
             y = self.collocation_points_y(d)
             times.append(self._bs_process.time(d))
             interpl.append(LagrangeInterpolation(x, y))
-        self._g = _SquareRootMappingFunction(times=times, interpl=interpl)
+        self._g = MappingFunction(times=times, interpl=interpl)
 
 
-class _SquareRootMappingFunction:
+class MappingFunction:
     """CLV mapping g(t, x) for the square-root kernel.
 
     # C++ parity: ``SquareRootCLVModel::MappingFunction`` in
     # squarerootclvmodel.hpp:69-81 + squarerootclvmodel.cpp:130-182.
 
     Per maturity, a ``LagrangeInterpolation`` over the (x, y) collocation
-    pair. Between maturities, linear interpolation in t (with no
-    extrapolation beyond the maturity span — matching C++).
+    pair (C++ keeps them in the ``interpl`` ``std::map<Time, ...>``; the
+    Python port keeps the sorted ``times`` list alongside the matching
+    interpolations, which is the same ordered structure). Between
+    maturities, linear interpolation in t.
     """
 
     __slots__ = ("_interpl", "_times")
@@ -215,6 +217,16 @@ class _SquareRootMappingFunction:
         self._times: list[float] = times
         self._interpl: list[LagrangeInterpolation] = interpl
 
+    @property
+    def times(self) -> list[float]:
+        """The maturity times (keys of the C++ ``interpl`` map)."""
+        return self._times
+
+    @property
+    def interpl(self) -> list[LagrangeInterpolation]:
+        """The per-maturity Lagrange interpolations (values of ``interpl``)."""
+        return self._interpl
+
     def __call__(self, t: float, x: float) -> float:
         # C++ parity: squarerootclvmodel.cpp:162-182 — lower_bound on the
         # maturity map, exact-hit or linear interpolation between brackets.
@@ -227,6 +239,11 @@ class _SquareRootMappingFunction:
         if idx < len(times) and close_enough(times[idx], t):
             return self._interpl[idx](x, allow_extrapolation=True)
 
+        # # C++ parity note: C++ dereferences the lower_bound iterator BEFORE
+        # # checking it against end() (squarerootclvmodel.cpp:163-167), so a t
+        # # past the last maturity is undefined behaviour there. PQuantLib
+        # # bounds-checks first and raises the same QL_REQUIRE message the C++
+        # # would have raised had it got that far.
         qassert.require(
             0 < idx < len(times),
             "extrapolation to large or small t is not allowed",
@@ -239,4 +256,4 @@ class _SquareRootMappingFunction:
         return y0 + (y1 - y0) / (t1 - t0) * (t - t0)
 
 
-__all__ = ["SquareRootCLVModel"]
+__all__ = ["MappingFunction", "SquareRootCLVModel"]

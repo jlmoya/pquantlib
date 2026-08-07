@@ -149,7 +149,14 @@ def test_close_helpers() -> None:
     assert not close(_bbl(1.0), _bbl(2.0))
 
 
-def test_rounded_is_noop_by_default() -> None:
-    # Barrel's default rounding is the no-op Rounding(), so amount is unchanged.
-    q = _bbl(1.23456789)
-    tolerance.exact(q.rounded().amount, 1.23456789)
+def test_rounded_uses_the_uom_data_default_rounding() -> None:
+    """``rounded()`` is NOT a no-op: UnitOfMeasure::Data defaults to Rounding(0).
+
+    # C++ parity: quantity.hpp:140-144 applies ``unitOfMeasure_.rounding()``,
+    # and unitofmeasure.hpp:86 defaults that to ``Rounding(0)`` — precision 0,
+    # type Closest, digit 5. Values pinned by the W7 misc probe.
+    """
+    ref = reference_reader.load("v143/experimental/misc")
+    tolerance.exact(_bbl(1.23456789).rounded().amount, ref["uom_quantity_rounded_1p23456789"])
+    tolerance.exact(_bbl(2.5).rounded().amount, ref["uom_quantity_rounded_2p5"])
+    tolerance.exact(_bbl(-1.5).rounded().amount, ref["uom_quantity_rounded_m1p5"])

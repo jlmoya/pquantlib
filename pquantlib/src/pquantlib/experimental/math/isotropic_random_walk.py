@@ -17,17 +17,31 @@ fresh ``phi = pi*u`` is drawn each step; the final two coordinates use
 ``cos(2 phi)`` / ``sin(2 phi)``. For ``dim == 1`` a single uniform
 picks the sign.
 
-# C++ parity note: in the final ``sin`` term, C++ reads ``*weight``
-# (the last advanced iterator) for *both* the penultimate ``cos`` and
-# the final ``sin`` coordinate — the weight iterator is **not** advanced
-# for the final component. PQuantLib reproduces this (``weights[widx]``
-# is reused for ``out[widx + 1]``).
+Every component gets its own weight. The C++ is
+
+.. code-block:: cpp
+
+   for (Size i = 0; i < dim_ - 2; i++) {
+       *first++ = radius*cos(phi)*(*weight++);
+       ...
+   }
+   *first++ = radius*cos(2.0*phi)*(*weight++);
+   *first   = radius*sin(2.0*phi)*(*weight);
+
+where the penultimate line's ``*weight++`` is a **post-increment**, so
+the final ``sin`` term reads ``weights[dim-1]`` — the last weight — not
+a repeat of the penultimate one. An earlier revision of this port read
+``weights[widx]`` for both of the last two components; that was wrong
+and is fixed. It was invisible for unweighted walks (all weights 1.0)
+and shows up as an exact factor-of-``w[dim-2]/w[dim-1]`` error on the
+last component otherwise, which is how the C++ box-weighted probe case
+caught it.
 """
 
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
@@ -39,13 +53,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-class _RadiusEngine(Protocol):
-    """Minimal uniform-engine interface a radius distribution consumes."""
-
-    def next_real(self) -> float: ...
-
-
-class IsotropicRandomWalk:
+class IsotropicRandomWalk[Engine]:
     """Isotropic random walk on a (possibly weighted) sphere.
 
     # C++ parity: ``template <Distribution, Engine> class
@@ -55,8 +63,10 @@ class IsotropicRandomWalk:
     Parameters
     ----------
     engine:
-        Uniform engine consumed by ``distribution`` to draw the radius
-        (exposes ``next_real()``).
+        Engine consumed by ``distribution`` to draw the radius. The walk
+        never touches it itself, which is why it is a free type parameter
+        here exactly as it is a template parameter in C++ — the firefly and
+        PSO consumers pass a ``StdMt19937``.
     distribution:
         Callable ``distribution(engine) -> radius`` (e.g.
         ``LevyFlightDistribution``).
@@ -73,14 +83,14 @@ class IsotropicRandomWalk:
 
     def __init__(
         self,
-        engine: _RadiusEngine,
-        distribution: Callable[[_RadiusEngine], float],
+        engine: Engine,
+        distribution: Callable[[Engine], float],
         dim: int,
         weights: npt.NDArray[np.float64] | None = None,
         seed: int = 1,
     ) -> None:
-        self._engine: _RadiusEngine = engine
-        self._distribution: Callable[[_RadiusEngine], float] = distribution
+        self._engine: Engine = engine
+        self._distribution: Callable[[Engine], float] = distribution
         self._rng: MersenneTwisterUniformRng = MersenneTwisterUniformRng(seed)
         self._dim: int = dim
         if weights is None or weights.size == 0:
@@ -123,9 +133,9 @@ class IsotropicRandomWalk:
                 radius *= math.sin(phi)
                 phi = math.pi * self._rng.next_real()
             out[widx] = radius * math.cos(2.0 * phi) * weights[widx]
-            # C++ parity: final sin term reuses weights[widx] (iterator
-            # not advanced for the last component).
-            out[widx + 1] = radius * math.sin(2.0 * phi) * weights[widx]
+            # C++ parity: `*weight++` above is a post-increment, so the final
+            # sin term reads the NEXT weight. See the module docstring.
+            out[widx + 1] = radius * math.sin(2.0 * phi) * weights[widx + 1]
         elif self._rng.next_real() < 0.5:
             out[0] = -radius * weights[0]
         else:

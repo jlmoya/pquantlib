@@ -55,6 +55,12 @@ from pquantlib.experimental.shortrate.linear_flat_interpolation import (
 )
 from pquantlib.math.constants import QL_EPSILON
 from pquantlib.math.integrals.simpson import SimpsonIntegral
+from pquantlib.math.interpolations.interpolation import Interpolation
+from pquantlib.math.optimization.constraint import (
+    Constraint,
+    NoConstraint,
+    PositiveConstraint,
+)
 from pquantlib.models.model import TermStructureConsistentModel
 from pquantlib.models.parameter import (
     Parameter,
@@ -79,6 +85,78 @@ if TYPE_CHECKING:
 
 def _identity(x: float) -> float:
     return x
+
+
+class InterpolationParameter(Parameter):
+    """Parameter that holds an interpolation object.
+
+    # C++ parity: ``class InterpolationParameter : public Parameter`` in
+    # generalizedhullwhite.hpp:37-61 (v1.43).
+
+    The whole point of the class is the *aliasing* between the parameter's
+    free-parameter vector and the interpolation's ordinates: C++ builds the
+    interpolation with ``a_.params().begin()`` as its y-iterator
+    (generalizedhullwhite.hpp:200-203), so a calibrator writing through
+    :meth:`Parameter.set_param` moves the curve with no rebuild. PQuantLib
+    reproduces this by handing :meth:`Parameter.params` — the parameter's own
+    ``numpy`` array — to the interpolation constructor, which keeps it by
+    reference.
+
+    # C++ parity note: only the *ordinates* are live. The interpolation's
+    # cached slopes are recomputed by ``Interpolation::update()``, which C++
+    # calls from ``GeneralizedHullWhite::generateArguments``
+    # (generalizedhullwhite.cpp:122-126) — not from ``setParam``. So between a
+    # bare ``set_param`` and the next ``update()`` the curve reads *new*
+    # ordinates through *stale* slopes. That is reproduced verbatim and pinned
+    # by ``ip_values_after_setparam`` in the misc probe.
+    """
+
+    class Impl(ParameterImpl):
+        """Interpolation-backed lookup strategy.
+
+        # C++ parity: ``InterpolationParameter::Impl`` in
+        # generalizedhullwhite.hpp:39-45.
+        """
+
+        __slots__ = ("_interpolator",)
+
+        def __init__(self) -> None:
+            self._interpolator: Interpolation | None = None
+
+        def value(self, params: npt.NDArray[np.float64], t: float) -> float:
+            # C++ parity: generalizedhullwhite.hpp:41 — ``return
+            # interpolator_(t);``. ``params`` is deliberately unused: the
+            # numbers reach the interpolation through the shared array, and
+            # the extrapolation policy is baked into the interpolation object
+            # (C++ calls ``enableExtrapolation()`` before ``reset``).
+            del params
+            if self._interpolator is None:
+                raise RuntimeError("InterpolationParameter has not been reset()")
+            return self._interpolator(t)
+
+        def reset(self, interp: Interpolation) -> None:
+            # C++ parity: generalizedhullwhite.hpp:42.
+            self._interpolator = interp
+
+    def __init__(self, count: int, constraint: Constraint | None = None) -> None:
+        # C++ parity: generalizedhullwhite.hpp:47-54.
+        super().__init__(
+            count,
+            InterpolationParameter.Impl(),
+            constraint if constraint is not None else NoConstraint(),
+        )
+
+    def reset(self, interp: Interpolation) -> None:
+        """Install the interpolation this parameter evaluates.
+
+        # C++ parity: generalizedhullwhite.hpp:55-60 — a
+        # ``dynamic_pointer_cast`` that silently does nothing when the Impl is
+        # not an ``InterpolationParameter::Impl``; the ``isinstance`` guard is
+        # the same no-op-on-mismatch behaviour.
+        """
+        impl = self.impl
+        if isinstance(impl, InterpolationParameter.Impl):
+            impl.reset(interp)
 
 
 class _GeneralizedHullWhiteFittingImpl(ParameterImpl):
@@ -271,48 +349,77 @@ class GeneralizedHullWhite(OneFactorAffineModel, TermStructureConsistentModel):
         self._vol_periods: list[float] = [
             dc.year_fraction(ref, d) for d in vol_structure
         ]
-        # LinearFlat requires >= 1 point; a single point -> constant.
-        self._speed_interp: LinearFlatInterpolation = self._build_flat(
-            self._speed_periods, list(speed)
+        # C++ parity: generalizedhullwhite.hpp:194-212 — a_ and sigma_ ARE
+        # ``InterpolationParameter``s bound to arguments_[0] / arguments_[1],
+        # with the reversion unconstrained and the volatility positive. The
+        # interpolations are built over the parameters' own arrays so that
+        # calibration (``set_params``) moves the curves.
+        a_param = InterpolationParameter(len(self._speed_periods), NoConstraint())
+        for i, s in enumerate(speed):
+            a_param.set_param(i, float(s))
+        sigma_param = InterpolationParameter(
+            len(self._vol_periods), PositiveConstraint()
         )
-        self._vol_interp: LinearFlatInterpolation = self._build_flat(
-            self._vol_periods, list(vol)
-        )
+        for i, v in enumerate(vol):
+            sigma_param.set_param(i, float(v))
+        self._arguments[0] = a_param
+        self._arguments[1] = sigma_param
+        self._rebuild_interpolations()
 
-    @staticmethod
-    def _build_flat(xs: list[float], ys: list[float]) -> LinearFlatInterpolation:
-        # A single pillar can't form a numpy x-range with > 1 element, but
-        # LinearFlat with one node returns ys[0] for every query; duplicate
-        # the single node a hair apart so the impl's slope loop is well
-        # defined while keeping the flat (constant) behaviour exactly.
-        if len(xs) == 1:
-            interp = LinearFlat.interpolate(
-                np.array([xs[0], xs[0] + 1.0], dtype=np.float64),
-                np.array([ys[0], ys[0]], dtype=np.float64),
-            )
-        else:
-            interp = LinearFlat.interpolate(
-                np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64)
-            )
-        interp.enable_extrapolation()
-        return interp
+    def _rebuild_interpolations(self) -> None:
+        """Rebuild the LinearFlat curves over the parameters' live arrays.
+
+        # C++ parity: generalizedhullwhite.hpp:200-212 (initial build) and
+        # generalizedhullwhite.cpp:122-124 (``speed_.update(); vol_.update();``
+        # after a calibration step). C++ can call ``update()`` in place because
+        # its interpolation holds an iterator into ``params()``; PQuantLib's
+        # ``Interpolation`` recomputes its cached slopes only in its own
+        # ``update()``, so re-installing an interpolation built over the same
+        # (shared) array is the exact equivalent.
+        """
+        a_param = self._arguments[0]
+        sigma_param = self._arguments[1]
+        # LinearFlat requires >= 1 point; a single pillar -> constant curve
+        # (the C++ analytic ctor uses BackwardFlat over one pillar, which is
+        # likewise constant).
+        self._speed_interp: LinearFlatInterpolation = LinearFlat.interpolate(
+            np.asarray(self._speed_periods, dtype=np.float64), a_param.params
+        )
+        self._speed_interp.enable_extrapolation()
+        self._vol_interp: LinearFlatInterpolation = LinearFlat.interpolate(
+            np.asarray(self._vol_periods, dtype=np.float64), sigma_param.params
+        )
+        self._vol_interp.enable_extrapolation()
+        if isinstance(a_param, InterpolationParameter):
+            a_param.reset(self._speed_interp)
+        if isinstance(sigma_param, InterpolationParameter):
+            sigma_param.reset(self._vol_interp)
 
     # --- analytic accessors ---------------------------------------------
 
     def a(self) -> float:
-        # C++ parity: generalizedhullwhite.hpp:132 — a_(0.0).
-        return self._speed_interp(0.0, allow_extrapolation=True)
+        # C++ parity: generalizedhullwhite.hpp:130 — ``a_(0.0)``, i.e. the
+        # InterpolationParameter evaluated at t = 0.
+        return self._arguments[0](0.0)
 
     def sigma(self) -> float:
-        # C++ parity: generalizedhullwhite.hpp:133 — sigma_(0.0).
-        return self._vol_interp(0.0, allow_extrapolation=True)
+        # C++ parity: generalizedhullwhite.hpp:131 — ``sigma_(0.0)``.
+        return self._arguments[1](0.0)
 
     def speed(self, t: float) -> float:
-        """Reversion alpha(t)."""
+        """Reversion alpha(t).
+
+        # C++ parity: generalizedhullwhite.hpp:133 returns the ``speed_``
+        # interpolation itself as a ``std::function<Real(Time)>``; Python
+        # exposes it as a call.
+        """
         return self._speed_interp(t, allow_extrapolation=True)
 
     def vol(self, t: float) -> float:
-        """Volatility sigma(t)."""
+        """Volatility sigma(t).
+
+        # C++ parity: generalizedhullwhite.hpp:134 (``vol_``).
+        """
         return self._vol_interp(t, allow_extrapolation=True)
 
     # --- Gurrieri B / V / A integrals -----------------------------------
@@ -437,7 +544,9 @@ class GeneralizedHullWhite(OneFactorAffineModel, TermStructureConsistentModel):
         return _GeneralizedHullWhiteDynamics(phi, process, self._f, self._f_inverse)
 
     def generate_arguments(self) -> None:
-        # C++ parity: generalizedhullwhite.cpp:122-126.
+        # C++ parity: generalizedhullwhite.cpp:122-126 —
+        # ``speed_.update(); vol_.update(); phi_ = FittingParameter(...);``
+        self._rebuild_interpolations()
         self._phi = _GeneralizedHullWhiteFittingParameter(
             self.term_structure, self.a(), self.sigma()
         )
@@ -453,4 +562,4 @@ class GeneralizedHullWhite(OneFactorAffineModel, TermStructureConsistentModel):
         return [True] * na + [False] * nsigma
 
 
-__all__ = ["GeneralizedHullWhite"]
+__all__ = ["GeneralizedHullWhite", "InterpolationParameter"]

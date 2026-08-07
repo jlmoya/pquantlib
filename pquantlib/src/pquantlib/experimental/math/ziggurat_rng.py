@@ -25,10 +25,12 @@ transcribed verbatim from ``zigguratrng.cpp``.
 from __future__ import annotations
 
 import math
+from typing import ClassVar
 
 from pquantlib.math.distributions.inverse_cumulative_normal import InverseCumulativeNormal
 from pquantlib.math.randomnumbers.mersenne_twister import MersenneTwisterUniformRng
 from pquantlib.math.randomnumbers.random_number_generator import Sample
+from pquantlib.math.randomnumbers.random_sequence_generator import RandomSequenceGenerator
 
 # Tail probability (base-strip tail). C++ zigguratrng.cpp:36-37.
 _P: float = 2.880541027242713e-004
@@ -296,3 +298,48 @@ class ZigguratRng:
     def dimension(self) -> int:
         """Scalar RNG — dimension is always 1."""
         return 1
+
+
+class Ziggurat:
+    """RNG traits for the Ziggurat generator.
+
+    # C++ parity: ``struct Ziggurat`` in
+    # ql/experimental/math/zigguratrng.hpp:63-74 (v1.43).
+
+    A C++ traits struct — no instance is ever created — but not an empty tag
+    type: it names the generator types a Monte Carlo engine will get, carries
+    the compile-time ``allowsErrorEstimate`` flag that those engines branch
+    on, and provides the sequence-generator factory. It is the same shape as
+    :class:`~pquantlib.math.randomnumbers.rng_traits.PseudoRandom` and is
+    ported the same way — the C++ typedefs become class attributes holding the
+    classes themselves, which is enough for the same job.
+
+    Unlike ``PseudoRandom`` there is no inverse-cumulative stage: the Ziggurat
+    generator emits standard normals directly, so the sequence generator is a
+    plain ``RandomSequenceGenerator`` over :class:`ZigguratRng`.
+    """
+
+    #: # C++ parity: ``typedef ZigguratRng rng_type``.
+    rng_type: ClassVar[type] = ZigguratRng
+    #: # C++ parity: ``typedef RandomSequenceGenerator<rng_type> rsg_type``.
+    rsg_type: ClassVar[type] = RandomSequenceGenerator
+
+    #: # C++ parity: ``enum { allowsErrorEstimate = 1 }``. The Ziggurat draws
+    #: are i.i.d., so the sample standard error is meaningful.
+    allows_error_estimate: ClassVar[int] = 1
+
+    @staticmethod
+    def make_sequence_generator(
+        dimension: int, seed: int
+    ) -> RandomSequenceGenerator[ZigguratRng]:
+        """Build the standard-normal sequence generator.
+
+        # C++ parity: ``make_sequence_generator`` (zigguratrng.hpp:70-73),
+        # which calls ``rsg_type(dimension, seed)`` — the
+        # ``RandomSequenceGenerator(Size, BigNatural)`` overload, i.e. it
+        # constructs a ``ZigguratRng`` from the seed.
+        """
+        return RandomSequenceGenerator(dimension, ZigguratRng(seed))
+
+
+__all__ = ["Ziggurat", "ZigguratRng"]
