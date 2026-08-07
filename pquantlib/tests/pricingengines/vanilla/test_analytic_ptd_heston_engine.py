@@ -1,4 +1,4 @@
-"""AnalyticPiecewiseTimeDependentHestonEngine tests.
+"""AnalyticPTDHestonEngine tests.
 
 Cross-validates against ``migration-harness/references/cluster/w1d.json``.
 
@@ -10,9 +10,23 @@ Tolerance choice:
 * Degenerate case (PTD vs plain Heston): TIGHT — at all-equal piecewise
   params the PTD engine must reduce algebraically to plain Heston. The
   C++ reference confirms ~12-digit agreement; we accept tight.
-* 2-segment NPV vs C++: LOOSE (abs_tol=1e-8) — same reason as
-  AnalyticHestonEngine: scipy.quad on (0, +inf) diverges from C++
-  Gauss-Laguerre at ~1e-8 absolute on multi-segment integrands.
+* 2-segment NPV vs C++: TIGHT (abs_tol=1e-14, rel_tol=1e-12).
+
+NOTE (v1.43 wave): the tolerance rationale below used to read "pquantlib uses
+scipy.integrate.quad (QUADPACK adaptive) while C++ uses Gauss-Laguerre
+quadrature", and every engine assertion was LOOSE because of it. **That premise
+is stale.** ``AnalyticHestonEngine`` now carries a real port of
+``AnalyticHestonEngine::Integration`` and honours ``integration_order``, so this
+engine runs the SAME Gauss-Laguerre rule C++ does; no adaptive-vs-fixed
+quadrature gap remains. Every assertion here was re-run at TIGHT (1e-14 abs /
+1e-12 rel) against the unchanged reference and passes, so the tier has been
+raised to TIGHT rather than left where a false premise had put it.
+
+The v1.43 cross-validation for this class lives in
+``test_pe_hestonbates_v143.py``, which pins far more of the surface. This file
+is kept because its reference is an independent C++ run and because its
+algebraic-reduction and put-call-parity checks are properties, not values.
+
 """
 
 from __future__ import annotations
@@ -37,14 +51,14 @@ from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.pricingengines.vanilla.analytic_heston_engine import (
     AnalyticHestonEngine,
 )
-from pquantlib.pricingengines.vanilla.analytic_piecewise_time_dependent_heston_engine import (
-    AnalyticPiecewiseTimeDependentHestonEngine,
+from pquantlib.pricingengines.vanilla.analytic_ptd_heston_engine import (
+    AnalyticPTDHestonEngine,
 )
 from pquantlib.processes.heston_process import HestonProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.reference_reader import load as load_reference
-from pquantlib.testing.tolerance import loose, tight
+from pquantlib.testing.tolerance import tight
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 from pquantlib.time.time_grid import TimeGrid
@@ -159,7 +173,7 @@ def test_degenerate_call_matches_plain_heston(
     # to analytichestonengine.cpp Gatheral branch.
     """
     ptd_model = _build_degenerate_model()
-    ptd_engine = AnalyticPiecewiseTimeDependentHestonEngine(ptd_model, 144)
+    ptd_engine = AnalyticPTDHestonEngine(ptd_model, 144)
     plain_engine = _plain_heston_engine(2.0, 0.04, 0.3, -0.7, _V0)
 
     payoff = PlainVanillaPayoff(OptionType.Call, _S)
@@ -180,7 +194,7 @@ def test_degenerate_call_matches_plain_heston(
     )
 
     # Cross-validate against C++ reference for the degenerate case too.
-    loose(
+    tight(
         ptd_opt.npv(),
         cpp_refs["plain_heston_reference"]["call_atm_1y"],
         reason="scipy.quad vs C++ Gauss-Laguerre diverges at ~1e-8",
@@ -190,7 +204,7 @@ def test_degenerate_call_matches_plain_heston(
 def test_degenerate_put_matches_plain_heston() -> None:
     """Put NPV — same logic as call."""
     ptd_model = _build_degenerate_model()
-    ptd_engine = AnalyticPiecewiseTimeDependentHestonEngine(ptd_model, 144)
+    ptd_engine = AnalyticPTDHestonEngine(ptd_model, 144)
     plain_engine = _plain_heston_engine(2.0, 0.04, 0.3, -0.7, _V0)
 
     payoff = PlainVanillaPayoff(OptionType.Put, _S)
@@ -207,29 +221,29 @@ def test_degenerate_put_matches_plain_heston() -> None:
 def test_two_segment_call_matches_cpp(cpp_refs: dict[str, Any]) -> None:
     """2-segment piecewise NPV matches C++ AnalyticPTDHestonEngine."""
     model = _build_two_segment_model()
-    engine = AnalyticPiecewiseTimeDependentHestonEngine(model, 144)
+    engine = AnalyticPTDHestonEngine(model, 144)
     option = VanillaOption(
         PlainVanillaPayoff(OptionType.Call, _S), EuropeanExercise(_expiry())
     )
     option.set_pricing_engine(engine)
     expected = cpp_refs["ptd_heston_2segment"]["call_atm_1y"]
-    loose(option.npv(), expected, reason="scipy.quad vs C++ Gauss-Laguerre")
+    tight(option.npv(), expected, reason="scipy.quad vs C++ Gauss-Laguerre")
 
 
 def test_two_segment_put_matches_cpp(cpp_refs: dict[str, Any]) -> None:
     """2-segment piecewise put NPV matches C++."""
     model = _build_two_segment_model()
-    engine = AnalyticPiecewiseTimeDependentHestonEngine(model, 144)
+    engine = AnalyticPTDHestonEngine(model, 144)
     option = VanillaOption(
         PlainVanillaPayoff(OptionType.Put, _S), EuropeanExercise(_expiry())
     )
     option.set_pricing_engine(engine)
     expected = cpp_refs["ptd_heston_2segment"]["put_atm_1y"]
-    loose(option.npv(), expected, reason="scipy.quad vs C++ Gauss-Laguerre")
+    tight(option.npv(), expected, reason="scipy.quad vs C++ Gauss-Laguerre")
 
 
 def test_engine_inspector_returns_model() -> None:
     """``engine.model()`` returns the supplied PTD model."""
     model = _build_two_segment_model()
-    engine = AnalyticPiecewiseTimeDependentHestonEngine(model, 144)
+    engine = AnalyticPTDHestonEngine(model, 144)
     assert engine.model() is model

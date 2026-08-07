@@ -1,7 +1,10 @@
 """PiecewiseTimeDependentHestonModel — Heston with piecewise-constant params.
 
 # C++ parity: ql/models/equity/piecewisetimedependenthestonmodel.{hpp,cpp}
-# (v1.42.1).
+# (v1.43) — re-verified against v1.43 during the v1.43 pricing-engine wave:
+# the header and the .cpp are unchanged from v1.42.1 (same five arguments in the
+# same order, same ``ConstantParameter(v0, PositiveConstraint())`` for slot 4,
+# same three ``registerWith`` calls).
 
 A Heston-type stochastic-volatility model where ``theta``, ``kappa``,
 ``sigma`` and ``rho`` are general ``Parameter`` instances (typically
@@ -20,7 +23,7 @@ Divergences from C++:
 - The model itself is a thin scaffold over ``CalibratedModel`` and a
   ``TimeGrid`` — it never builds its own ``HestonProcess`` (this is
   why the constructor doesn't take one). The companion
-  ``AnalyticPiecewiseTimeDependentHestonEngine`` does the integration
+  ``AnalyticPTDHestonEngine`` does the integration
   by reading ``theta(t)``, ``kappa(t)``, ``sigma(t)``, ``rho(t)`` on
   each grid segment.
 - The C++ ``HestonModel`` parent of ``PiecewiseTimeDependentHestonModel``
@@ -43,8 +46,8 @@ class PiecewiseTimeDependentHestonModel(CalibratedModel):
     """Heston model with piecewise-constant time-dependent params.
 
     # C++ parity: ``class PiecewiseTimeDependentHestonModel : public
-    # CalibratedModel`` in piecewisetimedependenthestonmodel.hpp:44-79
-    # (v1.42.1).
+    # CalibratedModel`` in piecewisetimedependenthestonmodel.hpp:44-78
+    # (v1.43).
 
     Parameter layout matches C++ ``arguments_`` exactly:
 
@@ -79,7 +82,7 @@ class PiecewiseTimeDependentHestonModel(CalibratedModel):
         rho: Parameter,
         time_grid: TimeGrid,
     ) -> None:
-        # C++ parity: piecewisetimedependenthestonmodel.cpp:36-48.
+        # C++ parity: piecewisetimedependenthestonmodel.cpp:26-48.
         super().__init__(self._N_ARGUMENTS)
         self._s0: Quote = s0
         self._risk_free_rate: YieldTermStructure = risk_free_rate
