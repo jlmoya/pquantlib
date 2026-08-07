@@ -107,7 +107,8 @@ def test_abcd_squared_is_not_the_square_of_f_when_t_differs_from_s() -> None:
     case = asymmetric[0]
     sq = AbcdSquared(case["a"], case["b"], case["c"], case["d"], case["T"], case["S"])
     fn = AbcdFunction(case["a"], case["b"], case["c"], case["d"])
-    assert sq(case["t"]) != pytest.approx(fn(case["t"]) ** 2, rel=1e-6)
+    square_of_f = fn(case["t"]) ** 2
+    assert abs(sq(case["t"]) - square_of_f) > 1e-6 * abs(square_of_f)
 
 
 # --- AbcdParametersTransformation -------------------------------------------

@@ -58,7 +58,7 @@ _TODAY = Date.from_ymd(15, Month.January, 2024)
 
 
 @pytest.fixture(autouse=True)
-def _eval_date() -> Iterator[None]:
+def _eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
     s = ObservableSettings()
     prev = s.evaluation_date
     s.evaluation_date = _TODAY  # probe.cpp:174

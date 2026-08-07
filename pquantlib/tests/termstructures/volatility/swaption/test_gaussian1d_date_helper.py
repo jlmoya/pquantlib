@@ -65,7 +65,7 @@ _DAY_COUNTERS: dict[str, DayCounter] = {
 
 
 @pytest.fixture(autouse=True)
-def _eval_date() -> Iterator[None]:
+def _eval_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
     s = ObservableSettings()
     prev = s.evaluation_date
     s.evaluation_date = _TODAY  # probe.cpp:127
@@ -172,7 +172,7 @@ def test_derivative_is_the_forward_difference_not_the_exact_slope() -> None:
     fwd = helper.derivative(case["x"])
     central = (helper(case["x"] + 5e-7) - helper(case["x"] - 5e-7)) * 1e6
     tolerance.tight(fwd, case["derivative"])
-    assert fwd != pytest.approx(central, abs=1e-12)
+    assert abs(fwd - central) > 1e-12
 
 
 # --- the NewtonSafe inversion ----------------------------------------------
