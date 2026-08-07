@@ -57,6 +57,9 @@ from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from pquantlib import qassert
 from pquantlib.math.array import Array
+from pquantlib.math.interpolations.sabr_interpolation import (
+    xabr_interpolation_error,
+)
 from pquantlib.math.interpolations.zabr_formula import (
     ZabrEvaluation,
     zabr_volatility,
@@ -235,6 +238,21 @@ class ZabrInterpolation:
             weights[:] = 1.0 / n
         return np.sqrt(weights)
 
+    def _weights(self) -> np.ndarray:
+        """The normalised residual weights, exactly as C++ builds them.
+
+        # C++ parity: ``XABRInterpolationImpl`` constructor
+        # (xabrinterpolation.hpp:178-179) seeds ``weights_`` with a FLAT
+        # ``1/n``; ``update()`` (hpp:142-159) replaces it with the model's
+        # ``weight`` normalised to sum 1 when ``vegaWeighted``. The flat
+        # ``1/n`` is load-bearing: ``interpolationError`` multiplies by it.
+        """
+        n = len(self._strikes)
+        if not self._vega_weighted:
+            return np.full(n, 1.0 / n, dtype=np.float64)
+        sqrt_w = self._vega_weights()
+        return sqrt_w * sqrt_w
+
     def _eval_vols_at(
         self, alpha: float, beta: float, nu: float, rho: float, gamma: float,
     ) -> np.ndarray:
@@ -298,8 +316,12 @@ class ZabrInterpolation:
             upper.append(_GAMMA_UPPER)
 
         if not free_initial:
-            r = self._residuals(np.array([], dtype=np.float64))
-            self._update_diagnostics(r)
+            # C++ parity: xabrinterpolation.hpp:161-168 — "there is nothing to
+            # optimize"; error_/maxError_ come straight from the fixed params.
+            (
+                self._alpha, self._beta, self._nu, self._rho, self._gamma,
+            ) = self._initial
+            self._update_diagnostics()
             self._converged = True
             return
 
@@ -327,17 +349,28 @@ class ZabrInterpolation:
         self._converged = bool(
             result.success  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         )
-        self._update_diagnostics(np.asarray(
-            result.fun,  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-            dtype=np.float64,
-        ))
+        self._update_diagnostics()
 
-    def _update_diagnostics(self, residuals: np.ndarray) -> None:
+    def _update_diagnostics(self) -> None:
+        """Recompute ``error_`` / ``maxError_`` at the stored parameters.
+
+        # C++ parity: ``XABRInterpolationImpl::interpolationError`` /
+        # ``interpolationMaxError`` (xabrinterpolation.hpp:270-285), assigned
+        # to ``error_`` / ``maxError_`` on both exits of ``calculate()``
+        # (hpp:166-167, hpp:233-234). ZabrInterpolation instantiates the same
+        # template, so the formula is identical to the SABR one.
+        #
+        # Both start from the UNWEIGHTED residual; only the RMS applies the
+        # weights, and it divides by ``n - 1``, not ``n``.
+        """
+        residuals = self._raw_residuals(
+            (self._alpha, self._beta, self._nu, self._rho, self._gamma)
+        )
         if residuals.size == 0:
             self._rms_error = 0.0
             self._max_error = 0.0
             return
-        self._rms_error = float(np.sqrt(np.mean(residuals * residuals)))
+        self._rms_error = xabr_interpolation_error(residuals, self._weights())
         self._max_error = float(np.max(np.abs(residuals)))
 
     def _fit_multi_start(self, *, max_nfev: int, max_guesses: int, seed: int) -> None:
@@ -399,19 +432,14 @@ class ZabrInterpolation:
         ) = best_params
         self._rms_error = best_rms
         self._converged = best_converged
-        residuals = self._residuals_at_full(best_params)
-        self._update_diagnostics(residuals)
+        self._update_diagnostics()
 
-    def _residuals_at_full(
+    def _raw_residuals(
         self, params: tuple[float, float, float, float, float],
     ) -> np.ndarray:
-        """Evaluate residuals at the full 5-vector."""
+        """Unweighted ``model(k_i) - market_i``. C++ ``value(*x) - *y``."""
         alpha, beta, nu, rho, gamma = params
-        model_vols = self._eval_vols_at(alpha, beta, nu, rho, gamma)
-        r = model_vols - self._volatilities
-        if self._vega_weighted:
-            r = r * self._vega_weights()
-        return r
+        return self._eval_vols_at(alpha, beta, nu, rho, gamma) - self._volatilities
 
     # --- public API --------------------------------------------------
 

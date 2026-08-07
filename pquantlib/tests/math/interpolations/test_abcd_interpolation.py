@@ -1,9 +1,24 @@
 """Cross-validate AbcdInterpolation against the L10-C C++ probe.
 
 Reference: ``migration-harness/references/cluster/l10c.json`` —
-``abcd_interpolation`` section. Synthetic vols generated from
-known (a, b, c, d) = (-0.06, 0.17, 0.54, 0.17); both implementations
-recover the same fit via least-squares.
+``abcd_interpolation`` section.
+
+NOTE ON THE PROBE'S INPUT. ``vols`` there is the INSTANTANEOUS
+``AbcdMathFunction::operator()`` at ``times`` with ``(a,b,c,d) =
+(-0.06, 0.17, 0.54, 0.17)``, but ``AbcdInterpolation::value`` returns
+``abcdCalibrator_->value(x)`` (abcdinterpolation.hpp:126-130), which is
+``abcdBlackVolatility`` — the AVERAGE vol over ``[0, x]`` (abcd.hpp:105-108).
+The input is therefore NOT reproducible by the model, which is why C++'s
+``*_fitted`` sit nowhere near ``*_true`` and its residual floor is ~2.6e-3.
+That is a property of the probe's synthetic data, not of either optimiser.
+
+An earlier revision read that mismatch as "Python TRF finds the global minimum
+where C++ LM stops at a local one" and asserted the Python fit against
+``*_true``. It passed only because ``AbcdInterpolation._value`` returned the
+instantaneous ``abcd_value`` instead of ``abcd_black_volatility`` — the port
+was fitting a different function. With that corrected, Python reproduces the
+C++ fit to under 2e-7 absolute on every parameter, so these tests assert
+against C++.
 """
 
 from __future__ import annotations
@@ -16,6 +31,7 @@ import pytest
 from pquantlib.exceptions import LibraryException
 from pquantlib.math.interpolations.abcd_interpolation import (
     AbcdInterpolation,
+    abcd_black_volatility,
     abcd_value,
     validate_abcd,
 )
@@ -37,88 +53,84 @@ def _make() -> AbcdInterpolation:
     )
 
 
-def test_recovers_truth_when_data_is_exact_abcd() -> None:
-    """Python TRF recovers the synthetic truth (a, b, c, d) parameters.
+def test_recovers_the_cpp_fitted_parameters(cpp: dict[str, Any]) -> None:
+    """Python reproduces the C++ ``AbcdInterpolation`` fit on the probe's data.
 
-    When the input data is exactly ``(a + b*t)*exp(-c*t) + d``, the
-    Python ``scipy.optimize.least_squares(method='trf')`` arm converges
-    to the true minimum with residuals ~1e-13. The C++ probe also
-    runs LM but starts from a less-favourable initial guess and stops
-    at a local minimum with rms ~1.8e-3 — see the L10-C divergence note
-    in the module docstring. The Python residual is *smaller*, which
-    means the Python fit is *better*; both solvers respect the
-    documented 'least squares' contract.
+    Tolerance: 1e-6 ABSOLUTE on the parameters, looser than LOOSE (1e-8 rel).
+    Derivation: the two runs use different optimisers — C++
+    ``LevenbergMarquardt`` (MINPACK ``lmdif``) via ``ProjectedCostFunction``
+    against ``scipy.optimize.least_squares`` ``trf`` with
+    ``xtol = ftol = gtol = 1e-12``. Near a minimum the cost is locally
+    quadratic, so a parameter displacement ``dp`` perturbs the cost by
+    ~``H dp^2``; the two agree on ``rms_error`` to ~4e-11 relative, admitting a
+    parameter displacement of order ``sqrt(4e-11) ~ 6e-6``. The measured
+    worst-case absolute gap is 1.9e-7, well inside that. The bound is stated
+    ABSOLUTELY because ``a`` fits to 0.0108, where 1.9e-7 is 1.7e-5 relative.
     """
+    block = cpp["abcd_interpolation"]
     interp = _make()
-    # Truth params from the probe.
-    tolerance.loose(interp.a(), -0.06,
-                    reason="trf converges to truth on noiseless data")
-    tolerance.loose(interp.b(), 0.17,
-                    reason="trf converges to truth on noiseless data")
-    tolerance.loose(interp.c(), 0.54,
-                    reason="trf converges to truth on noiseless data")
-    tolerance.loose(interp.d(), 0.17,
-                    reason="trf converges to truth on noiseless data")
-    # Tight residuals (the Python fit is essentially exact).
-    assert interp.rms_error() < 1.0e-8
-    assert interp.max_error() < 1.0e-8
+    for got, key in (
+        (interp.a(), "a_fitted"),
+        (interp.b(), "b_fitted"),
+        (interp.c(), "c_fitted"),
+        (interp.d(), "d_fitted"),
+    ):
+        tolerance.custom(
+            got, float(block[key]), abs_tol=1e-6, rel_tol=0.0,
+            reason="different optimisers at the same minimum; see docstring",
+        )
+    tolerance.custom(
+        interp.rms_error(), float(block["rms_error"]), abs_tol=0.0, rel_tol=1e-9,
+        reason="the minimised quantity itself",
+    )
+    tolerance.custom(
+        interp.max_error(), float(block["max_error"]), abs_tol=0.0, rel_tol=1e-6,
+        reason="max residual, sensitive to the parameter gap above",
+    )
 
 
 def test_pillar_recovery_at_lsq_residual_floor(cpp: dict[str, Any]) -> None:
-    """At each input time the fitted abcd reproduces the market vol.
+    """``interp(t)`` at the input times reproduces C++'s ``fitted_at_pillars``.
 
-    Custom tier — TRF's residual floor for this 4-param non-linear LSQ
-    is ~1e-12 in absolute terms (xtol=ftol=1e-12 in the L9-C
-    precedent). LOOSE is more generous than needed; we use ~1e-10 as
-    the headroom buffer.
+    Tolerance 1e-6 relative: the fitted curve inherits the ~2e-7 parameter gap
+    derived in :func:`test_recovers_the_cpp_fitted_parameters`.
+    """
+    block = cpp["abcd_interpolation"]
+    times = [float(e) for e in block["times"]]
+    interp = _make()
+    for t, e in zip(times, block["fitted_at_pillars"], strict=True):
+        tolerance.custom(
+            interp(t), float(e), abs_tol=1e-9, rel_tol=1e-6,
+            reason="inherits the optimiser-gap bound; see the parameter test",
+        )
+
+
+def test_probe_input_is_not_reproducible_by_the_model(cpp: dict[str, Any]) -> None:
+    """The residual floor here is the DATA's, not the optimiser's.
+
+    ``vols`` is the instantaneous abcd form; the model fits the average
+    (Black) vol. The gap is structural, so BOTH implementations stop at the
+    same ~2.6e-3 pillar residual. An earlier revision asserted the opposite —
+    that C++'s residual proved it had found a worse local minimum — which was
+    only tenable while the port evaluated the wrong function.
     """
     block = cpp["abcd_interpolation"]
     times = [float(e) for e in block["times"]]
     vols = [float(e) for e in block["vols"]]
     interp = _make()
-    for t, v in zip(times, vols, strict=True):
-        tolerance.custom(
-            interp(t), v,
-            abs_tol=1.0e-10, rel_tol=1.0e-10,
-            reason="trf xtol=ftol=1e-12 leaves ~1e-12 residual floor",
-        )
 
-
-def test_python_fit_diverges_from_cpp_fit_documented(cpp: dict[str, Any]) -> None:
-    """Documented divergence — Python TRF and C++ projected-LM converge
-    to *different* (a, b, c, d) on this 4-param / 6-data system.
-
-    The Python fit finds the global minimum (residuals ~1e-13); the C++
-    fit stops at a local minimum with rms ~1.8e-3. This is captured by
-    Phase 9 / L10-C divergence notes in the module docstring. We assert
-    the divergence is observable — Python's pillar vols agree with
-    the *input* (truth) to TIGHT, while the C++ fitted-pillar values
-    differ from the input by ~1e-3.
-    """
-    block = cpp["abcd_interpolation"]
-    times = [float(e) for e in block["times"]]
-    vols = [float(e) for e in block["vols"]]
-    cpp_fitted_pillars = [float(e) for e in block["fitted_at_pillars"]]
-    interp = _make()
-    # Python interp matches the input vols (truth) to ~1e-10 (solver
-    # residual floor; see test_pillar_recovery_at_lsq_residual_floor).
-    for t, v_truth in zip(times, vols, strict=True):
-        tolerance.custom(
-            interp(t), v_truth,
-            abs_tol=1.0e-10, rel_tol=1.0e-10,
-            reason="trf xtol=ftol=1e-12 leaves ~1e-12 residual floor",
-        )
-    # C++ converges to a local min with ~1e-3 pillar residuals.
     cpp_max_resid = max(
         abs(float(v_cpp) - float(v_truth))
-        for v_cpp, v_truth in zip(cpp_fitted_pillars, vols, strict=True)
+        for v_cpp, v_truth in zip(block["fitted_at_pillars"], vols, strict=True)
     )
-    # Assert the divergence is observable — at least 1e-4 pillar
-    # residual on the C++ side, confirming the two solvers genuinely
-    # found different minima.
-    assert cpp_max_resid > 1.0e-4, (
-        f"C++ fit unexpectedly converged to the global min "
-        f"(max residual: {cpp_max_resid})"
+    py_max_resid = max(
+        abs(interp(t) - float(v)) for t, v in zip(times, vols, strict=True)
+    )
+    assert cpp_max_resid > 1.0e-4
+    # Same floor, to the optimiser-gap bound derived in the parameter test.
+    tolerance.custom(
+        py_max_resid, cpp_max_resid, abs_tol=1e-9, rel_tol=1e-6,
+        reason="structural data/model mismatch, identical on both sides",
     )
 
 
@@ -159,8 +171,13 @@ def test_fix_all_parameters() -> None:
     """When every parameter is fixed, the fit just evaluates the initial."""
     a, b, c, d = -0.06, 0.17, 0.54, 0.17
     times = np.array([0.25, 0.5, 1.0, 2.0, 5.0, 10.0])
+    # The data must be generated with the SAME function the model evaluates —
+    # ``abcd_black_volatility``, not the instantaneous ``abcd_value`` — or the
+    # residuals are not zero and this test says nothing about the fixed-param
+    # short-circuit it exists to check.
     vols = np.array(
-        [abcd_value(float(t), a, b, c, d) for t in times], dtype=np.float64
+        [abcd_black_volatility(float(t), a, b, c, d) for t in times],
+        dtype=np.float64,
     )
     interp = AbcdInterpolation(
         times, vols, a=a, b=b, c=c, d=d,
