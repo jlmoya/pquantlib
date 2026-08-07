@@ -16,12 +16,17 @@ L2-D coverage (port these):
 - ``duration(leg, rate, Duration.Type, ...)`` — Simple/Macaulay/Modified.
 - ``convexity(leg, rate, ...)``
 
+The remaining surface — the one ``BondFunctions`` delegates to — was added
+in the v1.43 ``bondswap`` wave and is cross-validated against C++ v1.43 in
+``pquantlib/tests/pricingengines/bond/test_bond_functions.py``:
+``previous_cash_flow`` / ``next_cash_flow`` (+ ``*_amount``), ``nominal``,
+``accrual_start_date`` / ``accrual_end_date`` / ``reference_period_start`` /
+``reference_period_end`` / ``accrual_period`` / ``accrual_days`` /
+``accrued_period`` / ``accrued_days``, ``atm_rate``, ``bps_yield``,
+``basis_point_value``, ``yield_value_basis_point``, ``npv_z_spread`` and
+``z_spread``.
+
 Deferred carve-outs:
-- ``atmRate`` (requires Visitor dispatch for BPSCalculator).
-- ``zSpread`` (requires ZeroSpreadedTermStructure — L2-B).
-- ``basisPointValue`` / ``yieldValueBasisPoint``.
-- ``startDate`` / ``maturityDate`` / ``previousCashFlow`` / ``nextCashFlow``
-  helpers (trivial — port on demand).
 - Settings.evaluationDate fallback for ``settlement_date=None`` (callers
   must supply explicitly).
 """
@@ -35,8 +40,14 @@ from pquantlib.cashflows.coupon import Coupon
 from pquantlib.cashflows.duration import Duration
 from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.interest_rate import InterestRate
+from pquantlib.math.solvers1d.brent import Brent
 from pquantlib.math.solvers1d.newton_safe import NewtonSafe
 from pquantlib.math.solvers1d.solver_1d import Solver1D
+from pquantlib.quotes.simple_quote import SimpleQuote
+from pquantlib.termstructures.yield_.flat_forward import FlatForward
+from pquantlib.termstructures.yield_.zero_spreaded_term_structure import (
+    ZeroSpreadedTermStructure,
+)
 from pquantlib.time.compounding import Compounding
 from pquantlib.time.date import Date
 from pquantlib.time.frequency import Frequency
@@ -48,6 +59,7 @@ if TYPE_CHECKING:
 
     from pquantlib.cashflows.cash_flow import CashFlow
     from pquantlib.termstructures.protocols import YieldTermStructureProtocol
+    from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 
 
 _BASIS_POINT: float = 1.0e-4
@@ -661,22 +673,50 @@ class CashFlows:
         return result
 
     @classmethod
-    def _aggregate_rate(cls, leg: Sequence[CashFlow], idx: int) -> float:
-        """C++ parity: cashflows.cpp:185-211 (aggregateRate)."""
-        if idx == len(leg) or idx < 0:
+    def _aggregate_rate(cls, leg: Sequence[CashFlow], walk: Sequence[int]) -> float:
+        """C++ parity: cashflows.cpp:178-210 (anonymous-namespace ``aggregateRate``).
+
+        ``walk`` is the C++ iterator range expressed as the indices to visit
+        **in iteration order** — forward (``nextCouponRate``) or backward
+        (``previousCouponRate``, which is handed a ``const_reverse_iterator``).
+        The direction matters: on the final payment date the leg holds
+        ``[.., lastCoupon, redemption]``, so walking backward from the
+        redemption still reaches the coupon while walking forward does not.
+
+        The C++ body SUMS ``cp->rate()`` over the same-date coupons (it does
+        not average them) and requires that they agree on nominal, accrual
+        period and day counter; it then ``QL_ENSURE``s that at least one
+        Coupon was seen, so a payment date carrying only a Redemption raises.
+        """
+        if not walk:
             return 0.0
-        payment_date = leg[idx].date()
-        result = 0.0
+        payment_date = leg[walk[0]].date()
+        first_coupon_found = False
         nominal = 0.0
-        for cf in leg[idx:]:
+        accrual_period = 0.0
+        day_counter: DayCounter | None = None
+        result = 0.0
+        for i in walk:
+            cf = leg[i]
             if cf.date() != payment_date:
                 break
-            if isinstance(cf, Coupon):
-                result += cf.nominal() * cf.accrual_period() * cf.rate()
-                nominal += cf.nominal() * cf.accrual_period()
-        if nominal == 0.0:
-            return 0.0
-        return result / nominal
+            if not isinstance(cf, Coupon):
+                continue
+            if first_coupon_found:
+                qassert.require(
+                    nominal == cf.nominal()
+                    and accrual_period == cf.accrual_period()
+                    and day_counter == cf.day_counter(),
+                    f"cannot aggregate two different coupons on {payment_date}",
+                )
+            else:
+                first_coupon_found = True
+                nominal = cf.nominal()
+                accrual_period = cf.accrual_period()
+                day_counter = cf.day_counter()
+            result += cf.rate()
+        qassert.require(first_coupon_found, f"no coupon paid at cashflow date {payment_date}")
+        return result
 
     @classmethod
     def next_coupon_rate(
@@ -690,7 +730,7 @@ class CashFlows:
         C++ parity: ql/cashflows/cashflows.cpp:223-229.
         """
         idx = cls._next_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
-        return cls._aggregate_rate(leg, idx)
+        return cls._aggregate_rate(leg, range(idx, len(leg)))
 
     @classmethod
     def previous_coupon_rate(
@@ -701,10 +741,452 @@ class CashFlows:
     ) -> float:
         """Aggregate previous-coupon rate (across same-date coupons).
 
-        C++ parity: ql/cashflows/cashflows.cpp:214-221.
+        C++ parity: ql/cashflows/cashflows.cpp:214-221. Note the C++ walks
+        *backwards* from the previous cashflow (``leg.rbegin()``-based
+        iterator through to ``leg.rend()``).
         """
         idx = cls._previous_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
-        return cls._aggregate_rate(leg, idx)
+        if idx < 0:
+            return 0.0
+        return cls._aggregate_rate(leg, range(idx, -1, -1))
+
+    # ===================================================================
+    # CashFlow / Coupon inspectors used by BondFunctions
+    # ===================================================================
+
+    @classmethod
+    def previous_cash_flow(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> CashFlow | None:
+        """Most recent already-occurred cashflow, or ``None``.
+
+        C++ parity: cashflows.cpp:83-99. The C++ returns a
+        ``Leg::const_reverse_iterator`` and signals "none" with ``leg.rend()``;
+        Python returns ``None``.
+        """
+        idx = cls._previous_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        return None if idx < 0 else leg[idx]
+
+    @classmethod
+    def next_cash_flow(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> CashFlow | None:
+        """Next-to-occur cashflow, or ``None``.
+
+        C++ parity: cashflows.cpp:101-117 (``leg.end()`` means "none").
+        """
+        idx = cls._next_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        return None if idx == len(leg) else leg[idx]
+
+    @classmethod
+    def previous_cash_flow_amount(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """Total amount paid on the previous payment date.
+
+        C++ parity: cashflows.cpp:143-157 — walks BACKWARD from the previous
+        cashflow, summing every amount sharing its date; ``Real()`` (0.0) if
+        there is no previous cashflow.
+        """
+        idx = cls._previous_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        if idx < 0:
+            return 0.0
+        payment_date = leg[idx].date()
+        result = 0.0
+        for i in range(idx, -1, -1):
+            if leg[i].date() != payment_date:
+                break
+            result += leg[i].amount()
+        return result
+
+    @classmethod
+    def next_cash_flow_amount(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """Total amount paid on the next payment date.
+
+        C++ parity: cashflows.cpp:159-173.
+        """
+        idx = cls._next_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        if idx == len(leg):
+            return 0.0
+        payment_date = leg[idx].date()
+        result = 0.0
+        for cf in leg[idx:]:
+            if cf.date() != payment_date:
+                break
+            result += cf.amount()
+        return result
+
+    @classmethod
+    def _first_coupon_at_next_payment_date(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> Coupon | None:
+        """First ``Coupon`` sharing the next cashflow's payment date, else ``None``.
+
+        C++ parity: the loop body repeated verbatim in cashflows.cpp:246-374
+        by accrualStartDate / accrualEndDate / referencePeriodStart /
+        referencePeriodEnd / accrualPeriod / accrualDays / accruedPeriod /
+        accruedDays / nominal.
+        """
+        idx = cls._next_cash_flow_index(leg, include_settlement_date_flows, settlement_date)
+        if idx == len(leg):
+            return None
+        payment_date = leg[idx].date()
+        for cf in leg[idx:]:
+            if cf.date() != payment_date:
+                break
+            if isinstance(cf, Coupon):
+                return cf
+        return None
+
+    @classmethod
+    def nominal(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """C++ parity: cashflows.cpp:231-244."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return 0.0 if cp is None else cp.nominal()
+
+    @classmethod
+    def accrual_start_date(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> Date:
+        """C++ parity: cashflows.cpp:246-260 — null ``Date`` when no Coupon."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return Date() if cp is None else cp.accrual_start_date()
+
+    @classmethod
+    def accrual_end_date(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> Date:
+        """C++ parity: cashflows.cpp:262-276."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return Date() if cp is None else cp.accrual_end_date()
+
+    @classmethod
+    def reference_period_start(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> Date:
+        """C++ parity: cashflows.cpp:278-292."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return Date() if cp is None else cp.reference_period_start()
+
+    @classmethod
+    def reference_period_end(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> Date:
+        """C++ parity: cashflows.cpp:294-308."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return Date() if cp is None else cp.reference_period_end()
+
+    @classmethod
+    def accrual_period(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """C++ parity: cashflows.cpp:310-323."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return 0.0 if cp is None else cp.accrual_period()
+
+    @classmethod
+    def accrual_days(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> int:
+        """C++ parity: cashflows.cpp:325-338."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return 0 if cp is None else cp.accrual_days()
+
+    @classmethod
+    def accrued_period(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> float:
+        """C++ parity: cashflows.cpp:340-356."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return 0.0 if cp is None else cp.accrued_period(settlement_date)
+
+    @classmethod
+    def accrued_days(
+        cls,
+        leg: Sequence[CashFlow],
+        include_settlement_date_flows: bool | None,
+        settlement_date: Date,
+    ) -> int:
+        """C++ parity: cashflows.cpp:358-374."""
+        cp = cls._first_coupon_at_next_payment_date(
+            leg, include_settlement_date_flows, settlement_date
+        )
+        return 0 if cp is None else cp.accrued_days(settlement_date)
+
+    # ===================================================================
+    # atmRate / basisPointValue / yieldValueBasisPoint / z-spread
+    # ===================================================================
+
+    @classmethod
+    def atm_rate(
+        cls,
+        leg: Sequence[CashFlow],
+        discount_curve: YieldTermStructureProtocol,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+        target_npv: float | None = None,
+    ) -> float:
+        """At-the-money rate reproducing ``target_npv``.
+
+        C++ parity: cashflows.cpp:509-551. ``target_npv=None`` is C++'s
+        ``Null<Real>()``: the target becomes the leg's own NPV minus the
+        non-rate-sensitive NPV (i.e. the par coupon). With a target the
+        C++ multiplies it by ``discount(npvDate)`` FIRST and only then
+        subtracts the non-sensitive NPV.
+
+        The C++ walks the leg with a ``BPSCalculator`` visitor; acyclic
+        Visitor dispatch sends a ``Coupon`` to ``visit(Coupon&)`` (which
+        feeds ``bps_`` only) and every other cashflow to ``visit(CashFlow&)``
+        (which feeds ``nonSensNPV_`` only), so the split below is exact.
+        """
+        if not leg:
+            return 0.0
+        settle = settlement_date if settlement_date is not None else discount_curve.reference_date()
+        npv_d = npv_date if npv_date is not None else settle
+        npv = 0.0
+        bps_sum = 0.0
+        non_sens_npv = 0.0
+        for cf in leg:
+            if cf.has_occurred(settle, include_settlement_date_flows) or cf.trading_ex_coupon(settle):
+                continue
+            df = discount_curve.discount(cf.date())
+            npv += cf.amount() * df
+            if isinstance(cf, Coupon):
+                bps_sum += cf.nominal() * cf.accrual_period() * df
+            else:
+                non_sens_npv += cf.amount() * df
+        if target_npv is None:
+            target = npv - non_sens_npv
+        else:
+            target = target_npv * discount_curve.discount(npv_d) - non_sens_npv
+        if target == 0.0:
+            return 0.0
+        qassert.require(bps_sum != 0.0, "null bps: impossible atm rate")
+        return target / bps_sum
+
+    @classmethod
+    def bps_yield(
+        cls,
+        leg: Sequence[CashFlow],
+        yield_rate: InterestRate,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+    ) -> float:
+        """BPS against a flat yield.
+
+        C++ parity: cashflows.cpp:870-890 — builds a ``FlatForward`` anchored
+        at the settlement date from the ``InterestRate`` and delegates to the
+        discount-curve ``bps``.
+        """
+        if not leg:
+            return 0.0
+        qassert.require(
+            settlement_date is not None,
+            "settlement_date is required (no Settings.evaluationDate)",
+        )
+        assert settlement_date is not None
+        flat_rate = FlatForward.from_rate(
+            settlement_date,
+            yield_rate.rate(),
+            yield_rate.day_counter(),
+            yield_rate.compounding(),
+            yield_rate.frequency(),
+        )
+        return cls.bps(leg, flat_rate, include_settlement_date_flows, settlement_date, npv_date)
+
+    @classmethod
+    def basis_point_value(
+        cls,
+        leg: Sequence[CashFlow],
+        yield_rate: InterestRate,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+    ) -> float:
+        """Second-order price change for a one-basis-point yield shift.
+
+        C++ parity: cashflows.cpp:1059-1091.
+        """
+        if not leg:
+            return 0.0
+        qassert.require(
+            settlement_date is not None,
+            "settlement_date is required (no Settings.evaluationDate)",
+        )
+        assert settlement_date is not None
+        npv_d = npv_date if npv_date is not None else settlement_date
+        npv = cls.npv_yield(leg, yield_rate, include_settlement_date_flows, settlement_date, npv_d)
+        modified_duration = cls.duration(
+            leg, yield_rate, Duration.Modified, include_settlement_date_flows, settlement_date, npv_d
+        )
+        convexity = cls.convexity(
+            leg, yield_rate, include_settlement_date_flows, settlement_date, npv_d
+        )
+        delta = -modified_duration * npv
+        gamma = (convexity / 100.0) * npv
+        shift = 0.0001
+        delta *= shift
+        gamma *= shift * shift
+        return delta + 0.5 * gamma
+
+    @classmethod
+    def yield_value_basis_point(
+        cls,
+        leg: Sequence[CashFlow],
+        yield_rate: InterestRate,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+    ) -> float:
+        """Yield change for a one-price-point move.
+
+        C++ parity: cashflows.cpp:1106-1130 — note the ``shift`` is 0.01,
+        not 0.0001, and the result is ``shift / (-npv * modifiedDuration)``.
+        """
+        if not leg:
+            return 0.0
+        qassert.require(
+            settlement_date is not None,
+            "settlement_date is required (no Settings.evaluationDate)",
+        )
+        assert settlement_date is not None
+        npv_d = npv_date if npv_date is not None else settlement_date
+        npv = cls.npv_yield(leg, yield_rate, include_settlement_date_flows, settlement_date, npv_d)
+        modified_duration = cls.duration(
+            leg, yield_rate, Duration.Modified, include_settlement_date_flows, settlement_date, npv_d
+        )
+        shift = 0.01
+        return (1.0 / (-npv * modified_duration)) * shift
+
+    @classmethod
+    def npv_z_spread(
+        cls,
+        leg: Sequence[CashFlow],
+        discount_curve: YieldTermStructure,
+        z_spread: float,
+        compounding: Compounding,
+        frequency: Frequency,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+    ) -> float:
+        """NPV against ``discount_curve`` shifted by a zero-rate spread.
+
+        C++ parity: cashflows.cpp:1146-1175.
+        """
+        if not leg:
+            return 0.0
+        qassert.require(
+            settlement_date is not None,
+            "settlement_date is required (no Settings.evaluationDate)",
+        )
+        assert settlement_date is not None
+        spreaded = ZeroSpreadedTermStructure(
+            discount_curve, SimpleQuote(z_spread), compounding, frequency
+        )
+        return cls.npv_curve(
+            leg, spreaded, include_settlement_date_flows, settlement_date, npv_date
+        )
+
+    @classmethod
+    def z_spread(
+        cls,
+        leg: Sequence[CashFlow],
+        npv: float,
+        discount_curve: YieldTermStructure,
+        compounding: Compounding,
+        frequency: Frequency,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+        accuracy: float = _DEFAULT_IRR_ACCURACY,
+        max_iterations: int = _DEFAULT_IRR_MAX_ITER,
+        guess: float = 0.0,
+    ) -> float:
+        """Solve for the zero-rate spread reproducing ``npv``.
+
+        C++ parity: cashflows.cpp:1190-1225. The solver is ``Brent`` with a
+        step of 0.01 and the objective is ``npv - NPV(spread)`` — that sign
+        order matters for a bracketing solver's first step.
+        """
+        qassert.require(
+            settlement_date is not None,
+            "settlement_date is required (no Settings.evaluationDate)",
+        )
+        assert settlement_date is not None
+        quote = SimpleQuote(0.0)
+        spreaded = ZeroSpreadedTermStructure(discount_curve, quote, compounding, frequency)
+
+        def objective(spread: float) -> float:
+            quote.set_value(spread)
+            return npv - cls.npv_curve(
+                leg, spreaded, include_settlement_date_flows, settlement_date, npv_date
+            )
+
+        solver = Brent()
+        solver.set_max_evaluations(max_iterations)
+        return solver.solve(objective, accuracy, guess, 0.01)
 
     # ===================================================================
     # IRR (yield that reproduces a target NPV)
@@ -738,6 +1220,45 @@ class CashFlows:
         sign change raises ``LibraryException`` rather than silently
         returning a meaningless root.
         """
+        if solver is None:
+            solver = NewtonSafe()
+        solver.set_max_evaluations(max_iterations)
+        return cls.irr_with_solver(
+            solver,
+            leg,
+            target_npv,
+            day_counter,
+            compounding,
+            frequency,
+            include_settlement_date_flows,
+            settlement_date,
+            npv_date,
+            accuracy,
+            guess,
+        )
+
+    @classmethod
+    def irr_with_solver(
+        cls,
+        solver: Solver1D,
+        leg: Sequence[CashFlow],
+        target_npv: float,
+        day_counter: DayCounter,
+        compounding: Compounding,
+        frequency: Frequency,
+        include_settlement_date_flows: bool = False,
+        settlement_date: Date | None = None,
+        npv_date: Date | None = None,
+        accuracy: float = _DEFAULT_IRR_ACCURACY,
+        guess: float = _DEFAULT_IRR_GUESS,
+    ) -> float:
+        """Solver-parameterised IRR.
+
+        C++ parity: ``template <typename Solver> CashFlows::yield(solver, ...)``
+        (cashflows.hpp:276-292). Note it does NOT touch the solver's max
+        evaluations — the caller configures the solver — and there is
+        deliberately no ``maxIterations`` parameter.
+        """
         qassert.require(
             settlement_date is not None,
             "settlement_date is required (no Settings.evaluationDate)",
@@ -754,8 +1275,5 @@ class CashFlows:
             settlement_date,
             npv_date,
         )
-        if solver is None:
-            solver = NewtonSafe()
-        solver.set_max_evaluations(max_iterations)
         # C++ parity: cashflows.hpp:291 — the step is guess/10, not a constant.
         return solver.solve(obj_function, accuracy, guess, guess / 10.0)

@@ -222,7 +222,9 @@
 #include <ql/pricingengines/bond/discountingbondengine.hpp>
 #include <ql/pricingengines/bond/riskybondengine.hpp>
 #include <ql/pricingengines/forward/discountingfxforwardengine.hpp>
+#include <ql/instruments/swaption.hpp>
 #include <ql/pricingengines/swap/cvaswapengine.hpp>
+#include <ql/pricingengines/swaption/blackswaptionengine.hpp>
 #include <ql/pricingengines/swap/discountingswapengine.hpp>
 #include <ql/pricingengines/swap/discretizedswap.hpp>
 #include <ql/pricingengines/swap/treeswapengine.hpp>
@@ -1274,6 +1276,80 @@ void runCvaSwapEngine() {
         ex.n("fixed_leg_npv", swap->fixedLegNPV());
         ex.n("floating_leg_npv", swap->floatingLegNPV());
         addCase("cva_riskless_reference", in, ex);
+    }
+
+    {
+        // Swaplet-level diagnostics: the engine's inner strip, rebuilt here
+        // exactly as cvaswapengine.cpp:156-206 does. The FIRST swaplet expires
+        // on the pricing date, so its stdDev is 0 and BlackCalculator returns
+        // pure intrinsic — a knife-edge where the sign of
+        // (swapletFairRate - baseSwapFairRate) decides which of the call/put
+        // legs is exactly zero. Pinned so a port can localise a mismatch to
+        // MakeVanillaSwap rather than to the CVA arithmetic.
+        auto swap = makeSwap(Swap::Payer);
+        swap->setPricingEngine(ext::make_shared<DiscountingSwapEngine>(rts));
+        const Real baseSwapRate = 0.03;
+        const Rate baseSwapFairRate =
+            -baseSwapRate * swap->floatingLegNPV() / swap->fixedLegNPV();
+
+        Obj in;
+        in.s("base", "same swap as cva_riskless_reference");
+        in.n("black_vol", 0.20);
+        Obj ex;
+        ex.n("base_swap_fair_rate", baseSwapFairRate);
+        ex.n("base_swap_fair_rate_via_accessor", swap->fairRate());
+
+        const Handle<YieldTermStructure> discount = rts;
+        const auto blackEngine = ext::make_shared<BlackSwaptionEngine>(discount, 0.20);
+        VanillaSwap::arguments args;
+        swap->setupArguments(&args);
+        Date swapletStart = kToday;
+        const Date lastFixed = args.fixedPayDates.back();
+        for (Size k = 0; k < args.fixedPayDates.size(); ++k) {
+            Period tenor(lastFixed.serialNumber() - swapletStart.serialNumber(), Days);
+            auto call = MakeVanillaSwap(tenor, index, baseSwapFairRate)
+                            .withType(Swap::Payer)
+                            .withNominal(1'000'000.0)
+                            .withEffectiveDate(swapletStart)
+                            .withTerminationDate(lastFixed);
+            auto put = MakeVanillaSwap(tenor, index, baseSwapFairRate)
+                           .withType(Swap::Receiver)
+                           .withNominal(1'000'000.0)
+                           .withEffectiveDate(swapletStart)
+                           .withTerminationDate(lastFixed);
+            ext::shared_ptr<VanillaSwap> callSwap = call;
+            ext::shared_ptr<VanillaSwap> putSwap = put;
+
+            Swaption callOpt(callSwap, ext::make_shared<EuropeanExercise>(swapletStart));
+            Swaption putOpt(putSwap, ext::make_shared<EuropeanExercise>(swapletStart));
+            callOpt.setPricingEngine(blackEngine);
+            putOpt.setPricingEngine(blackEngine);
+
+            const std::string k_s = std::to_string(k);
+            ex.d("swaplet_" + k_s + "_start", swapletStart);
+            ex.d("swaplet_" + k_s + "_end", lastFixed);
+            ex.i("swaplet_" + k_s + "_tenor_days",
+                 static_cast<long long>(lastFixed.serialNumber() - swapletStart.serialNumber()));
+            ex.d("swaplet_" + k_s + "_first_float_accrual_start",
+                 ext::dynamic_pointer_cast<Coupon>(callSwap->floatingLeg()[0])->accrualStartDate());
+            ex.i("swaplet_" + k_s + "_n_float_coupons",
+                 static_cast<long long>(callSwap->floatingLeg().size()));
+            guarded(ex, "swaplet_" + k_s + "_call_npv", [&] { return callOpt.NPV(); });
+            guarded(ex, "swaplet_" + k_s + "_put_npv", [&] { return putOpt.NPV(); });
+            guarded(ex, "swaplet_" + k_s + "_atm_forward", [&] {
+                callOpt.NPV();
+                return ext::any_cast<Real>(callOpt.additionalResults().at("atmForward"));
+            });
+            guarded(ex, "swaplet_" + k_s + "_annuity", [&] {
+                callOpt.NPV();
+                return ext::any_cast<Real>(callOpt.additionalResults().at("annuity"));
+            });
+            ex.n("swaplet_" + k_s + "_ctpty_default_prob",
+                 ext::make_shared<FlatHazardRate>(kToday, 0.02, dc365())
+                     ->defaultProbability(swapletStart, args.fixedPayDates[k]));
+            swapletStart = args.fixedPayDates[k];
+        }
+        addCase("cva_swaplet_strip", in, ex);
     }
 }
 

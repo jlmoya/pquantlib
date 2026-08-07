@@ -47,7 +47,11 @@ from pquantlib.payoffs import (
 
 _PHI: Final[CumulativeNormalDistribution] = CumulativeNormalDistribution()
 _QL_MAX_REAL: Final[float] = sys.float_info.max
-_QL_MIN_REAL: Final[float] = sys.float_info.min
+# C++ ``#define QL_MIN_REAL -((std::numeric_limits<QL_REAL>::max)())``
+# (qldefines.hpp:176) — the most NEGATIVE double, not the smallest positive one.
+# Cross-validated by ``black_calculator_elasticity_min_real_arm`` in
+# migration-harness/references/v143/pe/bondswap.json.
+_QL_MIN_REAL: Final[float] = -sys.float_info.max
 # C++ ``M_SQRT_2 * M_1_SQRTPI`` = sqrt(2/pi)/2 = the standard-normal
 # pdf at the origin (= 1/sqrt(2*pi)).
 _NORM_PDF_0: Final[float] = 1.0 / math.sqrt(2.0 * math.pi)
@@ -381,7 +385,19 @@ class BlackCalculator:
         if self._std_dev <= QL_EPSILON:
             return 0.0
 
-        temp = math.log(self._strike / self._forward) / self._variance
+        # ALIGN(pricingengines): C++ evaluates ``std::log(strike/forward)``
+        # unguarded. For a zero-strike payoff that is ``std::log(0.0)`` =
+        # -HUGE_VAL, and since ``initialize`` sets DalphaDd1 = DbetaDd2 = 0 on
+        # the ``close(strike, 0)`` branch, the 0 * -inf products make C++ return
+        # NaN -- the same NaN its own gamma() and theta() already return there.
+        # Python's math.log raises ValueError instead, which aborted the whole
+        # pricing of a zero-strike option (reachable from
+        # AnalyticDividendEuropeanEngine and AnalyticEuropeanEngine alike; see
+        # the upstream test-suite case testZeroStrikeCallWithCashDividends).
+        # Producing the -inf explicitly restores C++ behaviour; every
+        # strike > 0 path is bit-identical to before.
+        ratio = self._strike / self._forward
+        temp = (math.log(ratio) if ratio > 0.0 else -math.inf) / self._variance
         dalpha_dsigma = self._dalpha_dd1 * (temp + 0.5)
         dbeta_dsigma = self._dbeta_dd2 * (temp - 0.5)
         return (
