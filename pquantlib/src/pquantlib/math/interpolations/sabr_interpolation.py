@@ -523,6 +523,38 @@ class SABRInterpolation:
         # Return sqrt(weight) so |sqrt(w) * r|^2 = w * r^2.
         return np.sqrt(weights)
 
+    def _weights(self) -> np.ndarray:
+        """The normalised residual weights, exactly as C++ builds them.
+
+        # C++ parity: ``XABRInterpolationImpl`` constructor
+        # (xabrinterpolation.hpp:178-179) seeds ``weights_`` with a FLAT
+        # ``1/n``; ``update()`` (hpp:142-159) replaces it with
+        # ``SABRSpecs::weight`` normalised to sum 1 when ``vegaWeighted``.
+        #
+        # The flat 1/n is not cosmetic: ``interpolationError`` multiplies by
+        # it, so a port that treats the unweighted case as "no weights"
+        # reports an error larger by sqrt(n).
+        """
+        n = len(self._strikes)
+        if not self._vega_weighted:
+            return np.full(n, 1.0 / n, dtype=np.float64)
+        # _vega_weights() returns sqrt(w); square it back.
+        sqrt_w = self._vega_weights()
+        return sqrt_w * sqrt_w
+
+    def _raw_residuals(
+        self, params: tuple[float, float, float, float],
+    ) -> np.ndarray:
+        """Unweighted ``model(k_i) - market_i``. C++ ``value(*x) - *y``."""
+        alpha, beta, nu, rho = params
+        model_vols = np.empty_like(self._strikes)
+        for i, k in enumerate(self._strikes):
+            model_vols[i] = shifted_sabr_volatility(
+                float(k), self._forward, self._expiry_time,
+                alpha, beta, nu, rho, self._shift, self._volatility_type,
+            )
+        return model_vols - self._volatilities
+
     def _residuals(self, free_params: np.ndarray) -> np.ndarray:
         # Reconstruct the full 4-vector by interleaving free + fixed.
         params = list(self._initial)
@@ -575,9 +607,10 @@ class SABRInterpolation:
             upper.append(_EPS2)
 
         if not free_initial:
-            # Everything fixed — just evaluate residuals at the initial.
-            r = self._residuals(np.array([], dtype=np.float64))
-            self._update_diagnostics(r)
+            # Everything fixed — C++ short-circuits identically
+            # (xabrinterpolation.hpp:161-168 "there is nothing to optimize").
+            self._alpha, self._beta, self._nu, self._rho = self._initial
+            self._update_diagnostics()
             self._converged = True
             return
 
@@ -610,17 +643,34 @@ class SABRInterpolation:
         self._converged = bool(
             result.success  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         )
-        self._update_diagnostics(np.asarray(
-            result.fun,  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-            dtype=np.float64,
-        ))
+        self._update_diagnostics()
 
-    def _update_diagnostics(self, residuals: np.ndarray) -> None:
+    def _update_diagnostics(self) -> None:
+        """Recompute ``error_`` / ``maxError_`` at the stored parameters.
+
+        # C++ parity: ``XABRInterpolationImpl::interpolationError`` /
+        # ``interpolationMaxError`` (xabrinterpolation.hpp:270-285), which
+        # ``calculate()`` assigns to ``error_`` / ``maxError_`` on BOTH exits
+        # (hpp:166-167 for the nothing-to-optimise branch, hpp:233-234 after
+        # the fit). ``SABRInterpolation::rmsError()`` / ``maxError()`` are
+        # just those two members (sabrinterpolation.hpp:183-184).
+        #
+        # Both start from the UNWEIGHTED residual; only the RMS applies the
+        # weights, and it divides by ``n - 1``, not ``n``. This module already
+        # carried the correct :func:`xabr_interpolation_error` helper — it was
+        # used by no_arb_sabr_interpolation.py and svi_interpolation.py but
+        # never by this class, which computed ``sqrt(mean(r^2))`` off the
+        # scipy residual vector instead. Pinned against C++ by
+        # tests/math/interpolations/test_abcd_error_formula.py.
+        """
+        residuals = self._raw_residuals(
+            (self._alpha, self._beta, self._nu, self._rho)
+        )
         if residuals.size == 0:
             self._rms_error = 0.0
             self._max_error = 0.0
             return
-        self._rms_error = float(np.sqrt(np.mean(residuals * residuals)))
+        self._rms_error = xabr_interpolation_error(residuals, self._weights())
         self._max_error = float(np.max(np.abs(residuals)))
 
     def _fit_multi_start(self, *, max_nfev: int, max_guesses: int, seed: int) -> None:
@@ -699,28 +749,7 @@ class SABRInterpolation:
         self._rms_error = best_rms
         self._converged = best_converged
         # Refresh max_error from best_params.
-        residuals = self._residuals_at_full(best_params)
-        self._update_diagnostics(residuals)
-
-    def _residuals_at_full(
-        self, params: tuple[float, float, float, float],
-    ) -> np.ndarray:
-        """Evaluate residuals at full 4-vector (no free/fixed packing)."""
-        alpha, beta, nu, rho = params
-        alpha = max(alpha, _EPS1)
-        beta = min(max(beta, _EPS1), 1.0 - _EPS1)
-        nu = max(nu, _EPS1)
-        rho = min(max(rho, -_EPS2), _EPS2)
-        model_vols = np.empty_like(self._strikes)
-        for i, k in enumerate(self._strikes):
-            model_vols[i] = shifted_sabr_volatility(
-                float(k), self._forward, self._expiry_time,
-                alpha, beta, nu, rho, self._shift, self._volatility_type,
-            )
-        r = model_vols - self._volatilities
-        if self._vega_weighted:
-            r = r * self._vega_weights()
-        return r
+        self._update_diagnostics()
 
     # --- public API --------------------------------------------------
 

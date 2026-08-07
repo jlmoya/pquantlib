@@ -1,7 +1,7 @@
 """OptionletStripper2 — strip ATM caplet vols from a CapFloorTermVolCurve.
 
 # C++ parity: ql/termstructures/volatility/optionlet/optionletstripper2.{hpp,cpp}
-# (v1.42.1).
+# (v1.43).
 
 Extends a pre-stripped :class:`OptionletStripper1` (which gives a
 strike grid + per-fixing vols across that grid) by *augmenting* each
@@ -14,25 +14,39 @@ The Brent root-find solves, for each option-expiry j:
 
   cap_npv(stripper1.vols + spread_j) = cap_npv(atm_cap_vol_j)
 
-PQuantLib divergences:
+Like C++, this class derives from
+:class:`~pquantlib.termstructures.volatility.optionlet.optionlet_stripper.OptionletStripper`
+and re-builds its base from stripper1's own surface / index / vol type /
+displacement / optionlet frequency (optionletstripper2.cpp:39-44), so its
+tenor grid is independently recomputed rather than delegated. Only
+``_perform_calculations`` — which copies stripper1's date grid and then
+augments the strike/vol rows — lives here.
 
-* **No Black engine with OptionletVolatilityStructure overload.**
-  C++ piggy-backs on ``BlackCapFloorEngine(forwardingTermStructure,
-  Handle<OptionletVolatilityStructure>)`` to reprice the cap with a
-  spread-adjusted per-caplet vol surface. PQuantLib's
-  :class:`BlackCapFloorEngine` only accepts a flat vol; we therefore
-  hand-roll the spread-adjusted per-caplet repricing locally — for
-  each caplet, we look up its stripper1 vol at the ATM strike (via
-  :class:`StrippedOptionletAdapter`), add the trial spread, and
-  re-evaluate the caplet via :func:`black_formula`. This matches the
-  C++ ``SpreadedOptionletVolatility(adapter, spreadQuote)`` path
-  semantically.
-* **No MakeCapFloor.** We reuse OptionletStripper1's already-built
-  per-tenor coupons (it caches fixing dates, payment dates, accrual
-  periods, and ATM forwards on a per-cap basis). For OptionletStripper2
-  we re-build minimal cap structures via the same ``_build_cap``
-  helper, ATM-strike-pinned. We delegate per-caplet pricing to
-  :func:`black_formula` directly.
+PQuantLib divergences (pre-existing; each is a real behavioural gap against
+v1.43, flagged for a separate ``align()`` commit, NOT fixed by the base-class
+refactor because fixing them moves numbers):
+
+* **Cap repricing is hand-rolled, not engine-driven.** C++ prices the trial
+  cap with ``BlackCapFloorEngine(forwardingTermStructure,
+  Handle<OptionletVolatilityStructure>(SpreadedOptionletVolatility(adapter,
+  spreadQuote)))`` (optionletstripper2.cpp:170-179). Both
+  :class:`SpreadedOptionletVolatility` and :class:`MakeCapFloor` ARE ported
+  now, so the "not available" premise this code was written under no longer
+  holds.
+* **The root-find is ``scipy.optimize.brentq``, not QuantLib's Brent.**
+  ``pquantlib.math.solvers1d.brent.Brent`` is ported and is what
+  optionletstripper2.cpp:125-133 uses, with a *guess* and QuantLib's own
+  ``xAccuracy`` termination — scipy's ``brentq`` ignores the guess and
+  terminates differently, so the two roots agree only to ``accuracy``.
+* **The ATM strike is a discount-weighted-forward proxy**
+  (:meth:`_cap_atm_strike`), where C++ uses
+  ``caps_[j]->atmRate(**iborIndex_->forwardingTermStructure())``
+  (optionletstripper2.cpp:87-88); ``CashFlows.atm_rate`` is ported.
+* **The augmentation row bound is ``i < legSize``**, where C++ is
+  ``i <= caps_[j]->floatingLeg().size()`` (optionletstripper2.cpp:100) — an
+  inclusive bound that gives one MORE augmented row per expiry. The probe
+  pins C++'s row widths at
+  ``v143/ts/optionletstripper.json → stripper2_euribor3m_flat18.row_widths``.
 """
 
 from __future__ import annotations
@@ -44,8 +58,8 @@ from scipy.optimize import brentq  # type: ignore[import-untyped]
 
 from pquantlib import qassert
 from pquantlib.cashflows.floating_rate_coupon import FloatingRateCoupon
-from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.instruments.cap_floor import Cap
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.payoffs import OptionType
 from pquantlib.pricingengines.black_formula import (
     bachelier_black_formula,
@@ -54,6 +68,9 @@ from pquantlib.pricingengines.black_formula import (
 from pquantlib.termstructures.volatility.capfloor.cap_floor_term_vol_curve import (
     CapFloorTermVolCurve,
 )
+from pquantlib.termstructures.volatility.optionlet.optionlet_stripper import (
+    OptionletStripper,
+)
 from pquantlib.termstructures.volatility.optionlet.optionlet_stripper_1 import (
     OptionletStripper1,
     _build_cap,  # pyright: ignore[reportPrivateUsage]
@@ -61,26 +78,23 @@ from pquantlib.termstructures.volatility.optionlet.optionlet_stripper_1 import (
 from pquantlib.termstructures.volatility.optionlet.stripped_optionlet_adapter import (
     StrippedOptionletAdapter,
 )
-from pquantlib.termstructures.volatility.optionlet.stripped_optionlet_base import (
-    StrippedOptionletBase,
-)
 from pquantlib.termstructures.volatility.volatility_type import VolatilityType
-from pquantlib.time.business_day_convention import BusinessDayConvention
-from pquantlib.time.calendar import Calendar
-from pquantlib.time.date import Date
 
 if TYPE_CHECKING:
     from pquantlib.termstructures.protocols import YieldTermStructureProtocol
 
 
-# Brent search bracket for the implied vol spread (C++ uses
-# ``minSpread = -0.1, maxSpread = 0.1``).
+# # C++ parity: ``Volatility guess = 0.0001, minSpread = -0.1, maxSpread = 0.1;``
+# (optionletstripper2.cpp:127). The bracket is honoured; ``_INIT_GUESS`` is
+# NOT — ``scipy.optimize.brentq`` takes no starting guess. Recorded rather
+# than deleted, because it is the concrete evidence for the "use the ported
+# ``pquantlib.math.solvers1d.brent.Brent``" item in the module docstring.
 _MIN_SPREAD: float = -0.1
 _MAX_SPREAD: float = 0.1
 _INIT_GUESS: float = 0.0001
 
 
-class OptionletStripper2(StrippedOptionletBase):
+class OptionletStripper2(OptionletStripper):
     """Augment OptionletStripper1 with ATM caplet vols from a term-vol curve."""
 
     def __init__(
@@ -91,90 +105,62 @@ class OptionletStripper2(StrippedOptionletBase):
         accuracy: float = 1.0e-5,
         max_iterations: int = 100,
     ) -> None:
+        # # C++ parity: OptionletStripper2::OptionletStripper2
+        # (optionletstripper2.cpp:36-55) — the base is re-built from
+        # stripper1's own inputs, with an EMPTY discount handle, so the tenor
+        # walk is recomputed rather than delegated.
+        super().__init__(
+            optionlet_stripper_1.term_vol_surface(),
+            optionlet_stripper_1.ibor_index(),
+            None,
+            optionlet_stripper_1.volatility_type(),
+            optionlet_stripper_1.displacement(),
+            optionlet_stripper_1.optionlet_frequency(),
+        )
         self._s1: OptionletStripper1 = optionlet_stripper_1
         self._curve: CapFloorTermVolCurve = atm_cap_floor_term_vol_curve
         self._accuracy: float = accuracy
         self._max_iterations: int = max_iterations
+        # # C++ parity: ``dc_(stripper1_->termVolSurface()->dayCounter())``
+        # (optionletstripper2.cpp:46).
+        self._dc = optionlet_stripper_1.term_vol_surface().day_counter()
 
-        # Day-counter parity check (C++ requires equal day counters
-        # between the term-vol surface and the term-vol curve).
+        # # C++ parity: optionletstripper2.cpp:53-54.
         qassert.require(
-            self._s1.day_counter() == self._curve.day_counter(),
-            "OptionletStripper1 and CapFloorTermVolCurve must share a day counter",
+            self._dc == self._curve.day_counter(),
+            "different day counters provided",
         )
 
         self._n_expiries: int = len(self._curve.option_tenors())
 
         # State populated by _perform_calculations.
-        self._calculated: bool = False
         self._atm_strikes: list[float] = [0.0] * self._n_expiries
         self._atm_prices: list[float] = [0.0] * self._n_expiries
         self._spreads_vol: list[float] = [0.0] * self._n_expiries
-        # Per-row augmented strikes + vols, mirroring stripper1's
-        # ``optionlet_strikes(i)`` / ``optionlet_volatilities(i)``.
-        self._augmented_strikes: list[list[float]] = []
-        self._augmented_vols: list[list[float]] = []
 
     # --- public diagnostics ----------------------------------------------
 
     def atm_cap_floor_strikes(self) -> list[float]:
+        """# C++ parity: optionletstripper2.cpp:143-146."""
         self._ensure_calculated()
         return list(self._atm_strikes)
 
     def atm_cap_floor_prices(self) -> list[float]:
+        """# C++ parity: optionletstripper2.cpp:148-151."""
         self._ensure_calculated()
         return list(self._atm_prices)
 
     def spreads_vol(self) -> list[float]:
+        """# C++ parity: optionletstripper2.cpp:138-141."""
         self._ensure_calculated()
         return list(self._spreads_vol)
 
-    # --- StrippedOptionletBase interface --------------------------------
-
-    def optionlet_strikes(self, i: int) -> list[float]:
-        self._ensure_calculated()
-        return list(self._augmented_strikes[i])
-
-    def optionlet_volatilities(self, i: int) -> list[float]:
-        self._ensure_calculated()
-        return list(self._augmented_vols[i])
-
-    def optionlet_fixing_dates(self) -> list[Date]:
-        return self._s1.optionlet_fixing_dates()
-
-    def optionlet_fixing_times(self) -> list[float]:
-        return self._s1.optionlet_fixing_times()
-
-    def optionlet_maturities(self) -> int:
-        return self._s1.optionlet_maturities()
-
-    def atm_optionlet_rates(self) -> list[float]:
-        return self._s1.atm_optionlet_rates()
-
-    def day_counter(self) -> DayCounter:
-        return self._s1.day_counter()
-
-    def calendar(self) -> Calendar:
-        return self._s1.calendar()
-
-    def settlement_days(self) -> int:
-        return self._s1.settlement_days()
-
-    def business_day_convention(self) -> BusinessDayConvention:
-        return self._s1.business_day_convention()
-
-    def volatility_type(self) -> VolatilityType:
-        return self._s1.volatility_type()
-
-    def displacement(self) -> float:
-        return self._s1.displacement()
-
     # --- internal -------------------------------------------------------
-
-    def _ensure_calculated(self) -> None:
-        if not self._calculated:
-            self._perform_calculations()
-            self._calculated = True
+    #
+    # The whole StrippedOptionletBase read interface is inherited from
+    # OptionletStripper — # C++ parity: optionletstripper.cpp:87-175. C++
+    # OptionletStripper2 overrides NONE of it; the values arrive by copying
+    # stripper1's grid into the base's own vectors below.
 
     def _perform_calculations(self) -> None:
         """Compute spreads + augment per-row strike grids.
@@ -188,17 +174,26 @@ class OptionletStripper2(StrippedOptionletBase):
           3. Insert (atm_strike, atm_caplet_vol) into stripper1's
              per-row strike grid (sorted).
         """
-        # Force stripper1 to do its work. We access stripper1's
-        # private buffers because PQuantLib's StrippedOptionletBase
-        # interface intentionally omits ``ibor_index``, the term-vol
-        # surface handle, and the discount-curve helper — stripper2
-        # is the *only* downstream consumer that needs them, so we
-        # narrow the coupling here rather than widen the public
-        # interface.
-        self._s1._ensure_calculated()  # pyright: ignore[reportPrivateUsage]
-        ibor_index = self._s1._ibor_index  # pyright: ignore[reportPrivateUsage]
-        ref_date = self._s1._term_vol_surface.reference_date()  # pyright: ignore[reportPrivateUsage]
-        discount = self._s1._discount_handle()  # pyright: ignore[reportPrivateUsage]
+        # # C++ parity: optionletstripper2.cpp:60-68 — copy stripper1's date
+        # grid into THIS object's base vectors. Reading any of stripper1's
+        # accessors forces its own calculate() first, exactly as in C++.
+        self._optionlet_dates = self._s1.optionlet_fixing_dates()
+        self._optionlet_payment_dates = self._s1.optionlet_payment_dates()
+        self._optionlet_accrual_periods = self._s1.optionlet_accrual_periods()
+        self._optionlet_times = self._s1.optionlet_fixing_times()
+        self._atm_optionlet_rate = self._s1.atm_optionlet_rates()
+        for i in range(len(self._optionlet_times)):
+            self._optionlet_strikes[i] = self._s1.optionlet_strikes(i)
+            self._optionlet_volatilities[i] = self._s1.optionlet_volatilities(i)
+
+        # # C++ parity: ``iborIndex_`` / ``termVolSurface_`` are the base's
+        # own members (identical objects to stripper1's, per the ctor).
+        ibor_index = self.ibor_index()
+        # # C++ parity: MakeCapFloor works off Settings::evaluationDate()
+        # (makevanillaswap.cpp:67), not the surface's reference date.
+        eval_date = ObservableSettings().evaluation_date
+        discount = self._discount_handle()
+        # # C++ parity: optionletstripper2.cpp:94-95.
         adapter = StrippedOptionletAdapter(self._s1)
         adapter.enable_extrapolation(True)
 
@@ -220,7 +215,7 @@ class OptionletStripper2(StrippedOptionletBase):
                 length=tenor,
                 index=ibor_index,
                 strike=0.04,  # dummy; overwritten after we compute ATM.
-                reference_date=ref_date,
+                evaluation_date=eval_date,
             )
             atm_strike = self._cap_atm_strike(cap, discount)
             self._atm_strikes[j] = atm_strike
@@ -231,7 +226,7 @@ class OptionletStripper2(StrippedOptionletBase):
                 length=tenor,
                 index=ibor_index,
                 strike=atm_strike,
-                reference_date=ref_date,
+                evaluation_date=eval_date,
             )
             self._atm_prices[j] = self._price_cap_with_flat_vol(
                 cap_atm, discount, atm_vol,
@@ -243,7 +238,7 @@ class OptionletStripper2(StrippedOptionletBase):
                 length=tenor,
                 index=ibor_index,
                 strike=self._atm_strikes[j],
-                reference_date=ref_date,
+                evaluation_date=eval_date,
             )
             target_price = self._atm_prices[j]
             atm_strike_j = self._atm_strikes[j]
@@ -281,37 +276,42 @@ class OptionletStripper2(StrippedOptionletBase):
             self._spreads_vol[j] = root
 
         # ---- 3) Augment per-row strike grids with (atm_strike, atm_vol).
-        n_rows = self._s1.optionlet_maturities()
-        # Take stripper1's per-row strike grid + vols (these are at
-        # stripper1's input strike grid, not the curve's ATM strikes).
-        self._augmented_strikes = [self._s1.optionlet_strikes(i) for i in range(n_rows)]
-        self._augmented_vols = [self._s1.optionlet_volatilities(i) for i in range(n_rows)]
-        # Per the C++ loop: for each curve expiry j, for each row i
-        # within the cap's floating-leg length, insert the ATM
-        # strike + (stripper1 vol at ATM + spread_j).
+        # The rows were seeded from stripper1 above; C++ augments the base's
+        # own ``optionletStrikes_`` / ``optionletVolatilities_`` in place
+        # (optionletstripper2.cpp:98-120).
+        n_rows = self.optionlet_maturities()
         cap_floor_length: list[int] = []
         for j in range(self._n_expiries):
             cap = _build_cap(
                 length=self._curve.option_tenors()[j],
                 index=ibor_index,
                 strike=self._atm_strikes[j],
-                reference_date=ref_date,
+                evaluation_date=eval_date,
             )
             cap_floor_length.append(len(cap.floating_leg()))
 
         for j in range(self._n_expiries):
             length_j = cap_floor_length[j]
             atm_strike_j = self._atm_strikes[j]
+            # DIVERGENCE (pre-existing): C++ is
+            # ``if (i <= caps_[j]->floatingLeg().size())``
+            # (optionletstripper2.cpp:100) — an INCLUSIVE bound, so C++
+            # augments one more row per expiry than this ``i < length_j``.
+            # C++'s row widths are pinned at
+            # ``v143/ts/optionletstripper.json →
+            # stripper2_euribor3m_flat18.row_widths``. Not fixed here: this
+            # commit is a pure re-seating that must move no numbers.
             for i in range(min(length_j, n_rows)):
                 # Read stripper1's vol-at-ATM via the strike-axis
                 # interpolation in the adapter.
-                opt_time = self._s1.optionlet_fixing_times()[i]
+                opt_time = self._optionlet_times[i]
                 unadjusted = adapter.volatility(opt_time, atm_strike_j, True)
                 adjusted = unadjusted + self._spreads_vol[j]
                 # Insert sorted into row i.
-                strikes_i = self._augmented_strikes[i]
-                vols_i = self._augmented_vols[i]
-                # Find insert index via bisect.
+                # # C++ parity: ``std::lower_bound`` + ``insert``
+                # (optionletstripper2.cpp:106-117).
+                strikes_i = self._optionlet_strikes[i]
+                vols_i = self._optionlet_volatilities[i]
                 insert_at = 0
                 while insert_at < len(strikes_i) and strikes_i[insert_at] < atm_strike_j:
                     insert_at += 1
@@ -325,6 +325,15 @@ class OptionletStripper2(StrippedOptionletBase):
 
         The ATM strike is the discount-weighted forward — equivalently,
         the fixed leg rate that zeroes the cap's intrinsic.
+
+        DIVERGENCE (pre-existing): C++ calls
+        ``caps_[j]->atmRate(**iborIndex_->forwardingTermStructure())``
+        (optionletstripper2.cpp:87-88), which routes to
+        ``CashFlows::atmRate`` — ported at
+        ``pquantlib/src/pquantlib/cashflows/cash_flows.py:980``. This proxy
+        only coincides with it on a flat curve. C++'s values are pinned at
+        ``v143/ts/optionletstripper.json →
+        stripper2_euribor3m_flat18.atm_cap_floor_strikes``.
         """
         legs = cap.floating_leg()
         num = 0.0
@@ -349,9 +358,9 @@ class OptionletStripper2(StrippedOptionletBase):
         stripper1.
         """
         ref = discount.reference_date()
-        dc = self._s1.day_counter()
-        vol_type = self._s1.volatility_type()
-        displacement = self._s1.displacement()
+        dc = self._dc
+        vol_type = self.volatility_type()
+        displacement = self.displacement()
         strike = cap.cap_rates()[0]
         cap_npv = 0.0
         for cf in cap.floating_leg():
@@ -393,9 +402,9 @@ class OptionletStripper2(StrippedOptionletBase):
         Per-caplet vol = ``adapter.volatility(t_fix, atm_strike) + spread``.
         """
         ref = discount.reference_date()
-        dc = self._s1.day_counter()
-        vol_type = self._s1.volatility_type()
-        displacement = self._s1.displacement()
+        dc = self._dc
+        vol_type = self.volatility_type()
+        displacement = self.displacement()
         strike = cap.cap_rates()[0]
         cap_npv = 0.0
         for cf in cap.floating_leg():
@@ -429,6 +438,4 @@ class OptionletStripper2(StrippedOptionletBase):
         return cap_npv
 
 
-# Reattach the private cap builder so consumers can fix coupon pricers
-# at L10-A-test time without reaching into stripper_1's private module.
 __all__ = ["OptionletStripper2"]

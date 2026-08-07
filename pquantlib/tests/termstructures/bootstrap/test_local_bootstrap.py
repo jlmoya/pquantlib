@@ -49,6 +49,12 @@ class _FakeCurve:
     def times(self) -> list[float]:
         return list(self._times)
 
+    def dates(self) -> list[Date]:
+        return list(self._dates)
+
+    def data(self) -> list[float]:
+        return list(self._data)
+
     def data_live(self) -> list[float]:
         return self._data
 
@@ -104,20 +110,22 @@ class _FakeTraits:
         del ts
         return 0.0
 
-    def guess(self, i: int, data: list[float], valid_data: bool) -> float:
-        del i, valid_data
-        return 0.05 if len(data) > 0 else 0.0
+    def guess(
+        self, i: int, c: _FakeCurve, valid_data: bool, first_alive_helper: int
+    ) -> float:
+        del i, valid_data, first_alive_helper
+        return 0.05 if len(c.data()) > 0 else 0.0
 
     def min_value_after(
-        self, i: int, data: list[float], valid_data: bool,
+        self, i: int, c: _FakeCurve, valid_data: bool, first_alive_helper: int,
     ) -> float:
-        del i, data, valid_data
+        del i, c, valid_data, first_alive_helper
         return 0.0
 
     def max_value_after(
-        self, i: int, data: list[float], valid_data: bool,
+        self, i: int, c: _FakeCurve, valid_data: bool, first_alive_helper: int,
     ) -> float:
-        del i, data, valid_data
+        del i, c, valid_data, first_alive_helper
         return 0.5
 
     def update_guess(self, data: list[float], level: float, i: int) -> None:

@@ -1,13 +1,14 @@
 """SabrSwaptionVolatilityCube — SABR-fitted swaption vol cube.
 
 # C++ parity: ql/termstructures/volatility/swaption/sabrswaptionvolatilitycube.hpp
-# instantiated with ``SwaptionVolCubeSabrModel`` (Hagan 2002 SABR).
-# (v1.42.1).
+# ``typedef XabrSwaptionVolatilityCube<SwaptionVolCubeSabrModel>
+#  SabrSwaptionVolatilityCube`` (hpp:1270-1277), the classic Hagan 2002
+# SABR instantiation. (v1.43).
 
 Thin wrapper around :class:`XabrSwaptionVolatilityCube` that fixes
 ``model_kind`` to :attr:`XabrModelKind.SABR`. Originally a standalone
 class (Phase 9-C); refactored in Phase 11 W2-A as part of the SABR/ZABR
-generalisation so SABR + ZABR share the same eager-fit infrastructure.
+generalisation so SABR + ZABR share the same infrastructure.
 
 Public API preserved for back-compat:
 
@@ -49,11 +50,15 @@ class SabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
             vega_weighted_smile_fit: same as
             :class:`SwaptionVolatilityCube`.
         sabr_initial_guess: optional outer list shape
-            ``(n_option_tenors x n_swap_tenors) x 4`` of initial
-            ``(alpha, beta, nu, rho)`` quadruples. If ``None``, each
-            cell uses ``SabrInterpolation``'s default initial guess.
+            ``n_option_tenors x n_swap_tenors``, each cell an
+            ``(alpha, beta, nu, rho)`` quadruple of floats or
+            :class:`Quote` objects (C++ ``parametersGuess``). If
+            ``None``, each cell uses ``SabrInterpolation``'s default
+            initial guess.
         is_parameter_fixed: 4-element ``(alpha_fixed, beta_fixed,
             nu_fixed, rho_fixed)`` mask shared across grid cells.
+        backward_flat / cutoff_strike: C++ ``backwardFlat`` /
+            ``cutoffStrike``; see :class:`XabrSwaptionVolatilityCube`.
     """
 
     def __init__(
@@ -68,11 +73,13 @@ class SabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
         short_swap_index_base: SwapIndex | AtmSwapIndexProtocol,
         vega_weighted_smile_fit: bool = False,
         sabr_initial_guess: (
-            Sequence[Sequence[tuple[float, float, float, float]]] | None
+            Sequence[Sequence[Sequence[float] | Sequence[Quote]]] | None
         ) = None,
         is_parameter_fixed: tuple[bool, bool, bool, bool] = (
             False, False, False, False,
         ),
+        backward_flat: bool = False,
+        cutoff_strike: float = 0.0001,
     ) -> None:
         super().__init__(
             model_kind=XabrModelKind.SABR,
@@ -86,6 +93,8 @@ class SabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
             vega_weighted_smile_fit=vega_weighted_smile_fit,
             initial_guess=sabr_initial_guess,
             is_parameter_fixed=is_parameter_fixed,
+            backward_flat=backward_flat,
+            cutoff_strike=cutoff_strike,
         )
 
     # --- typed back-compat accessor ---------------------------------------

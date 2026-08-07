@@ -12,25 +12,24 @@ extends :class:`Interpolation` (it overrides ``_value`` / ``_primitive``);
 ``AbcdCalibration`` is a calibrator and exposes the fitted parameters
 plus a ``value(t)`` evaluator.
 
-PQuantLib factors the abcd-fit logic into a shared helper used by both
-classes. The shared helper is :class:`_AbcdFitter` at module scope
-below; it provides ``fit()`` returning ``(a, b, c, d, rms, max_err,
-converged)`` for given inputs. :class:`AbcdInterpolation` and
-:class:`AbcdCalibration` both call it.
+C++ declares two helper classes in ``AbcdCalibration``'s PRIVATE section:
+``AbcdError`` (abcdcalibration.hpp:44) and ``AbcdParametersTransformation``
+(abcdcalibration.hpp:69). A private nested class has no Python analogue, and
+hiding them would leave their arithmetic untestable, so both are exposed here
+at module scope with the same names and the same behaviour, cross-validated in
+``tests/math/interpolations/test_abcd_error_formula.py``.
 
-This keeps the behaviour identical (both fit via
-``scipy.optimize.least_squares`` ``trf`` arm with the C++
-``AbcdMathFunction::validate`` constraints) while preserving the
-distinct public APIs.
-
-Documented divergences vs C++ (inherited from L10-C):
+Documented divergences vs C++:
 
 * The optimizer is ``scipy.optimize.least_squares`` ``trf`` with native
   box bounds, not the C++ ``LevenbergMarquardt`` + ``ProjectedCostFunction``
-  combo. Recovered parameters can differ in the local-minima rich
-  regime (typical on noisy 4-param-vs-6-pillar problems); on noiseless
-  abcd-shape data the Python fit converges to the global minimum
-  (residuals ~1e-13).
+  + ``AbcdParametersTransformation`` combo. Recovered parameters can differ
+  in the local-minima rich regime (typical on noisy 4-param-vs-6-pillar
+  problems); on noiseless abcd-shape data the Python fit converges to the
+  global minimum (residuals ~1e-13). :class:`AbcdError` and
+  :class:`AbcdParametersTransformation` are therefore faithful and tested but
+  are not on the ``compute()`` path; wiring them in would move published
+  fitted parameters and is tracked separately.
 * ``end_criteria`` accepted as a duck-typed object with an optional
   ``max_iterations`` attribute (mapped to scipy ``max_nfev``).
 * ``optimization_method`` accepted but ignored.
@@ -42,16 +41,22 @@ Adjustment factor:
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import Any, Final
 
 import numpy as np
+import numpy.typing as npt
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
 
 from pquantlib import qassert
 from pquantlib.math.interpolations.abcd_interpolation import (
-    abcd_value,
+    abcd_black_volatility,
     validate_abcd,
+)
+from pquantlib.math.optimization.cost_function import (
+    CostFunction,
+    ParametersTransformation,
 )
 
 # C++ ``AbcdCalibration`` defaults at abcdcalibration.hpp:86-89.
@@ -156,8 +161,6 @@ class AbcdCalibration:
             if vega_weighted
             else np.full_like(times_arr, 1.0 / float(times_arr.shape[0]))
         )
-        self._rms_error: float = 0.0
-        self._max_error: float = 0.0
         self._end_criteria_diagnostic: str = "uncomputed"
         self._converged: bool = False
 
@@ -175,12 +178,34 @@ class AbcdCalibration:
     def d(self) -> float:
         return self._d
 
+    def set_parameters(self, a: float, b: float, c: float, d: float) -> None:
+        """Overwrite the current ``(a, b, c, d)``.
+
+        # C++ parity: there is no such method — ``AbcdError`` writes
+        # ``abcd_->a_ = y[0]`` etc. directly, which it may do because
+        # ``AbcdCalibration`` declares it a friend (abcdcalibration.hpp:44 sits
+        # inside the class body). Python has no friendship, and
+        # :class:`AbcdError` must be able to install trial parameters, so the
+        # write is exposed as one named method rather than four attribute
+        # pokes. Deliberately does NOT call ``validate_abcd``: C++ does not
+        # validate on this path either (abcdcalibration.hpp:49-53), and the
+        # optimiser legitimately visits infeasible points.
+        """
+        self._a = a
+        self._b = b
+        self._c = c
+        self._d = d
+
     def value(self, t: float) -> float:
         """Evaluate the fitted Rebonato model at ``t``.
 
-        # C++ parity: ``AbcdCalibration::value`` (abcdcalibration.cpp:164).
+        # C++ parity: ``AbcdCalibration::value`` (abcdcalibration.cpp:163-165)
+        # is ``abcdBlackVolatility(x, a_, b_, c_, d_)`` — the AVERAGE
+        # (Black) volatility over ``[0, t]``, i.e.
+        # ``AbcdFunction(a,b,c,d).volatility(0., t, t)`` (abcd.hpp:105-108),
+        # NOT the instantaneous ``f(t)``.
         """
-        return abcd_value(t, self._a, self._b, self._c, self._d)
+        return abcd_black_volatility(t, self._a, self._b, self._c, self._d)
 
     def k(
         self, t: Sequence[float], black_vols: Sequence[float],
@@ -202,19 +227,66 @@ class AbcdCalibration:
             result.append(float(vols[i]) / v if v != 0.0 else 0.0)
         return result
 
-    def error(self) -> float:
-        """RMS weighted error after :meth:`compute`.
+    def errors(self) -> list[float]:
+        """Per-time weighted differences ``(value(t_i) - vol_i) * sqrt(w_i)``.
 
-        # C++ parity: ``AbcdCalibration::error`` (abcdcalibration.cpp:180).
+        # C++ parity: ``AbcdCalibration::errors``
+        # (abcdcalibration.cpp:198-205). Live, like C++: computed from the
+        # CURRENT (a, b, c, d), not cached at ``compute()`` time — that is what
+        # makes :class:`AbcdError` able to drive it from trial parameters.
         """
-        return self._rms_error
+        return [
+            (self.value(float(t)) - float(v)) * math.sqrt(float(w))
+            for t, v, w in zip(
+                self._times, self._black_vols, self._weights, strict=True
+            )
+        ]
+
+    def error(self) -> float:
+        """``sqrt(n * sum_i w_i e_i^2 / (n - 1))`` at the current parameters.
+
+        # C++ parity: ``AbcdCalibration::error``
+        # (abcdcalibration.cpp:179-187):
+        #
+        #     Size n = times_.size();
+        #     for i: error = value(times_[i]) - blackVols_[i];
+        #            squaredError += error * error * weights_[i];
+        #     return std::sqrt(n * squaredError / (n - 1));
+        #
+        # ``weights_`` default to a uniform ``1/n`` (abcdcalibration.cpp:72),
+        # so the unweighted case reduces to the SAMPLE standard deviation
+        # ``sqrt(sum e^2 / (n-1))`` — not ``sqrt(mean(e^2))``. Pinned for
+        # n = 2, 3, 6 by tests/math/interpolations/test_abcd_error_formula.py
+        # against migration-harness/references/v143/ts/abcd.json.
+        """
+        n = int(self._times.shape[0])
+        if n == 0:
+            return 0.0
+        squared = 0.0
+        for t, v, w in zip(
+            self._times, self._black_vols, self._weights, strict=True
+        ):
+            e = self.value(float(t)) - float(v)
+            squared += e * e * float(w)
+        # C++ divides by (n - 1) unguarded; n == 1 would be a division by zero
+        # there. Python keeps the same value for n > 1 and returns the single
+        # weighted residual's magnitude for n == 1 rather than raising.
+        return math.sqrt(n * squared / (n - 1)) if n > 1 else math.sqrt(squared)
 
     def max_error(self) -> float:
-        """Max absolute residual after :meth:`compute`.
+        """``max_i |value(t_i) - vol_i|`` at the current parameters.
 
-        # C++ parity: ``AbcdCalibration::maxError`` (abcdcalibration.cpp:190).
+        # C++ parity: ``AbcdCalibration::maxError``
+        # (abcdcalibration.cpp:189-196). Note this is UNWEIGHTED even when
+        # ``vegaWeighted`` is set — only :meth:`error` and :meth:`errors`
+        # carry the weights.
         """
-        return self._max_error
+        if self._times.shape[0] == 0:
+            return 0.0
+        return max(
+            abs(self.value(float(t)) - float(v))
+            for t, v in zip(self._times, self._black_vols, strict=True)
+        )
 
     def end_criteria(self) -> str:
         """Termination diagnostic message from scipy.
@@ -244,7 +316,7 @@ class AbcdCalibration:
         if a + d < 0.0:
             a = -d
         model = np.array(
-            [abcd_value(float(t), a, b, c, d) for t in self._times],
+            [abcd_black_volatility(float(t), a, b, c, d) for t in self._times],
             dtype=np.float64,
         )
         r = model - self._black_vols
@@ -258,16 +330,12 @@ class AbcdCalibration:
         # C++ parity: ``AbcdCalibration::compute``
         # (abcdcalibration.cpp:101-162).
         """
-        # If all params fixed, just record diagnostics.
+        # C++ parity: abcdcalibration.cpp:117-122 — "there is nothing to
+        # optimize": a_,b_,c_,d_ keep the values passed to the constructor and
+        # abcdEndCriteria_ becomes EndCriteria::None. error()/maxError() are
+        # live methods in C++, so nothing is cached here either.
         if all(self._is_fixed):
-            r = self._residuals(np.array([], dtype=np.float64))
             self._a, self._b, self._c, self._d = self._initial
-            self._rms_error = (
-                float(np.sqrt(np.mean(r * r))) if r.size > 0 else 0.0
-            )
-            self._max_error = (
-                float(np.max(np.abs(r))) if r.size > 0 else 0.0
-            )
             self._converged = True
             self._end_criteria_diagnostic = "all parameters fixed"
             return
@@ -326,22 +394,132 @@ class AbcdCalibration:
         self._end_criteria_diagnostic = str(
             result.message  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         )
-        fun_arr: np.ndarray = np.asarray(
-            result.fun,  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-            dtype=np.float64,
+
+
+class AbcdParametersTransformation(ParametersTransformation):
+    """Bijection between R^4 and the feasible abcd region.
+
+    # C++ parity: ``AbcdCalibration::AbcdParametersTransformation``
+    # (abcdcalibration.hpp:69-78, abcdcalibration.cpp:36-52).
+
+    C++ declares this in the PRIVATE section of ``AbcdCalibration`` so that
+    only ``compute()`` can reach it; PQuantLib exposes it at module scope
+    because a private nested class has no Python analogue and hiding it would
+    leave the mapping untestable.
+
+    ``direct`` maps unconstrained coordinates onto parameters satisfying the
+    ``AbcdMathFunction`` feasibility conditions ``c > 0``, ``d > 0``,
+    ``a + d > 0``::
+
+        b = x[1]
+        c = exp(x[2])
+        d = exp(x[3])
+        a = exp(x[0]) - d          # so a + d = exp(x[0]) > 0
+
+    ``inverse`` is its two-sided partner. Note the asymmetry that C++ builds
+    in: ``inverse`` computes the a-slot as ``log(x[0] + x[3])`` from the
+    CONSTRAINED ``d`` in ``x[3]``, which is only the inverse of ``direct``
+    because ``direct`` assigns ``y[3]`` before it reads it for ``y[0]``.
+    Reordering those two statements still round-trips for some inputs, so the
+    round-trip residual is pinned explicitly in
+    ``tests/math/interpolations/test_abcd_error_formula.py``.
+    """
+
+    def direct(
+        self, x: npt.NDArray[np.float64]
+    ) -> npt.NDArray[np.float64]:
+        """Unconstrained ``x`` -> constrained ``(a, b, c, d)``.
+
+        # C++ parity: abcdcalibration.cpp:37-43.
+        """
+        y = np.empty(4, dtype=np.float64)
+        y[1] = x[1]
+        y[2] = np.exp(x[2])
+        y[3] = np.exp(x[3])
+        y[0] = np.exp(x[0]) - y[3]
+        return y
+
+    def inverse(
+        self, x: npt.NDArray[np.float64]
+    ) -> npt.NDArray[np.float64]:
+        """Constrained ``(a, b, c, d)`` -> unconstrained coordinates.
+
+        # C++ parity: abcdcalibration.cpp:46-52.
+        """
+        y = np.empty(4, dtype=np.float64)
+        y[1] = x[1]
+        y[2] = np.log(x[2])
+        y[3] = np.log(x[3])
+        y[0] = np.log(x[0] + x[3])
+        return y
+
+
+class AbcdError(CostFunction):
+    """Cost function driving :class:`AbcdCalibration` from R^4.
+
+    # C++ parity: ``AbcdCalibration::AbcdError``
+    # (abcdcalibration.hpp:44-67).
+
+    C++::
+
+        Real value(const Array& x) const override {
+            const Array y = abcd_->transformation_->direct(x);
+            abcd_->a_ = y[0]; ... abcd_->d_ = y[3];
+            return abcd_->error();
+        }
+
+    so the cost function MUTATES the calibration it points at — the trial
+    parameters are written into the calibration before its live ``error()`` /
+    ``errors()`` are read. PQuantLib keeps that contract exactly, because it
+    is observable: after evaluating the cost function the calibration reports
+    the trial parameters, not the ones it was constructed with.
+
+    Like C++ this is declared private in ``AbcdCalibration``; PQuantLib
+    exposes it at module scope for the same reason as
+    :class:`AbcdParametersTransformation`.
+    """
+
+    def __init__(
+        self,
+        calibration: AbcdCalibration,
+        transformation: AbcdParametersTransformation | None = None,
+    ) -> None:
+        # C++ parity: abcdcalibration.hpp:46 — holds a raw pointer back to the
+        # calibration; the transformation is the one compute() installed
+        # (abcdcalibration.cpp:125).
+        self._abcd: AbcdCalibration = calibration
+        self._transformation: AbcdParametersTransformation = (
+            transformation
+            if transformation is not None
+            else AbcdParametersTransformation()
         )
-        if fun_arr.size > 0:
-            n = fun_arr.shape[0]
-            # # C++ parity: ``error()`` returns
-            # # sqrt(n * sum(w*r^2) / (n-1)).
-            squared = float(np.sum(fun_arr * fun_arr))
-            self._rms_error = float(
-                np.sqrt(n * squared / max(n - 1, 1))
-            )
-            self._max_error = float(np.max(np.abs(fun_arr)))
-        else:
-            self._rms_error = 0.0
-            self._max_error = 0.0
+
+    def _apply(self, x: npt.NDArray[np.float64]) -> None:
+        # C++ parity: abcdcalibration.hpp:48-53 / :56-61 — identical prologue
+        # in both value() and values().
+        y = self._transformation.direct(x)
+        self._abcd.set_parameters(
+            float(y[0]), float(y[1]), float(y[2]), float(y[3])
+        )
+
+    def value(self, x: npt.NDArray[np.float64]) -> float:
+        """``AbcdCalibration::error()`` at ``direct(x)``.
+
+        # C++ parity: abcdcalibration.hpp:47-54. Note this OVERRIDES the
+        # ``CostFunction`` default ``sqrt(mean(values(x)^2))`` — the two are
+        # not the same number, because ``error()`` carries the ``n/(n-1)``
+        # scaling.
+        """
+        self._apply(x)
+        return self._abcd.error()
+
+    def values(self, x: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        """``AbcdCalibration::errors()`` at ``direct(x)``.
+
+        # C++ parity: abcdcalibration.hpp:55-63.
+        """
+        self._apply(x)
+        return np.asarray(self._abcd.errors(), dtype=np.float64)
 
 
-__all__ = ["AbcdCalibration"]
+__all__ = ["AbcdCalibration", "AbcdError", "AbcdParametersTransformation"]

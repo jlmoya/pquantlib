@@ -22,29 +22,23 @@ mirrors that defensive behavior — calibration loops can tolerate a
 
 ## Divergence from C++
 
-- C++ defaults to ``Gaussian1dSwaptionEngine`` (numerical integration
-  on the model's state grid). PQuantLib requires the engine to be
-  passed in explicitly — we don't carry ``Gaussian1dSwaptionEngine``
-  in this cluster (it's a deferred Phase-10 carve-out). Users can
-  pass any ``Swaption``-compatible engine; typical use is
-  ``BlackSwaptionEngine`` on a constant-vol surface during calibration.
-
-- C++ ``smileSectionImpl(Time, Time)`` uses a Newton root-find from
-  a guess of ``optionTime`` years past the reference date to back out
-  the option date. PQuantLib's surface dispatches by Date (matches
-  the rest of the project); the Time -> Date conversion uses the
-  parent class's ``option_date_from_tenor`` plumbing.
-
-- C++ ``Gaussian1dSwaptionVolatility::DateHelper`` (a 1-D Newton
-  inversion helper for finding the Date matching a given option time)
-  is omitted — PQuantLib's call sites use Date directly, so no time->date
-  inversion is needed.
+- C++ defaults its ``swaptionEngine`` argument to
+  ``Gaussian1dSwaptionEngine(model, 64, 7.0, true, false)``
+  (gaussian1dswaptionvolatility.hpp:44). PQuantLib requires the engine to be
+  passed explicitly, so the call site is always visible. An earlier revision
+  justified this by saying PQuantLib "doesn't carry
+  ``Gaussian1dSwaptionEngine`` in this cluster (a deferred Phase-10
+  carve-out)"; that stopped being true —
+  ``pquantlib/src/pquantlib/pricingengines/swaption/gaussian1d_swaption_engine.py``
+  has it — so the only remaining difference is the explicit argument.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pquantlib.math.rounding import ClosestRounding
+from pquantlib.math.solvers1d.newton_safe import NewtonSafe
 from pquantlib.termstructures.volatility.gaussian1d_smile_section import (
     Gaussian1dSmileSection,
 )
@@ -60,9 +54,63 @@ if TYPE_CHECKING:
     from pquantlib.indexes.swap_index import SwapIndex
     from pquantlib.models.shortrate.gaussian1d_model import Gaussian1dModel
     from pquantlib.pricingengines.pricing_engine import PricingEngine
+    from pquantlib.termstructures.term_structure import TermStructure
     from pquantlib.time.business_day_convention import BusinessDayConvention
     from pquantlib.time.calendar import Calendar
     from pquantlib.time.date import Date
+
+
+class DateHelper:
+    """Newton functor inverting ``timeFromReference`` back to a date.
+
+    # C++ parity: ``Gaussian1dSwaptionVolatility::DateHelper``
+    # (gaussian1dswaptionvolatility.hpp:70-86).
+
+    C++ declares this in the PRIVATE section of
+    ``Gaussian1dSwaptionVolatility``; a private nested class has no Python
+    analogue, and hiding it would leave the inversion untestable, so it is
+    exposed at module scope under the same name.
+
+    The functor is a piecewise-linear interpolation of
+    ``TermStructure::timeFromReference`` through the integer date serials,
+    shifted so that its root is the (fractional) serial whose year fraction
+    equals ``t``::
+
+        h    = date - floor(date)
+        f(x) = h * (T(floor(x) + 1) - t) + (1 - h) * (T(floor(x)) - t)
+
+    ``derivative`` is a FORWARD difference with step ``1e-6``, not the exact
+    slope — C++ notes it uses forward differencing "to avoid dates before
+    reference date" (hpp:82). The step size is part of the observable
+    behaviour, because ``NewtonSafe`` switches between Newton and bisection
+    based on it.
+    """
+
+    def __init__(self, ts: TermStructure, t: float) -> None:
+        # C++ parity: gaussian1dswaptionvolatility.hpp:72.
+        self._ts: TermStructure = ts
+        self._t: float = t
+
+    def __call__(self, date: float) -> float:
+        # C++ parity: gaussian1dswaptionvolatility.hpp:73-80. The C++
+        # ``static_cast<Date::serial_type>(date)`` truncates TOWARDS ZERO;
+        # serials are positive here, so int() matches.
+        from pquantlib.time.date import Date as _Date  # noqa: PLC0415
+
+        serial = int(date)
+        t1 = self._ts.time_from_reference(_Date(serial)) - self._t
+        t2 = self._ts.time_from_reference(_Date(serial + 1)) - self._t
+        h = date - serial
+        return h * t2 + (1.0 - h) * t1
+
+    def derivative(self, date: float) -> float:
+        """Forward difference with step ``1e-6``.
+
+        # C++ parity: gaussian1dswaptionvolatility.hpp:81-85 — verbatim,
+        # including the comment's reason for forward rather than central
+        # differencing.
+        """
+        return (self(date + 1e-6) - self(date)) * 1e6
 
 
 class Gaussian1dSwaptionVolatility(SwaptionVolatilityStructure):
@@ -182,6 +230,47 @@ class Gaussian1dSwaptionVolatility(SwaptionVolatilityStructure):
             engine=self._engine,
         )
 
+    def _smile_section_from_times(
+        self, option_time: float, swap_length: float
+    ) -> Gaussian1dSmileSection:
+        """Smile section addressed by (time, time) rather than (date, tenor).
+
+        # C++ parity: ``Gaussian1dSwaptionVolatility::smileSectionImpl(Time,
+        # Time)`` (gaussian1dswaptionvolatility.cpp:45-59)::
+        #
+        #     DateHelper hlp(*this, optionTime);
+        #     NewtonSafe newton;
+        #     Date d(static_cast<Date::serial_type>(newton.solve(
+        #         hlp, 0.1,
+        #         365.25 * optionTime + referenceDate().serialNumber(), 1.0)));
+        #     Period tenor(static_cast<Integer>(Rounding(0)(swapLength*12.0)),
+        #                  Months);
+        #     d = indexBase_->fixingCalendar().adjust(d);
+        #
+        # The ``365.25 * optionTime`` expression is only the SOLVER'S GUESS,
+        # not the answer. An earlier revision used it directly as the date, on
+        # the reasoning that PQuantLib "dispatches by Date, so no inversion is
+        # needed". Under Actual/365Fixed the true root is
+        # ``ref + 365 * optionTime``, so the guess is off by one day at
+        # optionTime = 4 and by five days at optionTime = 20 — pinned per day
+        # counter in tests/termstructures/volatility/swaption/
+        # test_gaussian1d_date_helper.py against
+        # migration-harness/references/v143/ts/datehelper.json.
+        """
+        from pquantlib.time.date import Date as _Date  # noqa: PLC0415
+
+        helper = DateHelper(self, option_time)
+        guess = 365.25 * option_time + float(self.reference_date().serial_number())
+        newton = NewtonSafe()
+        solved = newton.solve(helper, 0.1, guess, 1.0)
+        d = _Date(int(solved))
+        # C++ ``Rounding(0)`` defaults to Rounding::Closest (rounding.hpp:75-78),
+        # which is round-half-away-from-zero — NOT Python's banker's round().
+        tenor_months = int(ClosestRounding(0)(swap_length * 12.0))
+        tenor = Period(tenor_months, TimeUnit.Months)
+        d = self._swap_index_base.fixing_calendar().adjust(d)
+        return self.smile_section(d, tenor)
+
     def _volatility_impl(
         self,
         option_time: float,
@@ -190,23 +279,10 @@ class Gaussian1dSwaptionVolatility(SwaptionVolatilityStructure):
     ) -> float:
         """Black-implied vol at ``(option_time, swap_length, strike)``.
 
-        # C++ parity: gaussian1dswaptionvolatility.cpp:46-71.
-
-        Time -> Date inversion: the C++ uses a NewtonSafe over a
-        DateHelper functor. PQuantLib leverages the parent
-        ``SwaptionVolatilityStructure.option_date_from_tenor`` plumbing
-        for the floating-time -> Date conversion via a Period round-up
-        (consistent with how SwaptionVolatilityMatrix dispatches).
+        # C++ parity: ``volatilityImpl(Time, Time, Rate)``
+        # (gaussian1dswaptionvolatility.cpp:67-71) — the smile section from
+        # :meth:`_smile_section_from_times`, evaluated at ``strike``.
         """
-        # Round tenor (in years) up to the nearest month for Period
-        # reconstruction. C++ uses Rounding(0)(swap_length * 12.0).
-        tenor_months = round(swap_length * 12.0)
-        tenor = Period(tenor_months, TimeUnit.Months)
-        # Time -> Date via the parent class's calendar-aware advance.
-        ref = self.reference_date()
-        # Advance ref by ``option_time`` years; round to nearest day.
-        time_days = round(option_time * 365.25)
-        d = ref + time_days
-        d = self._swap_index_base.fixing_calendar().adjust(d)
-        section = self.smile_section(d, tenor)
-        return section.volatility(strike)
+        return self._smile_section_from_times(
+            option_time, swap_length
+        ).volatility(strike)

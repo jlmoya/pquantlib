@@ -59,6 +59,7 @@ at LOOSE tier.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Final
 
 import numpy as np
@@ -89,6 +90,37 @@ def abcd_value(t: float, a: float, b: float, c: float, d: float) -> float:
     if t < 0.0:
         return 0.0
     return (a + b * t) * float(np.exp(-c * t)) + d
+
+
+def abcd_black_volatility(
+    u: float, a: float, b: float, c: float, d: float
+) -> float:
+    """Average (Black) volatility over ``[0, u]`` of the ``u``-fixing rate.
+
+    # C++ parity: ``abcdBlackVolatility`` (abcd.hpp:105-108)::
+    #
+    #     AbcdFunction model(a,b,c,d);
+    #     return model.volatility(0., u, u);
+    #
+    # i.e. ``sqrt( integral_0^u f(u-s)^2 ds / u )``, NOT the instantaneous
+    # ``f(u)``. This is what ``AbcdCalibration::value`` (abcdcalibration.cpp:164)
+    # and therefore ``AbcdInterpolation::value`` (abcdinterpolation.hpp:126-130)
+    # return, and what the abcd fit matches against market Black vols.
+    #
+    # PQuantLib returned the instantaneous :func:`abcd_value` here instead. The
+    # two differ substantially — with the C++ default parameters at u = 0.25
+    # they are 0.1339 vs 0.1547 — so the calibration was fitting the wrong
+    # function to the market data. Pinned against C++ by
+    # tests/math/interpolations/test_abcd_error_formula.py.
+    """
+    # Local import: models/ sits above math/ in the layering, and
+    # abcd_function.py imports abcd_value from THIS module, so a module-level
+    # import would be circular.
+    from pquantlib.models.marketmodels.models.abcd_function import (  # noqa: PLC0415
+        AbcdFunction,
+    )
+
+    return AbcdFunction(a, b, c, d).volatility(0.0, u, u)
 
 
 def validate_abcd(a: float, b: float, c: float, d: float) -> None:
@@ -296,6 +328,33 @@ class AbcdInterpolation(Interpolation):
         w = w / total if total > 0.0 else np.ones(n, dtype=np.float64) / n
         return np.sqrt(w)
 
+    def _weights(self) -> np.ndarray:
+        """The normalised residual weights, as C++ builds them.
+
+        # C++ parity: ``AbcdCalibration``'s ``weights_`` (abcdcalibration.cpp:72)
+        # default to a FLAT ``1/n``; ``compute()`` replaces them with the
+        # normalised vega weights when ``vegaWeighted`` (cpp:102-114).
+        # ``AbcdInterpolation`` reports the calibrator's ``error()`` /
+        # ``maxError()`` verbatim (abcdinterpolation.hpp:122-123), so the flat
+        # ``1/n`` is load-bearing here too.
+        """
+        n = int(self._xs.shape[0])
+        if not self._vega_weighted:
+            return np.full(n, 1.0 / n, dtype=np.float64)
+        sqrt_w = self._vega_weights()
+        return np.asarray(sqrt_w * sqrt_w, dtype=np.float64)
+
+    def _raw_residuals(
+        self, params: tuple[float, float, float, float]
+    ) -> np.ndarray:
+        """Unweighted ``model(t_i) - market_i``. C++ ``value(t_i) - blackVols_i``."""
+        a, b, c, d = params
+        model = np.array(
+            [abcd_black_volatility(float(t), a, b, c, d) for t in self._xs],
+            dtype=np.float64,
+        )
+        return model - self._ys
+
     def _residuals(self, free_params: np.ndarray) -> np.ndarray:
         params = list(self._initial)
         j = 0
@@ -311,7 +370,7 @@ class AbcdInterpolation(Interpolation):
         if a + d < 0.0:
             a = -d
         model = np.array(
-            [abcd_value(float(t), a, b, c, d) for t in self._xs],
+            [abcd_black_volatility(float(t), a, b, c, d) for t in self._xs],
             dtype=np.float64,
         )
         r = model - self._ys
@@ -345,10 +404,10 @@ class AbcdInterpolation(Interpolation):
             lower.append(0.0)
             upper.append(np.inf)
         if not free_initial:
-            r = self._residuals(np.array([], dtype=np.float64))
-            self._update_diagnostics(r)
-            self._converged = True
+            # C++ parity: abcdcalibration.cpp:117-122 — nothing to optimise.
             self._a, self._b, self._c, self._d = self._initial
+            self._update_diagnostics()
+            self._converged = True
             return
         result: Any = least_squares(  # pyright: ignore[reportUnknownVariableType]
             self._residuals,
@@ -378,19 +437,31 @@ class AbcdInterpolation(Interpolation):
         self._converged = bool(
             result.success  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         )
-        self._update_diagnostics(
-            np.asarray(
-                result.fun,  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-                dtype=np.float64,
-            )
-        )
+        self._update_diagnostics()
 
-    def _update_diagnostics(self, residuals: np.ndarray) -> None:
-        if residuals.size == 0:
+    def _update_diagnostics(self) -> None:
+        """Recompute ``error_`` / ``maxError_`` at the stored parameters.
+
+        # C++ parity: ``AbcdInterpolation`` publishes the calibrator's numbers
+        # unchanged — ``coeffs().error_`` / ``maxError_``
+        # (abcdinterpolation.hpp:196-197) are assigned from
+        # ``abcdCalibrator_->error()`` / ``->maxError()`` (hpp:122-123), i.e.
+        # ``sqrt(n * sum_i w_i e_i^2 / (n-1))`` and the UNWEIGHTED
+        # ``max_i |e_i|`` (abcdcalibration.cpp:179-196).
+        #
+        # Note the ``n - 1`` denominator: this is NOT ``sqrt(mean(e^2))``.
+        """
+        residuals = self._raw_residuals(
+            (self._a, self._b, self._c, self._d)
+        )
+        n = residuals.size
+        if n == 0:
             self._rms_error = 0.0
             self._max_error = 0.0
             return
-        self._rms_error = float(np.sqrt(np.mean(residuals * residuals)))
+        w = self._weights()
+        squared = float(np.sum(residuals * residuals * w))
+        self._rms_error = math.sqrt(n * squared / (1 if n == 1 else n - 1))
         self._max_error = float(np.max(np.abs(residuals)))
 
     # --- public API ------------------------------------------------------
@@ -427,7 +498,12 @@ class AbcdInterpolation(Interpolation):
         return self._coeffs
 
     def _value(self, x: float) -> float:
-        return abcd_value(x, self._a, self._b, self._c, self._d)
+        # C++ parity: ``AbcdInterpolation::Impl::value`` (abcdinterpolation.hpp:
+        # 126-130) forwards to ``abcdCalibrator_->value(x)``, which is
+        # ``abcdBlackVolatility`` — the AVERAGE vol over [0, x], not the
+        # instantaneous f(x).
+        qassert.require(x >= 0.0, f"time must be non negative: {x} not allowed")
+        return abcd_black_volatility(x, self._a, self._b, self._c, self._d)
 
 
 class Abcd:
@@ -501,6 +577,7 @@ __all__ = [
     "Abcd",
     "AbcdCoeffHolder",
     "AbcdInterpolation",
+    "abcd_black_volatility",
     "abcd_value",
     "validate_abcd",
 ]

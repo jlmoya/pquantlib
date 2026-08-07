@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import numpy as np
+import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.indexes.ibor.euribor import Euribor
+from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.volatility.capfloor.cap_floor_term_vol_curve import (
     CapFloorTermVolCurve,
@@ -31,6 +35,28 @@ from pquantlib.time.time_unit import TimeUnit
 
 def _eval_date() -> Date:
     return Date.from_ymd(15, Month.June, 2026)
+
+
+@pytest.fixture(autouse=True)
+def _pinned_evaluation_date() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Pin the global evaluation date to this module's surface reference date.
+
+    The caps that OptionletStripper2 prices are built off
+    ``Settings::instance().evaluationDate()`` (makevanillaswap.cpp:67, reached
+    through ``MakeCapFloor``), NOT off the term-vol surface's reference date.
+    Without this pin the whole module was wall-clock dependent — it happened to
+    pass only because the two dates coincided on the day it was written. The
+    same fixture already guards ``test_optionlet_stripper_1.py:46-64``. No
+    expected value changes: 15 June 2026 is a TARGET business day, so
+    ``fixingCalendar().adjust()`` is a no-op and the schedules are unmoved.
+    """
+    settings = ObservableSettings()
+    previous = settings.evaluation_date
+    settings.evaluation_date = _eval_date()
+    try:
+        yield
+    finally:
+        settings.evaluation_date = previous
 
 
 def _setup_pair() -> tuple[OptionletStripper1, CapFloorTermVolCurve]:

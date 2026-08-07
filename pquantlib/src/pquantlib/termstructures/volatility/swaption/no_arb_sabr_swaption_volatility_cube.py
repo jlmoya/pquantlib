@@ -179,11 +179,14 @@ class NoArbSabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
             vega_weighted_smile_fit: same as
             :class:`SwaptionVolatilityCube`.
         no_arb_sabr_initial_guess: optional outer list shape
-            ``(n_option_tenors x n_swap_tenors) x 4`` of initial
-            ``(alpha, beta, nu, rho)`` quadruples. If ``None``, each cell
-            uses :class:`NoArbSabrInterpolation`'s default initial guess.
+            ``n_option_tenors x n_swap_tenors``, each cell an
+            ``(alpha, beta, nu, rho)`` quadruple of floats or
+            :class:`Quote` objects. If ``None``, each cell uses
+            :class:`NoArbSabrInterpolation`'s default initial guess.
         is_parameter_fixed: 4-element ``(alpha_fixed, beta_fixed,
             nu_fixed, rho_fixed)`` mask shared across grid cells.
+        backward_flat / cutoff_strike: C++ ``backwardFlat`` /
+            ``cutoffStrike``; see :class:`XabrSwaptionVolatilityCube`.
     """
 
     def __init__(
@@ -198,11 +201,13 @@ class NoArbSabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
         short_swap_index_base: SwapIndex | AtmSwapIndexProtocol,
         vega_weighted_smile_fit: bool = False,
         no_arb_sabr_initial_guess: (
-            Sequence[Sequence[tuple[float, float, float, float]]] | None
+            Sequence[Sequence[Sequence[float] | Sequence[Quote]]] | None
         ) = None,
         is_parameter_fixed: tuple[bool, bool, bool, bool] = (
             False, False, False, False,
         ),
+        backward_flat: bool = False,
+        cutoff_strike: float = 0.0001,
     ) -> None:
         super().__init__(
             model_kind=XabrModelKind.NOARB_SABR,
@@ -216,6 +221,8 @@ class NoArbSabrSwaptionVolatilityCube(XabrSwaptionVolatilityCube):
             vega_weighted_smile_fit=vega_weighted_smile_fit,
             initial_guess=no_arb_sabr_initial_guess,
             is_parameter_fixed=is_parameter_fixed,
+            backward_flat=backward_flat,
+            cutoff_strike=cutoff_strike,
         )
 
     def no_arb_sabr_parameters(

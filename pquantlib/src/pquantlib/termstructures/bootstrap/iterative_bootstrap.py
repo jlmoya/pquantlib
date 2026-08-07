@@ -1,12 +1,10 @@
 """IterativeBootstrap — generic piecewise-term-structure bootstrapper.
 
-# C++ parity: ql/termstructures/iterativebootstrap.hpp (v1.42.1) — the
+# C++ parity: ql/termstructures/iterativebootstrap.hpp (v1.43) — the
    ``IterativeBootstrap<Curve>`` template that drives the per-pillar
    Brent root-find used by ``PiecewiseYieldCurve`` /
-   ``PiecewiseZeroInflationCurve`` / ``PiecewiseYoYInflationCurve``.
-
-Closes the L2-B carve-out (yield bootstrap) and the L7-Bb carve-out
-(inflation bootstrap) — both share the same algorithm.
+   ``PiecewiseDefaultCurve`` / ``PiecewiseZeroInflationCurve`` /
+   ``PiecewiseYoYInflationCurve``.
 
 Design notes (Python-specific):
 
@@ -16,30 +14,34 @@ Design notes (Python-specific):
 - The C++ template knows about ``Curve::Traits`` because the template
   parameter is the curve type. In Python, we make ``Traits`` a separate
   type parameter so the trait class can be plugged in at call site
-  (Zero / YoY / Survival / Hazard / etc.).
-- The curve must satisfy ``BootstrapCurveProtocol`` (a small surface of
-  data/time/interpolation mutators). The protocol is structural so any
-  Piecewise curve subclass that exposes the right methods will work
-  without an explicit ``isinstance`` check.
+  (Zero / YoY / Survival / Hazard / Discount / ...).
+- The curve must satisfy ``BootstrapCurveProtocol``. The protocol is
+  structural so any Piecewise curve subclass that exposes the right
+  methods will work without an explicit ``isinstance`` check.
 
-The algorithm (mirroring C++ ``IterativeBootstrap::calculate``):
+The algorithm (mirroring C++ ``IterativeBootstrap::initialize`` +
+``::calculate``):
 
-1. Sort instruments by pillar date.
-2. Build the (n+1) dates/times/data grid: pillar 0 is the curve base
-   date with ``traits.initial_value(curve)``; pillar i+1 is
-   ``instruments[i].pillar_date()`` with ``traits.guess(i+1, data,
-   valid_data=False)`` as initial guess.
+1. Sort instruments by pillar date and skip the expired ones — the first
+   surviving index is ``firstAliveHelper`` (iterativebootstrap.hpp:164-167).
+2. Build the (alive+1) dates/times/data grid: pillar 0 is the curve base
+   date, and EVERY data slot is seeded with ``traits.initial_value(curve)``
+   (iterativebootstrap.hpp:213-217 — the seed is not a ``guess`` call).
 3. Wire each helper to the curve.
-4. Run the per-iteration Brent loop, solving each pillar's data slot
-   such that the corresponding helper's ``quote_error()`` reaches zero.
+4. Outer loop: for each pillar i, take the bracket from
+   ``traits.min_value_after`` / ``max_value_after``, the start point from
+   ``traits.guess``, and Brent-solve ``helper.quote_error() == 0``.
 5. After each pillar solve, ``traits.update_guess(data, level, i)``
    installs the solution.
-6. After every pillar passes once, the loop exits (non-global
-   interpolators) or repeats until ``improvement <= accuracy`` (global
-   interpolators).
+6. Repeat until ``improvement <= accuracy``.
 
-The Brent solver from L1-C is used for the per-pillar root find; the
-bracket is given by ``traits.min_value_after`` / ``max_value_after``.
+The interpolation is extended ONE NODE AT A TIME on the first pass
+(iterativebootstrap.hpp:296-311) and stays scoped to nodes ``0..i`` for
+the whole of pillar ``i``'s root-find, because ``error()`` only calls
+``interpolation_.update()`` (iterativebootstrap.hpp:313-317). That scoping is
+observable: the trait ``guess`` for pillar ``i`` reads the curve at
+``t_i``, which is an extrapolation off nodes ``0..i-1``, not a lookup of
+the not-yet-solved node ``i``.
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from pquantlib import qassert
+from pquantlib.daycounters.day_counter import DayCounter
 from pquantlib.math.solvers1d.brent import Brent
 from pquantlib.termstructures.bootstrap_helper import BootstrapHelper
 from pquantlib.time.date import Date
@@ -58,7 +61,7 @@ class BootstrapCurveProtocol(Protocol):
     """Structural surface a curve must expose for ``IterativeBootstrap``.
 
     The curve is mutated in place during the bootstrap: ``data_live()``
-    returns the live ``_data`` array (NOT a defensive copy — must aliase
+    returns the live ``_data`` array (NOT a defensive copy — must alias
     the curve's internal storage), ``set_data_at(i, level)`` updates
     a single pillar, and ``refresh_interpolation_through(i)`` rebuilds
     the underlying interpolation over the first ``i + 1`` nodes.
@@ -66,12 +69,16 @@ class BootstrapCurveProtocol(Protocol):
     Note: ``data_live`` is distinct from the public ``data()`` accessor
     (which returns a defensive copy per the interpolated-curve API).
     The bootstrap *must* see the live array so trait ``update_guess``
-    writes through to curve state.
+    writes through to curve state; the traits, mirroring C++'s
+    ``c->data()``, read the public accessor.
     """
 
     def reference_date(self) -> Date: ...
     def base_date(self) -> Date: ...
+    def day_counter(self) -> DayCounter: ...
     def times(self) -> list[float]: ...
+    def dates(self) -> list[Date]: ...
+    def data(self) -> list[float]: ...
     def data_live(self) -> list[float]: ...
     def set_data_at(self, i: int, level: float) -> None: ...
     def refresh_interpolation_through(self, up_to: int) -> None: ...
@@ -100,21 +107,48 @@ class BootstrapTraitsProtocol[TS](Protocol):
     """Structural surface a traits class must expose.
 
     Mirrors the C++ ``Traits`` template parameter (e.g.
-    ``ZeroInflationTraits`` / ``YoYInflationTraits`` /
-    ``Discount`` / ``ZeroYield`` / ``ForwardRate``).
+    ``ZeroInflationTraits`` / ``YoYInflationTraits`` / ``Discount`` /
+    ``ZeroYield`` / ``ForwardRate`` / ``SimpleZeroYield`` /
+    ``SurvivalProbability``).
+
+    ``guess`` / ``min_value_after`` / ``max_value_after`` take the CURVE,
+    not a bare data list — C++ passes ``const C* c`` so the trait can read
+    ``c->times()``, ``c->data()``, ``c->dates()`` and call back into the
+    curve's rate accessors (bootstraptraits.hpp:62-102 and friends).
+    ``first_alive_helper`` is the index of the first non-expired helper;
+    the standard traits ignore it, but it is part of the signature.
     """
 
     def initial_date(self, ts: TS) -> Date: ...
     def initial_value(self, ts: TS) -> float: ...
-    def guess(self, i: int, data: list[float], valid_data: bool) -> float: ...
+    def guess(
+        self, i: int, c: TS, valid_data: bool, first_alive_helper: int
+    ) -> float: ...
     def min_value_after(
-        self, i: int, data: list[float], valid_data: bool
+        self, i: int, c: TS, valid_data: bool, first_alive_helper: int
     ) -> float: ...
     def max_value_after(
-        self, i: int, data: list[float], valid_data: bool
+        self, i: int, c: TS, valid_data: bool, first_alive_helper: int
     ) -> float: ...
     def update_guess(self, data: list[float], level: float, i: int) -> None: ...
     def max_iterations(self) -> int: ...
+
+
+@runtime_checkable
+class TransformingBootstrapTraitsProtocol[TS](BootstrapTraitsProtocol[TS], Protocol):
+    """Traits that additionally map to/from an unconstrained variable.
+
+    # C++ parity: ``Traits::transformDirect`` / ``transformInverse``.
+    # Required by ``GlobalBootstrap`` (globalbootstrap.hpp:101-103, 371,
+    # 383), which optimises over the unconstrained image of the curve
+    # values. The yield traits (bootstraptraits.hpp) and the inflation
+    # traits (inflationtraits.hpp:105-112) define them; the credit
+    # probability traits (probabilitytraits.hpp) deliberately do not, so
+    # they are split out of the base protocol rather than forced onto it.
+    """
+
+    def transform_direct(self, x: float, i: int, c: TS) -> float: ...
+    def transform_inverse(self, x: float, i: int, c: TS) -> float: ...
 
 
 class IterativeBootstrap[TS, Traits]:
@@ -149,21 +183,37 @@ class IterativeBootstrap[TS, Traits]:
         self._traits: Traits = traits
         self._accuracy: float = accuracy
         self._valid_curve: bool = False
+        # C++ parity: ``firstAliveHelper_`` / ``alive_``
+        # (iterativebootstrap.hpp:118). Filled in by ``_initialize``.
+        self._first_alive_helper: int = 0
+        self._alive: int = len(instruments)
 
     # -- setup ------------------------------------------------------------
 
     def _initialize(self, curve: Any, traits: Any) -> None:
-        """Sort the helpers, build the pillar grid, and size the curve.
+        """Sort the helpers, skip expired ones, build the grid, size the curve.
 
         # C++ parity: ``IterativeBootstrap::initialize`` at
-        # iterativebootstrap.hpp:158-221.
+        # iterativebootstrap.hpp:155-220.
         """
         n = len(self._instruments)
         self._instruments.sort(key=lambda h: h.pillar_date())
 
-        dates: list[Date] = [traits.initial_date(curve)]
-        times: list[float] = [curve.time_from_reference(dates[0])]
-        data: list[float] = [traits.initial_value(curve)]
+        first_date: Date = traits.initial_date(curve)
+        # C++ parity: iterativebootstrap.hpp:161-163.
+        qassert.require(
+            self._instruments[n - 1].pillar_date() > first_date,
+            "all instruments expired",
+        )
+        # C++ parity: iterativebootstrap.hpp:164-167 — skip expired helpers.
+        first_alive = 0
+        while self._instruments[first_alive].pillar_date() <= first_date:
+            first_alive += 1
+        self._first_alive_helper = first_alive
+        self._alive = n - first_alive
+
+        dates: list[Date] = [first_date]
+        times: list[float] = [curve.time_from_reference(first_date)]
 
         # C++ seeds ``maxDate`` with the first grid date and grows it to the
         # furthest date any helper actually needs, then writes it onto the
@@ -171,29 +221,29 @@ class IterativeBootstrap[TS, Traits]:
         # helper's latest relevant date does — an OIS helper with a payment
         # lag pillars at its accrual end but still reads the curve at the
         # payment date.
-        max_date: Date = dates[0]
+        max_date: Date = first_date
 
-        for i, helper in enumerate(self._instruments):
+        for j in range(first_alive, n):
+            helper = self._instruments[j]
             pillar = helper.pillar_date()
             dates.append(pillar)
             times.append(curve.time_from_reference(pillar))
-            data.append(traits.guess(i + 1, data, valid_data=False))
 
-            # Pillar uniqueness — C++ parity iterativebootstrap.hpp:189-190.
+            # Pillar uniqueness — C++ parity iterativebootstrap.hpp:189-191.
             # Compared against the previous *grid* entry, so a helper whose
             # pillar lands on the curve's own base date is caught too.
             qassert.require(
-                dates[i] != dates[i + 1],
+                dates[-2] != dates[-1],
                 f"more than one instrument with pillar {pillar}",
             )
 
             # Helpers sorted by pillar must also be sorted by latest relevant
             # date — otherwise a helper does not extend the curve at all.
-            # C++ parity: iterativebootstrap.hpp:192-200.
+            # C++ parity: iterativebootstrap.hpp:193-201.
             latest_relevant_date = helper.latest_relevant_date()
             qassert.require(
                 latest_relevant_date > max_date,
-                f"{i + 1}th instrument (pillar: {pillar}) has "
+                f"{j + 1}th instrument (pillar: {pillar}) has "
                 f"latestRelevantDate ({latest_relevant_date}) before or equal "
                 f"to previous instrument's latestRelevantDate ({max_date})",
             )
@@ -205,13 +255,19 @@ class IterativeBootstrap[TS, Traits]:
             # check in ``calculate`` always compares against the previous
             # pass — so the loop is unconditionally run. Nothing to force.
 
+        # C++ parity: iterativebootstrap.hpp:213-217 — every data slot is
+        # seeded with ``Traits::initialValue(ts_)``, NOT with ``guess``.
+        # Only ``data[0]`` is meaningful; the rest just have to be numbers
+        # the interpolator's early checks will accept.
+        data: list[float] = [traits.initial_value(curve)] * len(dates)
+
         curve.bootstrap_install_grid(dates, times, data)
         # C++ parity: iterativebootstrap.hpp:209 — ``ts_->maxDate_ = maxDate``.
         curve.set_max_date(max_date)
 
-        # Wire helpers. C++ parity: iterativebootstrap.hpp:236-245.
-        for i in range(n):
-            self._instruments[i].set_term_structure(curve)
+        # Wire helpers. C++ parity: iterativebootstrap.hpp:234-245.
+        for j in range(first_alive, n):
+            self._instruments[j].set_term_structure(curve)
 
     # -- main entry -------------------------------------------------------
 
@@ -219,16 +275,8 @@ class IterativeBootstrap[TS, Traits]:
         """Run the iterative Brent loop until convergence (or maxIterations).
 
         # C++ parity: ``IterativeBootstrap::calculate`` at
-        # iterativebootstrap.hpp:184-368. Algorithm:
-        # 1. Sort helpers by pillar date; check pillar uniqueness.
-        # 2. Build dates/times/data arrays (n + 1 each, with pillar 0 = base),
-        #    accumulate the curve's max date, and wire each helper to it.
-        # 3. Outer loop: for each pillar i in 1..n, Brent-solve for
-        #    ``data[i]`` s.t. helper[i-1].quote_error() == 0.
-        # 4. Repeat until either non-global interpolator (no second pass
-        #    needed) or improvement <= accuracy.
+        # iterativebootstrap.hpp:222-389.
         """
-        n = len(self._instruments)
         # Duck-typed curve view — see class docstring on TS being purely
         # for caller-side typing; we treat the curve as an Any internally
         # because pyright cannot prove a TypeVar bound at construction time.
@@ -236,9 +284,11 @@ class IterativeBootstrap[TS, Traits]:
         traits: Any = self._traits
 
         self._initialize(curve, traits)
+        alive = self._alive
+        first_alive = self._first_alive_helper
 
         # Steps 3-4 — outer iteration loop.
-        # C++ parity: iterativebootstrap.hpp:229-368.
+        # C++ parity: iterativebootstrap.hpp:257-387.
         max_iterations = traits.max_iterations()
         brent = Brent()
 
@@ -246,43 +296,51 @@ class IterativeBootstrap[TS, Traits]:
             # Snapshot the previous pass's solved values (defensive copy).
             previous_data = list(curve.data_live())
 
-            # Per-pillar inner loop.
-            for i in range(1, n + 1):
-                instrument = self._instruments[i - 1]
+            # Per-pillar inner loop. C++ parity: iterativebootstrap.hpp:266.
+            for i in range(1, alive + 1):
+                instrument = self._instruments[first_alive + i - 1]
                 # Live alias — trait update writes through.
                 live_data = curve.data_live()
                 valid_data = self._valid_curve or iteration > 0
 
-                # Compute the initial guess.
-                if valid_data:
-                    guess = live_data[i]
-                elif i == 1:
-                    guess = traits.guess(i, live_data, valid_data=False)
-                else:
-                    guess = live_data[i - 1]
+                # Bracket first: C++ takes min/max BEFORE the guess
+                # (iterativebootstrap.hpp:274-280) so the guess can be
+                # clamped into it.
+                min_v = traits.min_value_after(i, curve, valid_data, first_alive)
+                max_v = traits.max_value_after(i, curve, valid_data, first_alive)
+                guess = traits.guess(i, curve, valid_data, first_alive)
 
-                min_v = traits.min_value_after(i, live_data, valid_data)
-                max_v = traits.max_value_after(i, live_data, valid_data)
-                if guess <= min_v or guess >= max_v:
-                    guess = (min_v + max_v) / 2.0
+                # C++ parity: iterativebootstrap.hpp:289-293 — a guess outside
+                # the bracket is pulled a FIFTH of the way in, not recentred.
+                if guess >= max_v:
+                    guess = max_v - (max_v - min_v) / 5.0
+                elif guess <= min_v:
+                    guess = min_v + (max_v - min_v) / 5.0
 
                 # First pass: extend interpolation one node at a time so
-                # extrapolation never reaches an unsolved pillar.
-                if not self._valid_curve and iteration == 0:
+                # extrapolation never reaches an unsolved pillar. The extent
+                # stays at ``i`` for the whole of this pillar's root-find —
+                # C++ only calls ``interpolation_.update()`` inside ``error``
+                # (iterativebootstrap.hpp:296-317).
+                if not valid_data:
                     curve.refresh_interpolation_through(i)
+                    extent = i
+                else:
+                    extent = len(live_data) - 1
 
-                # The error function the Brent solver minimises.
+                # The error function the Brent solver drives to zero.
                 def error_fn(
                     x: float,
                     i: int = i,
                     h: BootstrapHelper[TS] = instrument,
                     c: Any = curve,
                     t: Any = traits,
+                    up_to: int = extent,
                 ) -> float:
                     # Live mutation — ``data_live`` returns the curve's
                     # internal ``_data`` list, not a defensive copy.
                     t.update_guess(c.data_live(), x, i)
-                    c.refresh_interpolation_through(len(c.data_live()) - 1)
+                    c.refresh_interpolation_through(up_to)
                     return h.quote_error()
 
                 root = brent.solve(error_fn, self._accuracy, guess, min_v, max_v)
@@ -295,11 +353,11 @@ class IterativeBootstrap[TS, Traits]:
             # For non-global interpolators (Linear / BackwardFlat / ...) one
             # pass suffices — no convergence loop. C++ checks
             # ``interpolator_.global()`` which is ``false`` for these.
-            # # C++ parity: iterativebootstrap.hpp:325-329.
+            # # C++ parity: iterativebootstrap.hpp:363-374.
             # PQuantLib LinearInterpolation is not global — break after pass 1.
             improvement = 0.0
             cur = curve.data_live()
-            for i in range(1, n + 1):
+            for i in range(1, alive + 1):
                 improvement = max(improvement, abs(cur[i] - previous_data[i]))
 
             if improvement <= self._accuracy:
@@ -311,3 +369,11 @@ class IterativeBootstrap[TS, Traits]:
             f"convergence not reached after {max_iterations} iterations; "
             f"accuracy = {self._accuracy}",
         )
+
+
+__all__ = [
+    "BootstrapCurveProtocol",
+    "BootstrapTraitsProtocol",
+    "IterativeBootstrap",
+    "TransformingBootstrapTraitsProtocol",
+]

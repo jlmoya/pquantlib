@@ -16,6 +16,7 @@ import pytest
 
 from pquantlib.daycounters.actual_365_fixed import Actual365Fixed
 from pquantlib.math.interpolations.bicubic_spline import BicubicSpline
+from pquantlib.math.interpolations.bilinear import BilinearInterpolation
 from pquantlib.math.interpolations.cubic_interpolation import (
     CubicNaturalSpline,
     MonotonicCubicNaturalSpline,
@@ -152,27 +153,42 @@ def test_surface_default_is_bilinear() -> None:
     tolerance.tight(v, 0.21)
 
 
-def test_surface_bicubic_off_pillar_differs_from_bilinear() -> None:
+def test_default_is_bicubic_and_bilinear_is_the_opt_in() -> None:
+    """The default matches C++; ``BilinearInterpolation`` is the deviation.
+
+    C++ hard-codes ``BicubicSpline`` (capfloortermvolsurface.cpp:186-193) and
+    has no interpolator parameter, so the kwarg is a PQuantLib extension. This
+    test used to run the other way round -- it asserted that the DEFAULT
+    differed from bicubic off-pillar, which is what a wrong default looks like
+    when it is written down as a requirement.
+    """
     inputs = _surface_inputs()
-    bilinear_surf = CapFloorTermVolSurface(**inputs)  # type: ignore[arg-type]
+    default_surf = CapFloorTermVolSurface(**inputs)  # type: ignore[arg-type]
     bicubic_surf = CapFloorTermVolSurface(**inputs, interpolator=BicubicSpline)  # type: ignore[arg-type]
-    # Sample multiple off-pillar (time, strike) points; at least one
-    # must show a measurable bicubic-vs-bilinear difference.
+    bilinear_surf = CapFloorTermVolSurface(
+        **inputs,  # pyright: ignore[reportArgumentType]
+        interpolator=BilinearInterpolation,
+    )
+
     d_18m = TARGET().advance_period(_ref_date(), Period(18, TimeUnit.Months))
     d_42m = TARGET().advance_period(_ref_date(), Period(42, TimeUnit.Months))
-    diffs: list[float] = []
-    for d in (d_18m, d_42m):
-        for k in (0.025, 0.035, 0.045):
-            diffs.append(
-                abs(
-                    bilinear_surf.volatility(d, k, extrapolate=True)
-                    - bicubic_surf.volatility(d, k, extrapolate=True)
-                )
-            )
-    # At least one off-pillar (time, strike) shows a non-trivial diff.
-    assert max(diffs) > 1e-7, (
-        f"bicubic and bilinear shouldn't agree at all off-pillar points "
-        f"(max diff {max(diffs):.3e})"
-    )
-    # All stay near (smooth surface).
-    assert max(diffs) < 0.05, "bicubic should stay near bilinear"
+    points = [(d, k) for d in (d_18m, d_42m) for k in (0.025, 0.035, 0.045)]
+
+    # The default IS bicubic, everywhere.
+    for d, k in points:
+        tolerance.exact(
+            default_surf.volatility(d, k, extrapolate=True),
+            bicubic_surf.volatility(d, k, extrapolate=True),
+        )
+
+    # And the opt-in bilinear is measurably different off-pillar, so the
+    # comparison above is not vacuous.
+    diffs = [
+        abs(
+            bilinear_surf.volatility(d, k, extrapolate=True)
+            - bicubic_surf.volatility(d, k, extrapolate=True)
+        )
+        for d, k in points
+    ]
+    assert max(diffs) > 1e-7
+    assert max(diffs) < 0.05

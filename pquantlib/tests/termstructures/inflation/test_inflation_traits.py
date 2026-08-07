@@ -1,10 +1,14 @@
 """Tests for ZeroInflationTraits + YoYInflationTraits.
 
-# C++ parity: ql/termstructures/inflation/inflationtraits.hpp (v1.42.1).
+# C++ parity: ql/termstructures/inflation/inflationtraits.hpp (v1.43).
 
 Constants and trait-algebra behaviour are compared against C++ probe
 values from `migration-harness/references/cluster/l7b.json` (`traits`
 key) and against documented C++ formulas.
+
+``guess`` / ``min_value_after`` / ``max_value_after`` take the CURVE, as
+C++ does (``const C* c``), plus the trailing ``firstAliveHelper`` index;
+:class:`_StubCurve` supplies the one accessor these traits read.
 """
 
 from __future__ import annotations
@@ -42,6 +46,16 @@ _HARNESS_REF = (
 
 def _load_ref() -> dict[str, object]:
     return json.loads(_HARNESS_REF.read_text())
+
+
+class _StubCurve:
+    """Minimal stand-in for ``const C* c`` — the inflation traits read data() only."""
+
+    def __init__(self, data: list[float]) -> None:
+        self._data = data
+
+    def data(self) -> list[float]:
+        return self._data
 
 
 # ---- constants match the C++ probe ----------------------------------
@@ -94,38 +108,38 @@ def test_zero_initial_value_returns_avg_inflation() -> None:
 def test_zero_guess_returns_data_i_when_valid() -> None:
     """C++ parity: ``valid_data`` ⇒ guess(i, data, true) == data[i]."""
     t = ZeroInflationTraits()
-    data = [0.02, 0.03, 0.04, 0.05]
-    exact(t.guess(2, data, valid_data=True), 0.04)
+    c = _StubCurve([0.02, 0.03, 0.04, 0.05])
+    exact(t.guess(2, c, True, 0), 0.04)
     # And the AVG_INFLATION fallback for non-valid data.
-    exact(t.guess(2, data, valid_data=False), AVG_INFLATION)
+    exact(t.guess(2, c, False, 0), AVG_INFLATION)
 
 
 def test_zero_min_max_value_after_no_valid_data() -> None:
     """Without valid prior data, bounds = ±MAX_INFLATION."""
     t = ZeroInflationTraits()
-    data = [0.0, 0.0]
-    exact(t.min_value_after(1, data, valid_data=False), -MAX_INFLATION)
-    exact(t.max_value_after(1, data, valid_data=False), MAX_INFLATION)
+    c = _StubCurve([0.0, 0.0])
+    exact(t.min_value_after(1, c, False, 0), -MAX_INFLATION)
+    exact(t.max_value_after(1, c, False, 0), MAX_INFLATION)
 
 
 def test_zero_min_max_value_after_valid_data_all_positive() -> None:
     """Positive data → min/2, max*2 — # C++ parity inflationtraits.hpp."""
     t = ZeroInflationTraits()
-    data = [0.02, 0.03, 0.025, 0.022]
+    c = _StubCurve([0.02, 0.03, 0.025, 0.022])
     # min over [0.02, 0.03, 0.025, 0.022] = 0.02 → halve to 0.01.
-    tight(t.min_value_after(2, data, valid_data=True), 0.01)
+    tight(t.min_value_after(2, c, True, 0), 0.01)
     # max = 0.03 → double to 0.06.
-    tight(t.max_value_after(2, data, valid_data=True), 0.06)
+    tight(t.max_value_after(2, c, True, 0), 0.06)
 
 
 def test_zero_min_max_value_after_valid_data_with_negative() -> None:
     """Negative data → flips the bound (r*2 if r<0, r/2 otherwise)."""
     t = ZeroInflationTraits()
-    data = [-0.01, 0.02, -0.03]
+    c = _StubCurve([-0.01, 0.02, -0.03])
     # min = -0.03 → r<0 → r*2 = -0.06.
-    tight(t.min_value_after(1, data, valid_data=True), -0.06)
+    tight(t.min_value_after(1, c, True, 0), -0.06)
     # max = 0.02 → r>0 → r*2 = 0.04.
-    tight(t.max_value_after(1, data, valid_data=True), 0.04)
+    tight(t.max_value_after(1, c, True, 0), 0.04)
 
 
 def test_zero_update_guess_propagates_to_data_zero_when_i_is_one() -> None:
@@ -200,8 +214,8 @@ def test_yoy_update_guess_does_not_propagate_to_data_zero() -> None:
 def test_yoy_guess_and_bounds_same_shape_as_zero() -> None:
     """YoY guess/min_value_after/max_value_after share the algebra with zero."""
     t = YoYInflationTraits()
-    data = [0.02, 0.03, 0.025]
-    exact(t.guess(2, data, valid_data=True), 0.025)
-    exact(t.guess(2, data, valid_data=False), AVG_INFLATION)
-    tight(t.min_value_after(1, data, valid_data=True), 0.01)
-    tight(t.max_value_after(1, data, valid_data=True), 0.06)
+    c = _StubCurve([0.02, 0.03, 0.025])
+    exact(t.guess(2, c, True, 0), 0.025)
+    exact(t.guess(2, c, False, 0), AVG_INFLATION)
+    tight(t.min_value_after(1, c, True, 0), 0.01)
+    tight(t.max_value_after(1, c, True, 0), 0.06)

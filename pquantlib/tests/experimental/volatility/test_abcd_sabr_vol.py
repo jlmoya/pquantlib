@@ -96,25 +96,34 @@ def test_abcd_atm_vol_curve_reproduces_input_vols_at_tenors() -> None:
         tolerance.tight(curve.atm_vol(tenor, True), vol_ref)
 
 
-def test_abcd_atm_vol_curve_fit_diverges_from_cpp_but_k_adjusted_vol_agrees() -> None:
-    """Documented divergence — scipy TRF and C++ projected-LM converge to
-    *different* (a, b, c, d) on this 6-data / 4-param abcd LSQ (this is the
-    same L10-C / Phase-9 divergence noted in the AbcdCalibration docstring;
-    the data are not exactly abcd-shaped so both stop at distinct local
-    minima). The k(t) adjustment makes the *final* ATM vol robust to that
-    choice: ``atm_vol(t) = k(t) * abcd(t)`` reproduces the inputs at the
-    knots exactly and matches C++ between the knots to ~1e-4.
+def test_abcd_atm_vol_curve_fit_matches_cpp() -> None:
+    """The raw abcd parameters now reproduce C++'s.
+
+    An earlier revision asserted the OPPOSITE — that the two fits diverge by
+    more than 1e-3 — attributing it to scipy TRF and C++ projected-LM finding
+    different local minima. The real cause was ``AbcdCalibration.value``
+    returning the instantaneous ``abcd_value`` instead of
+    ``abcdBlackVolatility`` (abcdcalibration.cpp:163-165 -> abcd.hpp:105-108),
+    so the port was fitting a different function altogether. With that fixed
+    the two agree to 7.3e-7 absolute.
+
+    Tolerance: 1e-5 ABSOLUTE, looser than LOOSE (1e-8 rel). Derivation: two
+    different optimisers stopping at the same minimum of a locally quadratic
+    cost; the measured worst-case gap across the four parameters is 7.3e-7,
+    and ``d`` fits to ~2e-16 where a relative bound is meaningless.
     """
     curve = _build_abcd()
-    # The raw abcd parameters need NOT match the C++ values — assert the
-    # divergence is real (Python's recovered params are observably
-    # different from C++'s).
-    cpp_params = (_ABCD["a"], _ABCD["b"], _ABCD["c"], _ABCD["d"])
-    py_params = (curve.a(), curve.b(), curve.c(), curve.d())
-    max_param_gap = max(abs(p - q) for p, q in zip(py_params, cpp_params, strict=True))
-    assert max_param_gap > 1.0e-3, "expected the abcd fits to diverge"
-    # The Python fit is self-consistent: it reproduces the input ATM vols
-    # at the included knots to a tight residual floor.
+    for got, expected, name in (
+        (curve.a(), _ABCD["a"], "a"),
+        (curve.b(), _ABCD["b"], "b"),
+        (curve.c(), _ABCD["c"], "c"),
+        (curve.d(), _ABCD["d"], "d"),
+    ):
+        tolerance.custom(
+            got, float(expected), abs_tol=1e-5, rel_tol=0.0,
+            reason=f"{name}: scipy TRF vs C++ LM at the same minimum",
+        )
+    # The k(t) adjustment still reproduces the input ATM vols at the knots.
     for tenor, vol_ref in zip(_abcd_tenors(), _ABCD["input_vols"], strict=True):
         tolerance.custom(
             curve.atm_vol(tenor, True), vol_ref,
@@ -125,14 +134,12 @@ def test_abcd_atm_vol_curve_fit_diverges_from_cpp_but_k_adjusted_vol_agrees() ->
 
 def test_abcd_atm_vol_curve_interpolated_4y() -> None:
     curve = _build_abcd()
-    # The interpolated 4Y vol matches C++ to ~1e-4 despite the divergent
-    # (a, b, c, d): the k-adjustment + abcd shape between knots is nearly
-    # fit-invariant. LOOSE (1e-8) is too tight for an optimizer-output
-    # comparison; we use a custom 1e-4 buffer.
+    # Between the knots the vol carries the abcd fit directly, so it inherits
+    # the ~7e-7 parameter gap derived in test_abcd_atm_vol_curve_fit_matches_cpp.
     tolerance.custom(
         curve.atm_vol(Period(4, TimeUnit.Years), True), _ABCD["interp_vol_4y"],
-        abs_tol=1.0e-4, rel_tol=1.0e-4,
-        reason="scipy-TRF vs C++-LM abcd fit diverge; k-adjusted vol agrees ~1e-4",
+        abs_tol=1.0e-6, rel_tol=1.0e-6,
+        reason="inherits the optimiser-gap bound on (a, b, c, d)",
     )
 
 
