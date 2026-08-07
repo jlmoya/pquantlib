@@ -1,10 +1,13 @@
-"""Tests for FdBlackScholesVanillaEngine (1-D FD BSM vanilla engine).
+"""Structural tests for FdBlackScholesVanillaEngine (1-D FD BSM vanilla engine).
 
 # C++ parity: ql/pricingengines/vanilla/fdblackscholesvanillaengine.{hpp,cpp}
-# @ v1.42.1.
+# @ v1.43.
 
-Cross-validates against the ``fd_european`` and ``fd_american``
-sections of ``migration-harness/references/cluster/l5d.json``.
+Convergence checks against the ``fd_european`` / ``fd_american`` sections of
+``migration-harness/references/cluster/l5d.json``. The *exact* C++ v1.43
+cross-validation — every constructor overload, both cash-dividend models, the
+quanto branch and all four Greeks — lives in
+``pquantlib/tests/pricingengines/vanilla/test_pe_fdbs_v143.py``.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from pquantlib.exceptions import LibraryException
 from pquantlib.exercise import AmericanExercise, BermudanExercise, EuropeanExercise
 from pquantlib.instruments.vanilla_option import VanillaOption
 from pquantlib.methods.finitedifferences.schemes.fdm_scheme_desc import FdmSchemeDesc
-from pquantlib.payoffs import OptionType, PlainVanillaPayoff
+from pquantlib.payoffs import NullPayoff, OptionType, PlainVanillaPayoff
 from pquantlib.pricingengines.vanilla.analytic_european_engine import (
     AnalyticEuropeanEngine,
 )
@@ -249,31 +252,64 @@ def test_american_put_npv_approximates_cpp_reference(reference_data: dict[str, A
 # --- Edge cases -----------------------------------------------------------
 
 
+def test_engine_prices_bermudan_exercise() -> None:
+    """Bermudan exercise is supported.
+
+    C++ routes it through ``FdmStepConditionComposite::vanillaComposite``,
+    which accepts European, American and Bermudan and rejects anything else.
+    An earlier revision of this port raised for Bermudan; that carve-out is
+    gone. The Bermudan price must sit between the European and the American.
+    """
+    process, expiry = _build_process_and_expiry()
+    payoff = PlainVanillaPayoff(OptionType.Put, 100.0)
+    ref_date = process.risk_free_rate().reference_date()
+    mid = ref_date + 182
+
+    def npv(exercise: object) -> float:
+        opt = VanillaOption(payoff, exercise)  # pyright: ignore[reportArgumentType]
+        opt.set_pricing_engine(
+            FdBlackScholesVanillaEngine(process, t_grid=100, x_grid=100)
+        )
+        return opt.npv()
+
+    european = npv(EuropeanExercise(expiry))
+    bermudan = npv(BermudanExercise([mid, expiry]))
+    american = npv(AmericanExercise(ref_date, expiry))
+    assert european < bermudan < american
+
+
 def test_engine_rejects_non_striked_payoff() -> None:
-    """Non-StrikedTypePayoff must fail validation."""
+    """A non-striked payoff raises instead of dereferencing null.
 
+    C++ ``calculate()`` does ``dynamic_pointer_cast<StrikedTypePayoff>`` with no
+    ``QL_REQUIRE`` and then calls ``payoff->strike()``, i.e. it has undefined
+    behaviour here. The port raises, which cannot change any value C++ would
+    have returned.
+    """
     process, expiry = _build_process_and_expiry()
-    # We don't actually have a non-striked payoff to test with, so we'll
-    # test the engine on a Bermudan exercise which is currently unsupported.
-    # (The L5-D scope supports European + American only.)
-
-    payoff = PlainVanillaPayoff(OptionType.Call, 100.0)
-    bermudan_ex = BermudanExercise([expiry])
-    opt = VanillaOption(payoff, bermudan_ex)
-    opt.set_pricing_engine(FdBlackScholesVanillaEngine(process))
+    engine = FdBlackScholesVanillaEngine(process, t_grid=20, x_grid=20)
+    args = engine.get_arguments()
+    args.payoff = NullPayoff()
+    args.exercise = EuropeanExercise(expiry)
     with pytest.raises(LibraryException):
-        opt.npv()
+        engine.calculate()
 
 
-def test_engine_additional_results_populated() -> None:
+def test_engine_reports_no_additional_results() -> None:
+    """C++ leaves ``results_.additionalResults`` empty for this engine.
+
+    An earlier revision of this port populated it with spot / strike / grid
+    diagnostics. That was invention, not parity: ``calculate()`` in
+    fdblackscholesvanillaengine.cpp writes only value, delta, gamma and theta.
+    """
     process, expiry = _build_process_and_expiry()
     payoff = PlainVanillaPayoff(OptionType.Call, 100.0)
-    exercise = EuropeanExercise(expiry)
-    fd = VanillaOption(payoff, exercise)
-    engine = FdBlackScholesVanillaEngine(process, t_grid=50, x_grid=50, damping_steps=0)
-    fd.set_pricing_engine(engine)
-    _ = fd.npv()  # trigger calculate
-    extras = fd.additional_results()
-    assert extras["strike"] == 100.0
-    assert extras["spot"] == 100.0
-    assert extras["scheme"] == "CrankNicolsonType"
+    fd = VanillaOption(payoff, EuropeanExercise(expiry))
+    fd.set_pricing_engine(
+        FdBlackScholesVanillaEngine(process, t_grid=50, x_grid=50, damping_steps=0)
+    )
+    _ = fd.npv()
+    assert fd.additional_results() == {}
+    # ... and the four Greeks C++ does fill are all present.
+    for greek in (fd.delta(), fd.gamma(), fd.theta()):
+        assert isinstance(greek, float)

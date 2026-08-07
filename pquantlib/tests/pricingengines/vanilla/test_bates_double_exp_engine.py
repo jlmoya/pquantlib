@@ -1,4 +1,4 @@
-"""AnalyticBatesDoubleExpEngine tests — cross-validated against C++ reference.
+"""BatesDoubleExpEngine tests — cross-validated against C++ reference.
 
 Cross-validates against ``migration-harness/references/cluster/w1c.json``.
 
@@ -6,10 +6,25 @@ C++ parity: ql/pricingengines/vanilla/batesengine.{hpp,cpp}
             @ v1.42.1 (099987f0) — Gatheral form + double-exp CF
             add-on, Gauss-Laguerre order 144.
 
+
+NOTE (v1.43 wave): the tolerance rationale below used to read "pquantlib uses
+scipy.integrate.quad (QUADPACK adaptive) while C++ uses Gauss-Laguerre
+quadrature", and every engine assertion was LOOSE because of it. **That premise
+is stale.** ``AnalyticHestonEngine`` now carries a real port of
+``AnalyticHestonEngine::Integration`` and honours ``integration_order``, so this
+engine runs the SAME Gauss-Laguerre rule C++ does; no adaptive-vs-fixed
+quadrature gap remains. Every assertion here was re-run at TIGHT (1e-14 abs /
+1e-12 rel) against the unchanged reference and passes, so the tier has been
+raised to TIGHT rather than left where a false premise had put it.
+
+The v1.43 cross-validation for this class lives in
+``test_pe_hestonbates_v143.py``, which pins far more of the surface. This file
+is kept because its reference is an independent C++ run and because its
+algebraic-reduction and put-call-parity checks are properties, not values.
+
 Tolerance choice:
 
-* Engine NPV vs C++ reference: **LOOSE** (abs_tol=1e-8, rel_tol=1e-8).
-  Same Python-vs-C++-integrator trade-off as L6-B and L4-C.
+* Engine NPV vs C++ reference: **TIGHT** (abs_tol=1e-14, rel_tol=1e-12).
 * **Zero-jump reduction** to AnalyticHestonEngine: TIGHT (algebraic).
   At ``lambda ~ 0`` the add-on multiplies by ``t*lambda`` and the
   resulting NPV equals the pure-Heston NPV up to float noise.
@@ -32,17 +47,17 @@ from pquantlib.instruments.european_option import EuropeanOption
 from pquantlib.models.equity.bates_double_exp_model import BatesDoubleExpModel
 from pquantlib.models.equity.heston_model import HestonModel
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
-from pquantlib.pricingengines.vanilla.analytic_bates_double_exp_engine import (
-    AnalyticBatesDoubleExpEngine,
-)
 from pquantlib.pricingengines.vanilla.analytic_heston_engine import (
     AnalyticHestonEngine,
+)
+from pquantlib.pricingengines.vanilla.bates_engine import (
+    BatesDoubleExpEngine,
 )
 from pquantlib.processes.heston_process import HestonProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.reference_reader import load as load_reference
-from pquantlib.testing.tolerance import loose, tight
+from pquantlib.testing.tolerance import tight
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 
@@ -85,8 +100,8 @@ def _make_double_exp_engine(
     nu_up: float = _NU_UP,
     nu_down: float = _NU_DOWN,
     p: float = _P,
-) -> tuple[AnalyticBatesDoubleExpEngine, Date]:
-    """Build an AnalyticBatesDoubleExpEngine on the AMST testbed."""
+) -> tuple[BatesDoubleExpEngine, Date]:
+    """Build an BatesDoubleExpEngine on the AMST testbed."""
     _ref, expiry, rf, div, spot = _make_eval_setup()
     process = HestonProcess(
         risk_free_rate=rf,
@@ -101,7 +116,7 @@ def _make_double_exp_engine(
     model = BatesDoubleExpModel(
         process, lambda_=lambda_, nu_up=nu_up, nu_down=nu_down, p=p
     )
-    return AnalyticBatesDoubleExpEngine(model), expiry
+    return BatesDoubleExpEngine(model), expiry
 
 
 def _make_heston_engine() -> tuple[AnalyticHestonEngine, Date]:
@@ -121,7 +136,7 @@ def _make_heston_engine() -> tuple[AnalyticHestonEngine, Date]:
 
 
 def _price(
-    engine: AnalyticBatesDoubleExpEngine | AnalyticHestonEngine,
+    engine: BatesDoubleExpEngine | AnalyticHestonEngine,
     expiry: Date,
     strike: float,
     option_type: OptionType,
@@ -142,42 +157,42 @@ def test_amst_call_atm(cpp_refs: dict[str, Any]) -> None:
     """ATM call vs C++ reference (LOOSE)."""
     engine, expiry = _make_double_exp_engine()
     e = cpp_refs["bates_double_exp_engine_amst"]
-    loose(_price(engine, expiry, 100.0, OptionType.Call), e["call_atm"])
+    tight(_price(engine, expiry, 100.0, OptionType.Call), e["call_atm"])
 
 
 def test_amst_put_atm(cpp_refs: dict[str, Any]) -> None:
     """ATM put vs C++ reference (LOOSE)."""
     engine, expiry = _make_double_exp_engine()
     e = cpp_refs["bates_double_exp_engine_amst"]
-    loose(_price(engine, expiry, 100.0, OptionType.Put), e["put_atm"])
+    tight(_price(engine, expiry, 100.0, OptionType.Put), e["put_atm"])
 
 
 def test_amst_call_otm_low(cpp_refs: dict[str, Any]) -> None:
     """Deep-ITM call (K=80) vs C++ reference (LOOSE)."""
     engine, expiry = _make_double_exp_engine()
     e = cpp_refs["bates_double_exp_engine_amst"]
-    loose(_price(engine, expiry, 80.0, OptionType.Call), e["call_otm_low"])
+    tight(_price(engine, expiry, 80.0, OptionType.Call), e["call_otm_low"])
 
 
 def test_amst_call_otm_high(cpp_refs: dict[str, Any]) -> None:
     """OTM call (K=120) vs C++ reference (LOOSE)."""
     engine, expiry = _make_double_exp_engine()
     e = cpp_refs["bates_double_exp_engine_amst"]
-    loose(_price(engine, expiry, 120.0, OptionType.Call), e["call_otm_high"])
+    tight(_price(engine, expiry, 120.0, OptionType.Call), e["call_otm_high"])
 
 
 def test_amst_call_skew_low(cpp_refs: dict[str, Any]) -> None:
     """K=90 call vs C++ reference (LOOSE)."""
     engine, expiry = _make_double_exp_engine()
     e = cpp_refs["bates_double_exp_engine_amst"]
-    loose(_price(engine, expiry, 90.0, OptionType.Call), e["call_skew_low"])
+    tight(_price(engine, expiry, 90.0, OptionType.Call), e["call_skew_low"])
 
 
 def test_amst_call_skew_high(cpp_refs: dict[str, Any]) -> None:
     """K=110 call vs C++ reference (LOOSE)."""
     engine, expiry = _make_double_exp_engine()
     e = cpp_refs["bates_double_exp_engine_amst"]
-    loose(_price(engine, expiry, 110.0, OptionType.Call), e["call_skew_high"])
+    tight(_price(engine, expiry, 110.0, OptionType.Call), e["call_skew_high"])
 
 
 # ---------------------------------------------------------------------

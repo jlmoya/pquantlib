@@ -1,4 +1,4 @@
-"""AnalyticBatesDetJumpEngine tests — cross-validated against C++ reference.
+"""BatesDetJumpEngine tests — cross-validated against C++ reference.
 
 Cross-validates against ``migration-harness/references/cluster/w1c.json``.
 
@@ -6,19 +6,33 @@ C++ parity: ql/pricingengines/vanilla/batesengine.{hpp,cpp}
             @ v1.42.1 (099987f0) — Gatheral form + DetJump CF wrap,
             Gauss-Laguerre order 144.
 
+
+NOTE (v1.43 wave): the tolerance rationale below used to read "pquantlib uses
+scipy.integrate.quad (QUADPACK adaptive) while C++ uses Gauss-Laguerre
+quadrature", and every engine assertion was LOOSE because of it. **That premise
+is stale.** ``AnalyticHestonEngine`` now carries a real port of
+``AnalyticHestonEngine::Integration`` and honours ``integration_order``, so this
+engine runs the SAME Gauss-Laguerre rule C++ does; no adaptive-vs-fixed
+quadrature gap remains. Every assertion here was re-run at TIGHT (1e-14 abs /
+1e-12 rel) against the unchanged reference and passes, so the tier has been
+raised to TIGHT rather than left where a false premise had put it.
+
+The v1.43 cross-validation for this class lives in
+``test_pe_hestonbates_v143.py``, which pins far more of the surface. This file
+is kept because its reference is an independent C++ run and because its
+algebraic-reduction and put-call-parity checks are properties, not values.
+
 Tolerance choice:
 
-* Engine NPV vs C++ reference: **LOOSE** (abs_tol=1e-8, rel_tol=1e-8).
-  pquantlib uses scipy.integrate.quad (QUADPACK adaptive) while C++ uses
-  Gauss-Laguerre quadrature. Same trade-off as L6-B (BatesEngine).
+* Engine NPV vs C++ reference: **TIGHT** (abs_tol=1e-14, rel_tol=1e-12).
 * **Algebraic identity** at ``thetaLambda == lambda``: TIGHT
   (abs_tol=1e-14, rel_tol=1e-12). When the OU long-term mean equals
   the initial intensity, the deterministic-intensity wrap collapses
   algebraically to the base ``BatesEngine.add_on_term``: the engine
   produces the same NPV as ``BatesEngine`` for any ``kappaLambda``.
   This is the cleanest reduction check for the wrap formula.
-* **Degenerate-jump reduction** to Heston (lambda ~ 1e-12): LOOSE
-  vs the C++ reference (one extra layer of CF arithmetic).
+* **Degenerate-jump reduction** to Heston (lambda ~ 1e-12): TIGHT
+  vs the C++ reference.
 * Put-call parity at jumps-on: TIGHT (algebraic identity).
 """
 
@@ -35,15 +49,15 @@ from pquantlib.instruments.european_option import EuropeanOption
 from pquantlib.models.equity.bates_det_jump_model import BatesDetJumpModel
 from pquantlib.models.equity.bates_model import BatesModel
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
-from pquantlib.pricingengines.vanilla.analytic_bates_det_jump_engine import (
-    AnalyticBatesDetJumpEngine,
+from pquantlib.pricingengines.vanilla.bates_engine import (
+    BatesDetJumpEngine,
+    BatesEngine,
 )
-from pquantlib.pricingengines.vanilla.bates_engine import BatesEngine
 from pquantlib.processes.bates_process import BatesProcess
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing.reference_reader import load as load_reference
-from pquantlib.testing.tolerance import loose, tight
+from pquantlib.testing.tolerance import tight
 from pquantlib.time.date import Date
 from pquantlib.time.month import Month
 
@@ -90,8 +104,8 @@ def _make_det_engine(
     delta: float = _DELTA,
     kappa_lambda: float = _KAPPA_LAMBDA,
     theta_lambda: float = _THETA_LAMBDA,
-) -> tuple[AnalyticBatesDetJumpEngine, Date]:
-    """Build an AnalyticBatesDetJumpEngine on the AMST testbed."""
+) -> tuple[BatesDetJumpEngine, Date]:
+    """Build an BatesDetJumpEngine on the AMST testbed."""
     _ref, expiry, rf, div, spot = _make_eval_setup()
     process = BatesProcess(
         risk_free_rate=rf,
@@ -109,7 +123,7 @@ def _make_det_engine(
     model = BatesDetJumpModel(
         process, kappa_lambda=kappa_lambda, theta_lambda=theta_lambda
     )
-    return AnalyticBatesDetJumpEngine(model), expiry
+    return BatesDetJumpEngine(model), expiry
 
 
 def _make_bates_engine() -> tuple[BatesEngine, Date]:
@@ -133,7 +147,7 @@ def _make_bates_engine() -> tuple[BatesEngine, Date]:
 
 
 def _price(
-    engine: AnalyticBatesDetJumpEngine | BatesEngine,
+    engine: BatesDetJumpEngine | BatesEngine,
     expiry: Date,
     strike: float,
     option_type: OptionType,
@@ -155,42 +169,42 @@ def test_amst_call_atm(cpp_refs: dict[str, Any]) -> None:
     """ATM call vs C++ reference (LOOSE)."""
     engine, expiry = _make_det_engine()
     e = cpp_refs["bates_det_jump_engine_amst"]
-    loose(_price(engine, expiry, 100.0, OptionType.Call), e["call_atm"])
+    tight(_price(engine, expiry, 100.0, OptionType.Call), e["call_atm"])
 
 
 def test_amst_put_atm(cpp_refs: dict[str, Any]) -> None:
     """ATM put vs C++ reference (LOOSE)."""
     engine, expiry = _make_det_engine()
     e = cpp_refs["bates_det_jump_engine_amst"]
-    loose(_price(engine, expiry, 100.0, OptionType.Put), e["put_atm"])
+    tight(_price(engine, expiry, 100.0, OptionType.Put), e["put_atm"])
 
 
 def test_amst_call_otm_low(cpp_refs: dict[str, Any]) -> None:
     """Deep-ITM call (K=80) vs C++ reference (LOOSE)."""
     engine, expiry = _make_det_engine()
     e = cpp_refs["bates_det_jump_engine_amst"]
-    loose(_price(engine, expiry, 80.0, OptionType.Call), e["call_otm_low"])
+    tight(_price(engine, expiry, 80.0, OptionType.Call), e["call_otm_low"])
 
 
 def test_amst_call_otm_high(cpp_refs: dict[str, Any]) -> None:
     """OTM call (K=120) vs C++ reference (LOOSE)."""
     engine, expiry = _make_det_engine()
     e = cpp_refs["bates_det_jump_engine_amst"]
-    loose(_price(engine, expiry, 120.0, OptionType.Call), e["call_otm_high"])
+    tight(_price(engine, expiry, 120.0, OptionType.Call), e["call_otm_high"])
 
 
 def test_amst_call_skew_low(cpp_refs: dict[str, Any]) -> None:
     """K=90 call (LOOSE)."""
     engine, expiry = _make_det_engine()
     e = cpp_refs["bates_det_jump_engine_amst"]
-    loose(_price(engine, expiry, 90.0, OptionType.Call), e["call_skew_low"])
+    tight(_price(engine, expiry, 90.0, OptionType.Call), e["call_skew_low"])
 
 
 def test_amst_call_skew_high(cpp_refs: dict[str, Any]) -> None:
     """K=110 call (LOOSE)."""
     engine, expiry = _make_det_engine()
     e = cpp_refs["bates_det_jump_engine_amst"]
-    loose(_price(engine, expiry, 110.0, OptionType.Call), e["call_skew_high"])
+    tight(_price(engine, expiry, 110.0, OptionType.Call), e["call_skew_high"])
 
 
 # ---------------------------------------------------------------------

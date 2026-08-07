@@ -1068,3 +1068,24 @@ add_executable(v143_pe_bondswap_probe v143_pe_bondswap/probe.cpp)
 target_link_libraries(v143_pe_bondswap_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_pe_swaption_probe v143_pe_swaption/probe.cpp)
 target_link_libraries(v143_pe_swaption_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# --- wave: finite-difference + Monte-Carlo pricingengines (v1.43) ---------
+# One probe per area; each emits references/v143/pe/<area>.json (the
+# reference generator turns every underscore in the target name into a
+# slash, so v143_pe_barriermc_probe -> v143/pe/barriermc.json).
+#
+# The add_executable MUST stay inside this loop: a previous merge lifted an
+# add_executable out of a foreach body and cmake then failed at generate time
+# for every probe in the file.
+foreach(area
+        barriermc
+        mcasian
+        mcfwdlb
+        fdbs
+        fdheston
+        hestonbates)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/v143_pe_${area}/probe.cpp)
+        add_executable(v143_pe_${area}_probe v143_pe_${area}/probe.cpp)
+        target_link_libraries(v143_pe_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
+    endif()
+endforeach()

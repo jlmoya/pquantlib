@@ -18,13 +18,13 @@ C++ design:
 
 The Python port simplifies:
 
-* ``MultiAssetOption`` and its full Greeks plumbing is deferred — the
-  L5-E carve-out documents this in ``phase5-design.md``. The Python
-  ``BasketOption`` inherits directly from ``Instrument`` (via Option)
-  with a minimal results carrier — engines fill ``value``.
-* Greek accessors are not exposed (analytic basket engines only
-  compute NPV; multi-asset Greeks via Bachelier-Spread or Stulz are
-  carry-outs).
+* ``MultiAssetOption`` is not a separate class — the Python
+  ``BasketOption`` inherits directly from ``Option``. Its results
+  carrier does mirror ``MultiAssetOption::results`` (``Instrument::results``
+  + ``Greeks``), because ``Fd2dBlackScholesVanillaEngine`` fills
+  ``delta``, ``gamma`` and ``theta`` there. Analytic basket engines fill
+  ``value`` only, so the Greek accessors raise the C++ "delta not
+  provided" style error unless an engine supplied them.
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ import numpy as np
 
 from pquantlib import qassert
 from pquantlib.exercise import Exercise
-from pquantlib.instruments.instrument import Instrument, InstrumentResults
-from pquantlib.option import Option
+from pquantlib.instruments.instrument import Instrument
+from pquantlib.option import Greeks, Option
 from pquantlib.payoffs import Payoff
 from pquantlib.pricingengines.pricing_engine import (
     PricingEngineArguments,
@@ -169,12 +169,14 @@ class SpreadBasketPayoff(BasketPayoff):
         return prices[0] - prices[1]
 
 
-class BasketOptionResults(InstrumentResults):
+class BasketOptionResults(Greeks):
     """Results carrier for a basket option.
 
-    # C++ parity: ``MultiAssetOption::results`` is ``Instrument::results``
-    # plus ``Greeks``. Phase 5 ports only ``value`` — Greeks defer to
-    # Phase 6 (multi-asset Greeks via Bachelier-Spread etc.).
+    # C++ parity: ``class MultiAssetOption::results : public
+    # Instrument::results, public Greeks`` (multiassetoption.hpp:62-69).
+    # In this port ``Greeks`` already derives from ``InstrumentResults``,
+    # so the C++ virtual-inheritance diamond collapses to a single base
+    # and ``reset()`` needs no override.
     """
 
 
@@ -184,12 +186,37 @@ class BasketOption(Option):
     # C++ parity: ``BasketOption(ext::shared_ptr<BasketPayoff>,
     # ext::shared_ptr<Exercise>)``. Inherits from C++'s
     # ``MultiAssetOption``; the Python port routes through ``Option``
-    # directly because ``MultiAssetOption`` (and its diamond inheritance
-    # with ``Greeks``) is deferred.
+    # directly and folds ``MultiAssetOption``'s Greek accessors in here.
     """
 
     def __init__(self, payoff: BasketPayoff, exercise: Exercise) -> None:
         super().__init__(payoff, exercise)
+        self._delta: float | None = None
+        self._gamma: float | None = None
+        self._theta: float | None = None
+
+    # --- greeks ----------------------------------------------------------
+
+    def delta(self) -> float:
+        """# C++ parity: ``MultiAssetOption::delta``."""
+        self.calculate()
+        qassert.require(self._delta is not None, "delta not provided")
+        assert self._delta is not None
+        return self._delta
+
+    def gamma(self) -> float:
+        """# C++ parity: ``MultiAssetOption::gamma``."""
+        self.calculate()
+        qassert.require(self._gamma is not None, "gamma not provided")
+        assert self._gamma is not None
+        return self._gamma
+
+    def theta(self) -> float:
+        """# C++ parity: ``MultiAssetOption::theta``."""
+        self.calculate()
+        qassert.require(self._theta is not None, "theta not provided")
+        assert self._theta is not None
+        return self._theta
 
     def is_expired(self) -> bool:
         """Return ``False`` — defers to engine.
@@ -205,13 +232,22 @@ class BasketOption(Option):
         Option.setup_arguments(self, args)
 
     def fetch_results(self, results: PricingEngineResults) -> None:
-        """Pull value out of the engine results.
+        """Pull value and Greeks out of the engine results.
 
-        # C++ parity: ``MultiAssetOption::fetchResults`` reads value +
-        # Greeks. Phase 5 ports only ``value`` (and base error +
-        # valuation date via ``Instrument::fetch_results``).
+        # C++ parity: ``MultiAssetOption::fetchResults``.
         """
         Instrument.fetch_results(self, results)
+        if isinstance(results, Greeks):
+            self._delta = results.delta
+            self._gamma = results.gamma
+            self._theta = results.theta
+
+    def setup_expired(self) -> None:
+        """# C++ parity: ``MultiAssetOption::setupExpired``."""
+        Instrument.setup_expired(self)
+        self._delta = 0.0
+        self._gamma = 0.0
+        self._theta = 0.0
 
 
 __all__ = [
