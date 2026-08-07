@@ -27,10 +27,21 @@ Divergences from C++:
 
 * ``Handle<Quote>`` / ``Handle<YieldTermStructure>`` collapse to a
   direct reference (pquantlib convention from L2 / L3).
-* The ``Discretization`` enum is dropped — only ``FullTruncation``
-  semantics are implemented. If MC-based engines ever land, the enum
-  can be re-introduced as a parameter on the L5 MC engine, not on the
-  process.
+* ``drift`` / ``diffusion`` keep a single full-truncation semantic,
+  because the analytic-engine path never varies it.
+
+* ``evolve`` DOES depend on the discretization, and is overridden here
+  rather than inherited from ``StochasticProcess`` — the generic
+  ``apply(expectation(...), stdDeviation(...)*dw)`` is not what C++ does
+  for a Heston path and does not reproduce ``MCEuropeanHestonEngine``.
+  Five of the nine C++ schemes are ported: ``PartialTruncation``,
+  ``FullTruncation``, ``Reflection``, ``QuadraticExponential`` and
+  ``QuadraticExponentialMartingale`` (the C++ default). The three
+  ``BroadieKayaExactScheme*`` members and ``NonCentralChiSquareVariance``
+  are deliberately absent from the enum rather than present-and-broken:
+  they need the exact-sampling characteristic function / non-central
+  chi-square inversion that this module already documents as unported,
+  and ``factors()`` would have to return 3 for the Broadie-Kaya family.
 * The internal exact-sampling characteristic function ``Phi`` and the
   ``pdf`` method are not ported — they require modified Bessel
   functions + Gauss-Laguerre quadrature + non-central chi-square
@@ -50,10 +61,15 @@ preserve some correlation information; we mirror that.
 from __future__ import annotations
 
 import math
+from enum import IntEnum
 
 import numpy as np
 import numpy.typing as npt
 
+from pquantlib import qassert
+from pquantlib.math.distributions.cumulative_normal_distribution import (
+    CumulativeNormalDistribution,
+)
 from pquantlib.processes.euler_discretization import EulerDiscretization
 from pquantlib.processes.stochastic_process import StochasticProcess
 from pquantlib.quotes.quote import Quote
@@ -61,6 +77,28 @@ from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 from pquantlib.time.compounding import Compounding
 from pquantlib.time.date import Date
 from pquantlib.time.frequency import Frequency
+
+
+class Discretization(IntEnum):
+    """Path-discretization scheme for :meth:`HestonProcess.evolve`.
+
+    # C++ parity: ``HestonProcess::Discretization`` (hestonprocess.hpp:56-66).
+
+    The C++ enumerator order is ``PartialTruncation, FullTruncation,
+    Reflection, NonCentralChiSquareVariance, QuadraticExponential,
+    QuadraticExponentialMartingale, BroadieKayaExactSchemeLobatto,
+    BroadieKayaExactSchemeLaguerre, BroadieKayaExactSchemeTrapezoidal``; the
+    integer values below preserve it so a round-trip through an int is stable
+    even though the unported members are absent.
+
+    ``QuadraticExponentialMartingale`` is the C++ constructor default.
+    """
+
+    PartialTruncation = 0
+    FullTruncation = 1
+    Reflection = 2
+    QuadraticExponential = 4
+    QuadraticExponentialMartingale = 5
 
 
 class HestonProcess(StochasticProcess):
@@ -91,8 +129,13 @@ class HestonProcess(StochasticProcess):
         theta: float,
         sigma: float,
         rho: float,
+        discretization: Discretization = Discretization.QuadraticExponentialMartingale,
     ) -> None:
         super().__init__(EulerDiscretization())
+        # NOTE the name: ``StochasticProcess`` already owns ``_discretization``
+        # (the Euler/other *object* used by ``expectation`` / ``std_deviation``).
+        # Storing the scheme enum under that name would silently replace it.
+        self._disc_scheme: Discretization = discretization
         self._risk_free_rate: YieldTermStructure = risk_free_rate
         self._dividend_yield: YieldTermStructure = dividend_yield
         self._s0: Quote = s0
@@ -267,6 +310,127 @@ class HestonProcess(StochasticProcess):
             dtype=np.float64,
         )
 
+    def discretization(self) -> Discretization:
+        """The path-discretization scheme in force.
+
+        # C++ parity: the ``discretization_`` member (hestonprocess.hpp:107).
+        """
+        return self._disc_scheme
+
+    def evolve(  # noqa: PLR0915 — verbatim transcription of a C++ switch
+        self,
+        t0: float,
+        x0: npt.NDArray[np.float64],
+        dt: float,
+        dw: npt.NDArray[np.float64],
+    ) -> npt.NDArray[np.float64]:
+        """One discretized step of (S, V).
+
+        # C++ parity: ``HestonProcess::evolve`` (hestonprocess.cpp:396-...).
+
+        This override matters: the inherited
+        ``apply(expectation(t0, x0, dt), stdDeviation(t0, x0, dt) * dw)`` is a
+        plain Euler step and is *not* what C++ simulates, so an MC Heston
+        engine built on the inherited version cannot reproduce C++ at any
+        sample count.
+        """
+        v0 = float(x0[1])
+        s0 = float(x0[0])
+        dw0 = float(dw[0])
+        dw1 = float(dw[1])
+        sdt = math.sqrt(dt)
+        sqrhov = math.sqrt(1.0 - self._rho * self._rho)
+        scheme = self._disc_scheme
+
+        if scheme in (
+            Discretization.PartialTruncation,
+            Discretization.FullTruncation,
+            Discretization.Reflection,
+        ):
+            if scheme == Discretization.Reflection:
+                vol = math.sqrt(abs(v0))
+            else:
+                vol = math.sqrt(v0) if v0 > 0.0 else 0.0
+            vol2 = self._sigma * vol
+            mu = self._forward_rate_spread(t0, dt) - 0.5 * vol * vol
+            if scheme == Discretization.PartialTruncation:
+                nu = self._kappa * (self._theta - v0)
+            else:
+                nu = self._kappa * (self._theta - vol * vol)
+            s1 = s0 * math.exp(mu * dt + vol * dw0 * sdt)
+            base = vol * vol if scheme == Discretization.Reflection else v0
+            v1 = base + nu * dt + vol2 * sdt * (self._rho * dw0 + sqrhov * dw1)
+            return np.array([s1, v1], dtype=np.float64)
+
+        # QuadraticExponential[Martingale]: Leif Andersen, "Efficient Simulation
+        # of the Heston Stochastic Volatility Model".
+        sigma = self._sigma
+        kappa = self._kappa
+        theta = self._theta
+        rho = self._rho
+        ex = math.exp(-kappa * dt)
+        m = theta + (v0 - theta) * ex
+        s2 = v0 * sigma * sigma * ex / kappa * (1 - ex) + theta * sigma * sigma / (
+            2 * kappa
+        ) * (1 - ex) * (1 - ex)
+        psi = s2 / (m * m)
+
+        g1 = 0.5
+        g2 = 0.5
+        k0 = -rho * kappa * theta * dt / sigma
+        k1 = g1 * dt * (kappa * rho / sigma - 0.5) - rho / sigma
+        k2 = g2 * dt * (kappa * rho / sigma - 0.5) + rho / sigma
+        k3 = g1 * dt * (1 - rho * rho)
+        k4 = g2 * dt * (1 - rho * rho)
+        a_coef = k2 + 0.5 * k4
+        martingale = scheme == Discretization.QuadraticExponentialMartingale
+
+        if psi < 1.5:
+            b2 = 2 / psi - 1 + math.sqrt(2 / psi * (2 / psi - 1))
+            b = math.sqrt(b2)
+            a = m / (1 + b2)
+            if martingale:
+                qassert.require(a_coef < 1 / (2 * a), "illegal value")
+                k0 = (
+                    -a_coef * b2 * a / (1 - 2 * a_coef * a)
+                    + 0.5 * math.log(1 - 2 * a_coef * a)
+                    - (k1 + 0.5 * k3) * v0
+                )
+            v1 = a * (b + dw1) * (b + dw1)
+        else:
+            p = (psi - 1) / (psi + 1)
+            beta = (1 - p) / m
+            u = CumulativeNormalDistribution()(dw1)
+            if martingale:
+                qassert.require(a_coef < beta, "illegal value")
+                k0 = -math.log(p + beta * (1 - p) / (beta - a_coef)) - (
+                    k1 + 0.5 * k3
+                ) * v0
+            v1 = 0.0 if u <= p else math.log((1 - p) / (1 - u)) / beta
+
+        mu = self._forward_rate_spread(t0, dt)
+        s1 = s0 * math.exp(
+            mu * dt + k0 + k1 * v0 + k2 * v1 + math.sqrt(k3 * v0 + k4 * v1) * dw0
+        )
+        return np.array([s1, v1], dtype=np.float64)
+
+    def _forward_rate_spread(self, t0: float, dt: float) -> float:
+        """``r(t0, t0+dt) - q(t0, t0+dt)``, continuously compounded.
+
+        # C++ parity: the ``riskFreeRate_->forwardRate(t0, t0+dt, Continuous)
+        # - dividendYield_->forwardRate(t0, t0+dt, Continuous)`` pair that
+        # every branch of ``HestonProcess::evolve`` computes. Unlike
+        # :meth:`drift`, this uses the *actual* step, so no zero-window
+        # workaround is needed and the result is bit-comparable with C++.
+        """
+        r = self._risk_free_rate.forward_rate(
+            t0, t0 + dt, Compounding.Continuous, Frequency.NoFrequency, True
+        ).rate()
+        q = self._dividend_yield.forward_rate(
+            t0, t0 + dt, Compounding.Continuous, Frequency.NoFrequency, True
+        ).rate()
+        return r - q
+
     def time(self, date: Date) -> float:
         """Year fraction via the risk-free curve's day counter.
 
@@ -278,4 +442,4 @@ class HestonProcess(StochasticProcess):
         )
 
 
-__all__ = ["HestonProcess"]
+__all__ = ["Discretization", "HestonProcess"]
