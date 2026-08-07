@@ -1,7 +1,7 @@
 """VannaVolga 3-point smile interpolation.
 
 # C++ parity: ql/experimental/barrieroption/vannavolgainterpolation.hpp
-#             (v1.42.1).
+#             (v1.43).
 
 The Vanna-Volga method interpolates an FX volatility smile from exactly
 three pillars (25-delta put, ATM, 25-delta call). Given a strike ``k``
@@ -13,14 +13,20 @@ generic ``Interpolation`` x-search/extrapolation machinery, the Python
 port implements it as a small self-contained callable rather than
 subclassing :class:`Interpolation`. The ``value`` formula mirrors C++
 ``VannaVolgaInterpolationImpl::value`` verbatim.
+
+:class:`VannaVolga` is the interpolation factory/traits class; it carries
+the ``requiredPoints = 3`` traits constant that the C++
+``Interpolation::templateImpl`` base uses to reject short input ranges.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from typing import Final
 
 from pquantlib import qassert
+from pquantlib.exceptions import LibraryException
 from pquantlib.math.distributions.normal_distribution import NormalDistribution
 from pquantlib.payoffs import OptionType
 from pquantlib.pricingengines.black_formula import (
@@ -140,5 +146,89 @@ class VannaVolgaInterpolation:
         norm = NormalDistribution()
         return self._spot * self._d_discount * math.sqrt(self._t) * norm(d1)
 
+    # --- the three C++ Interpolation::Impl overrides that are QL_FAIL stubs ---
 
-__all__ = ["VannaVolgaInterpolation"]
+    def primitive(self, k: float) -> float:
+        """Always raises.
+
+        # C++ parity: ``VannaVolgaInterpolationImpl::primitive``
+        # (vannavolgainterpolation.hpp:123-125) is ``QL_FAIL("Vanna Volga
+        # primitive not implemented")``.
+        """
+        del k
+        raise LibraryException("Vanna Volga primitive not implemented")
+
+    def derivative(self, k: float) -> float:
+        """Always raises.
+
+        # C++ parity: vannavolgainterpolation.hpp:126-128.
+        """
+        del k
+        raise LibraryException("Vanna Volga derivative not implemented")
+
+    def second_derivative(self, k: float) -> float:
+        """Always raises.
+
+        # C++ parity: vannavolgainterpolation.hpp:129-131.
+        """
+        del k
+        raise LibraryException("Vanna Volga secondDerivative not implemented")
+
+
+class VannaVolga:
+    """VannaVolga-interpolation factory and traits.
+
+    # C++ parity: ``class VannaVolga``
+    # (vannavolgainterpolation.hpp:58-77).
+
+    Binds the market context (spot, the two discount factors, the maturity)
+    once and stamps out a :class:`VannaVolgaInterpolation` per strike/vol
+    triple. ``required_points`` is the C++
+    ``static const Size requiredPoints = 3`` traits constant that
+    ``Interpolation::templateImpl`` uses to reject short input ranges — for
+    Vanna-Volga the interpolation additionally requires *exactly* three
+    points, which :class:`VannaVolgaInterpolation` enforces.
+
+    Unlike :class:`Svi` / :class:`NoArbSabr` this factory carries no
+    ``global`` flag: C++ ``VannaVolga`` does not declare one, so the
+    interpolated-curve machinery treats it as a local (piecewise)
+    interpolation.
+
+    Args:
+        spot: spot FX rate.
+        d_discount: domestic discount factor to ``t``.
+        f_discount: foreign discount factor to ``t``.
+        t: time to maturity.
+    """
+
+    #: C++ ``static const Size requiredPoints = 3``.
+    required_points: Final[int] = 3
+
+    __slots__ = ("_d_discount", "_f_discount", "_spot", "_t")
+
+    def __init__(
+        self,
+        spot: float,
+        d_discount: float,
+        f_discount: float,
+        t: float,
+    ) -> None:
+        self._spot: float = spot
+        self._d_discount: float = d_discount
+        self._f_discount: float = f_discount
+        self._t: float = t
+
+    def interpolate(
+        self, strikes: Sequence[float], vols: Sequence[float]
+    ) -> VannaVolgaInterpolation:
+        """Build a :class:`VannaVolgaInterpolation` over one strike triple.
+
+        # C++ parity: ``VannaVolga::interpolate``
+        # (vannavolgainterpolation.hpp:66-70).
+        """
+        return VannaVolgaInterpolation(
+            strikes, vols, self._spot, self._d_discount, self._f_discount, self._t
+        )
+
+
+__all__ = ["VannaVolga", "VannaVolgaInterpolation"]

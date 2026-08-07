@@ -1,6 +1,6 @@
 """NoArbSabrInterpolation — fit no-arbitrage SABR to a strike-vol slice.
 
-# C++ parity: ql/experimental/volatility/noarbsabrinterpolation.hpp (v1.42.1).
+# C++ parity: ql/experimental/volatility/noarbsabrinterpolation.hpp (v1.43).
 
 Fits the 4 no-arbitrage SABR parameters ``(alpha, beta, nu, rho)`` to a
 market strike-vol slice, mirroring the L9-C :class:`SabrInterpolation`
@@ -8,16 +8,19 @@ surface but evaluating the model vol via :func:`no_arb_sabr_volatility`
 (which prices the Doust no-arb terminal density and inverts Black).
 
 The C++ class wires the generic ``XABRInterpolationImpl`` through
-``NoArbSabrSpecs``. PQuantLib delegates the optimisation to
-``scipy.optimize.least_squares(method='trf')`` (see the
-:class:`SabrInterpolation` docstring for the optimiser-divergence
-rationale).
+``NoArbSabrSpecs``, ported here as :class:`NoArbSabrSpecs`.
+:class:`NoArbSabr` is the interpolation factory/traits class. PQuantLib
+delegates the optimisation to ``scipy.optimize.least_squares(method='trf')``
+(see the :class:`SabrInterpolation` docstring for the optimiser-divergence
+rationale); the delegation is cross-validated against the C++ fitted curve
+by blocks ``D3``/``D4`` of
+``references/v143/experimental/volatility.json``.
 
 Parameter bounds differ from plain SABR — the no-arb model constrains
 ``sigmaI = alpha * forward^(beta-1)`` to ``[0.05, 1.0]`` (rather than
 ``alpha`` directly), ``beta`` to ``[0.01, 0.99]``, ``nu`` to
 ``[0.01, 0.80]`` and ``rho`` to ``[-0.99, 0.99]`` (see
-``detail::NoArbSabrModel`` and ``NoArbSabrSpecs::guess``). The
+``detail::NoArbSabrModel`` and :meth:`NoArbSabrSpecs.guess`). The
 ``defaultValues`` adjustment that nudges ``alpha`` into the admissible
 ``sigmaI`` band is reproduced.
 
@@ -28,8 +31,9 @@ multi-start guess count therefore defaults to a modest value.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 from scipy.optimize import least_squares  # type: ignore[import-untyped]
@@ -46,24 +50,265 @@ from pquantlib.experimental.volatility.no_arb_sabr import (
     SIGMA_I_MIN,
     no_arb_sabr_volatility,
 )
+from pquantlib.math.array import Array
+from pquantlib.math.interpolations.sabr_interpolation import (
+    NULL_REAL,
+    SABRSpecs,
+    as_null,
+    xabr_interpolation_error,
+)
+from pquantlib.pricingengines.black_formula import black_formula_std_dev_derivative
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle broken at runtime
+    from pquantlib.experimental.volatility.no_arb_sabr_smile_section import (
+        NoArbSabrSmileSection,
+    )
 
 _EPS: Final[float] = 0.000001
 
 
-def _default_alpha(forward: float, beta: float) -> float:
-    """Plain-SABR ``defaultValues`` alpha, then nudged into sigmaI band.
+class NoArbSabrSpecs:
+    """The no-arb-SABR model policy the C++ XABR template is instantiated with.
 
-    # C++ parity: ``NoArbSabrSpecs::defaultValues`` (noarbsabrinterpolation.hpp:41-73)
-    # which calls ``SABRSpecs::defaultValues`` then adjusts alpha so
-    # ``sigmaI = alpha*F^(beta-1)`` lands within [sigmaI_min, sigmaI_max].
+    # C++ parity: ``struct detail::NoArbSabrSpecs``
+    # (noarbsabrinterpolation.hpp:38-190).
+
+    Same role as :class:`SABRSpecs` — parameter count, defaults, multi-start
+    guess rule, residual weights and the constrained<->unconstrained
+    bijection — but the box is the Doust admissible region, and the alpha
+    axis is parameterised through ``sigmaI = alpha * forward^(beta - 1)``
+    rather than through alpha directly. That coupling is why
+    :meth:`direct` and :meth:`default_values` have to adjust *beta* when
+    alpha is pinned outside the sigmaI band.
+
+    PQuantLib's :class:`NoArbSabrInterpolation` does not currently route its
+    optimisation through this reparameterisation (it uses scipy's native box
+    constraints instead), so these methods exist as a faithful,
+    cross-validated transcription rather than as the live calibration path.
+
+    Every method is stateless; the class is instantiable to mirror the C++
+    call sites (``Model().direct(...)``).
     """
-    alpha = 0.2 * forward ** (1.0 - beta) if beta < 0.9999 else 0.2
-    sigma_i = alpha * forward ** (beta - 1.0)
-    if sigma_i < SIGMA_I_MIN:
-        alpha = SIGMA_I_MIN * (1.0 + _EPS) / forward ** (beta - 1.0)
-    elif sigma_i > SIGMA_I_MAX:
-        alpha = SIGMA_I_MAX * (1.0 - _EPS) / forward ** (beta - 1.0)
-    return alpha
+
+    __slots__ = ()
+
+    def dimension(self) -> int:
+        """Number of model parameters (4). C++ ``dimension``."""
+        return 4
+
+    def eps(self) -> float:
+        """Relative nudge used when snapping sigmaI into its band. C++ ``eps``."""
+        return 0.000001
+
+    def default_values(
+        self,
+        params: list[float],
+        param_is_fixed: list[bool],
+        forward: float,
+        expiry_time: float,
+        add_params: Sequence[float],
+    ) -> None:
+        """Fill any ``NULL_REAL`` slot of ``params`` in place, then snap sigmaI.
+
+        # C++ parity: ``defaultValues`` (noarbsabrinterpolation.hpp:41-73).
+
+        Runs :meth:`SABRSpecs.default_values` first, then checks
+        ``sigmaI = alpha * F^(beta - 1)`` against the Doust band and repairs
+        it: by rescaling alpha when alpha is free, otherwise by rescaling
+        beta when beta is free, otherwise not at all (the model constructor
+        raises later — C++ says so in a comment and does the same).
+
+        # C++ parity note: ``sigmaI`` is computed ONCE, before both branches,
+        # so the ``> sigmaI_max`` test still sees the pre-repair value. It
+        # cannot be both below the floor and above the cap, so the ordering
+        # is unobservable — but it is reproduced verbatim.
+        #
+        # C++ parity note: the beta repair is ``1 + log(bound/alpha)/log(F)``
+        # with NO clamp to [beta_min, beta_max]; for a small forward it
+        # readily returns a beta outside the admissible range (e.g. -0.1156
+        # for alpha=0.001, F=0.03). Reproduced as-is.
+        """
+        SABRSpecs().default_values(params, param_is_fixed, forward, expiry_time, add_params)
+        eps = self.eps()
+        sigma_i = params[0] * math.pow(forward, params[1] - 1.0)
+        if sigma_i < SIGMA_I_MIN:
+            if not param_is_fixed[0]:
+                params[0] = SIGMA_I_MIN * (1.0 + eps) / math.pow(forward, params[1] - 1.0)
+            elif not param_is_fixed[1]:
+                params[1] = 1.0 + math.log(SIGMA_I_MIN * (1.0 + eps) / params[0]) / math.log(
+                    forward
+                )
+        if sigma_i > SIGMA_I_MAX:
+            if not param_is_fixed[0]:
+                params[0] = SIGMA_I_MAX * (1.0 - eps) / math.pow(forward, params[1] - 1.0)
+            elif not param_is_fixed[1]:
+                params[1] = 1.0 + math.log(SIGMA_I_MAX * (1.0 - eps) / params[0]) / math.log(
+                    forward
+                )
+
+    def guess(
+        self,
+        values: Array,
+        param_is_fixed: Sequence[bool],
+        forward: float,
+        expiry_time: float,
+        r: Sequence[float],
+        add_params: Sequence[float],
+    ) -> None:
+        """Seed ``values`` in place from the low-discrepancy draws ``r``.
+
+        # C++ parity: ``guess`` (noarbsabrinterpolation.hpp:74-102).
+
+        ``r`` is consumed by a single running index in the order
+        beta, alpha, nu, rho — *not* the parameter order — and a fixed
+        parameter consumes nothing. The alpha draw is made in sigmaI space,
+        squeezed by ``(1 - eps)`` and offset by ``eps/2`` to stay strictly
+        inside the band, then divided by ``F^(beta - 1)`` using the beta
+        that was *just* written.
+        """
+        del expiry_time, add_params
+        eps = self.eps()
+        j = 0
+        if not param_is_fixed[1]:
+            values[1] = BETA_MIN + (BETA_MAX - BETA_MIN) * r[j]
+            j += 1
+        if not param_is_fixed[0]:
+            sigma_i = SIGMA_I_MIN + (SIGMA_I_MAX - SIGMA_I_MIN) * r[j]
+            j += 1
+            sigma_i *= 1.0 - eps
+            sigma_i += eps / 2.0
+            values[0] = sigma_i / math.pow(forward, float(values[1]) - 1.0)
+        if not param_is_fixed[2]:
+            values[2] = NU_MIN + (NU_MAX - NU_MIN) * r[j]
+            j += 1
+        if not param_is_fixed[3]:
+            values[3] = RHO_MIN + (RHO_MAX - RHO_MIN) * r[j]
+
+    def inverse(
+        self,
+        y: Array,
+        param_is_fixed: Sequence[bool],
+        params: Sequence[float],
+        forward: float,
+    ) -> Array:
+        """Constrained ``y`` -> unconstrained ``x``.
+
+        # C++ parity: ``inverse`` (noarbsabrinterpolation.hpp:103-128).
+
+        Each axis is the ``tan`` inverse of the ``atan`` map in
+        :meth:`direct`. Note the alpha axis inverts ``sigmaI``, not alpha.
+
+        # C++ parity note: the alpha branch writes ``- M_PI/2`` where beta,
+        # nu and rho write ``+ M_PI/2``. The two spellings produce the same
+        # number because ``tan`` has period pi, so the asymmetry is cosmetic;
+        # it is reproduced verbatim rather than normalised.
+        """
+        del param_is_fixed, params
+        x = np.zeros(4, dtype=np.float64)
+        y0, y1, y2, y3 = (float(y[i]) for i in range(4))
+        half_pi = math.pi / 2.0
+        x[1] = math.tan((y1 - BETA_MIN) / (BETA_MAX - BETA_MIN) * math.pi + half_pi)
+        x[0] = math.tan(
+            (y0 * math.pow(forward, y1 - 1.0) - SIGMA_I_MIN)
+            / (SIGMA_I_MAX - SIGMA_I_MIN)
+            * math.pi
+            - half_pi
+        )
+        x[2] = math.tan((y2 - NU_MIN) / (NU_MAX - NU_MIN) * math.pi + half_pi)
+        x[3] = math.tan((y3 - RHO_MIN) / (RHO_MAX - RHO_MIN) * math.pi + half_pi)
+        return x
+
+    def direct(
+        self,
+        x: Array,
+        param_is_fixed: Sequence[bool],
+        params: Sequence[float],
+        forward: float,
+    ) -> Array:
+        """Unconstrained ``x`` -> constrained ``y``.
+
+        # C++ parity: ``direct`` (noarbsabrinterpolation.hpp:129-179).
+
+        Order is load-bearing: beta is resolved first because the alpha axis
+        divides by ``F^(beta - 1)``. When alpha is pinned, beta is then
+        *overwritten* by the log-ratio repair if the implied sigmaI leaves
+        the band — discarding whatever beta the transform just produced.
+
+        # C++ parity note: the repair is unclamped, exactly as in
+        # :meth:`default_values`, and can return a beta outside
+        # ``[beta_min, beta_max]``.
+        """
+        eps = self.eps()
+        half_pi = math.pi / 2.0
+        y = np.zeros(4, dtype=np.float64)
+        x0, x1, x2, x3 = (float(x[i]) for i in range(4))
+        if param_is_fixed[1]:
+            y[1] = params[1]
+        else:
+            y[1] = BETA_MIN + (BETA_MAX - BETA_MIN) * (math.atan(x1) + half_pi) / math.pi
+        # alpha is carried through sigmaI; if alpha is pinned we have to
+        # check beta is admissible and adjust if need be.
+        if param_is_fixed[0]:
+            y[0] = params[0]
+            sigma_i = float(y[0]) * math.pow(forward, float(y[1]) - 1.0)
+            if sigma_i < SIGMA_I_MIN:
+                y[1] = 1.0 + math.log(SIGMA_I_MIN * (1.0 + eps) / float(y[0])) / math.log(forward)
+            if sigma_i > SIGMA_I_MAX:
+                y[1] = 1.0 + math.log(SIGMA_I_MAX * (1.0 - eps) / float(y[0])) / math.log(forward)
+        else:
+            sigma_i = (
+                SIGMA_I_MIN
+                + (SIGMA_I_MAX - SIGMA_I_MIN) * (math.atan(x0) + half_pi) / math.pi
+            )
+            y[0] = sigma_i / math.pow(forward, float(y[1]) - 1.0)
+        if param_is_fixed[2]:
+            y[2] = params[2]
+        else:
+            y[2] = NU_MIN + (NU_MAX - NU_MIN) * (math.atan(x2) + half_pi) / math.pi
+        if param_is_fixed[3]:
+            y[3] = params[3]
+        else:
+            y[3] = RHO_MIN + (RHO_MAX - RHO_MIN) * (math.atan(x3) + half_pi) / math.pi
+        return y
+
+    def weight(
+        self,
+        strike: float,
+        forward: float,
+        std_dev: float,
+        add_params: Sequence[float],
+    ) -> float:
+        """Per-strike residual weight — the Black vega wrt std dev.
+
+        # C++ parity: ``weight`` (noarbsabrinterpolation.hpp:180-183). As in
+        # ``SviSpecs::weight`` no displacement is passed; no-arb SABR has no
+        # shift (a non-zero shift is rejected by the interpolation ctor).
+        """
+        del add_params
+        return black_formula_std_dev_derivative(strike, forward, std_dev, 1.0)
+
+    def instance(
+        self,
+        t: float,
+        forward: float,
+        params: Sequence[float],
+        add_params: Sequence[float],
+    ) -> NoArbSabrSmileSection:
+        """Build the bound model.
+
+        # C++ parity: ``instance`` / ``typedef NoArbSabrWrapper type``
+        # (noarbsabrinterpolation.hpp:36, 184-189) where
+        # ``typedef NoArbSabrSmileSection NoArbSabrWrapper``.
+        """
+        del add_params
+        from pquantlib.experimental.volatility.no_arb_sabr_smile_section import (  # noqa: PLC0415
+            NoArbSabrSmileSection,
+        )
+
+        alpha, beta, nu, rho = (float(v) for v in params)
+        return NoArbSabrSmileSection(
+            forward=forward, sabr_params=(alpha, beta, nu, rho), exercise_time=t
+        )
 
 
 class NoArbSabrInterpolation:
@@ -76,11 +321,15 @@ class NoArbSabrInterpolation:
         volatilities: y-axis market vols.
         expiry_time: option expiry ``tau`` in year fractions (positive).
         forward: ATM forward (positive).
-        alpha, beta, nu, rho: initial values; ``None`` uses the C++
-            ``defaultValues`` rule (beta=0.5, alpha nudged into sigmaI
-            band, nu=sqrt(0.4) clamped to [nu_min,nu_max], rho=0).
+        alpha, beta, nu, rho: initial values; ``None`` (or the C++
+            ``Null<Real>()`` sentinel :data:`NULL_REAL`) uses the
+            :meth:`NoArbSabrSpecs.default_values` rule (beta=0.5, alpha
+            nudged into the sigmaI band, nu=sqrt(0.4), rho=0). As in C++
+            ``XABRCoeffHolder``, a null parameter is forced free even if
+            its ``*_is_fixed`` flag is set.
         alpha_is_fixed .. rho_is_fixed: pin a parameter during the fit.
-        vega_weighted: vega-weight residuals (Black vega at ATM).
+        vega_weighted: vega-weight residuals (Black vega wrt std dev,
+            :meth:`NoArbSabrSpecs.weight`).
         max_nfev: ``least_squares`` budget.
         max_guesses: Halton multi-start count (default 1 — single start,
             since each no-arb model evaluation is expensive). Set above 1
@@ -117,11 +366,6 @@ class NoArbSabrInterpolation:
         )
         qassert.require(expiry_time > 0.0, "expiry_time must be positive")
 
-        beta_init = beta if beta is not None else 0.5
-        alpha_init = alpha if alpha is not None else _default_alpha(forward, beta_init)
-        nu_init = nu if nu is not None else min(max(0.6324555320336759, NU_MIN), NU_MAX)
-        rho_init = rho if rho is not None else 0.0
-
         self._strikes: np.ndarray = np.ascontiguousarray(strikes, dtype=np.float64)
         self._volatilities: np.ndarray = np.ascontiguousarray(
             volatilities, dtype=np.float64
@@ -130,18 +374,21 @@ class NoArbSabrInterpolation:
         self._forward: float = forward
         self._vega_weighted: bool = vega_weighted
 
+        # C++ parity: ``XABRCoeffHolder`` (xabrinterpolation.hpp:70-74) only
+        # honours a ``paramIsFixed`` flag when the parameter is NOT null.
+        raw: list[float] = [as_null(alpha), as_null(beta), as_null(nu), as_null(rho)]
+        requested_fixed = [alpha_is_fixed, beta_is_fixed, nu_is_fixed, rho_is_fixed]
         self._is_fixed: list[bool] = [
-            alpha_is_fixed,
-            beta_is_fixed,
-            nu_is_fixed,
-            rho_is_fixed,
+            requested_fixed[i] and raw[i] != NULL_REAL for i in range(4)
         ]
-        self._initial: list[float] = [alpha_init, beta_init, nu_init, rho_init]
+        params = list(raw)
+        NoArbSabrSpecs().default_values(params, self._is_fixed, forward, expiry_time, ())
+        self._initial: list[float] = params
 
-        self._alpha: float = alpha_init
-        self._beta: float = beta_init
-        self._nu: float = nu_init
-        self._rho: float = rho_init
+        self._alpha: float = params[0]
+        self._beta: float = params[1]
+        self._nu: float = params[2]
+        self._rho: float = params[3]
         self._rms_error: float = 0.0
         self._max_error: float = 0.0
         self._converged: bool = False
@@ -154,28 +401,31 @@ class NoArbSabrInterpolation:
 
     # --- fit ------------------------------------------------------------
 
-    def _vega_weights(self) -> np.ndarray:
-        from math import exp, log, pi, sqrt  # noqa: PLC0415
+    def _weights(self) -> np.ndarray:
+        """The normalised residual weights, exactly as C++ builds them.
 
+        # C++ parity: ``XABRInterpolationImpl::update`` (xabrinterpolation.hpp:
+        # 132-159). Non-vega-weighted the vector is flat ``1/n``; vega-weighted
+        # it is :meth:`NoArbSabrSpecs.weight` normalised to sum 1.
+        """
         n = len(self._strikes)
-        weights = np.zeros(n, dtype=np.float64)
-        sqrt_t = sqrt(self._expiry_time)
+        if not self._vega_weighted:
+            return np.full(n, 1.0 / n, dtype=np.float64)
+        specs = NoArbSabrSpecs()
+        weights = np.empty(n, dtype=np.float64)
         for i in range(n):
-            k = float(self._strikes[i])
-            v = float(self._volatilities[i])
-            std_dev = v * sqrt_t
-            if std_dev <= 0.0 or k <= 0.0 or self._forward <= 0.0:
-                weights[i] = 1.0
-                continue
-            d1 = (log(self._forward / k) + 0.5 * std_dev * std_dev) / std_dev
-            phi = exp(-0.5 * d1 * d1) / sqrt(2.0 * pi)
-            weights[i] = max(self._forward * sqrt_t * phi, 1e-12)
-        total = float(np.sum(weights))
-        if total > 0.0:
-            weights /= total
-        else:
-            weights[:] = 1.0 / n
-        return np.sqrt(weights)
+            vol = float(self._volatilities[i])
+            std_dev = math.sqrt(vol * vol * self._expiry_time)
+            weights[i] = specs.weight(float(self._strikes[i]), self._forward, std_dev, ())
+        return weights / float(np.sum(weights))
+
+    def interpolation_weights(self) -> np.ndarray:
+        """The normalised per-strike residual weights.
+
+        # C++ parity: ``NoArbSabrInterpolation::interpolationWeights``
+        # (noarbsabrinterpolation.hpp:229-231).
+        """
+        return self._weights()
 
     def _clamp(self, params: list[float]) -> tuple[float, float, float, float]:
         """Project ``(alpha, beta, nu, rho)`` into the admissible region.
@@ -203,6 +453,10 @@ class NoArbSabrInterpolation:
             )
         return out
 
+    def _raw_residuals(self, params: list[float]) -> np.ndarray:
+        """Unweighted ``model(k_i) - market_i``. C++ ``value(*x) - *y``."""
+        return self._model_vols(params) - self._volatilities
+
     def _residuals(self, free_params: np.ndarray) -> np.ndarray:
         params = list(self._initial)
         j = 0
@@ -210,9 +464,10 @@ class NoArbSabrInterpolation:
             if not fixed:
                 params[i] = float(free_params[j])
                 j += 1
-        r = self._model_vols(params) - self._volatilities
+        r = self._raw_residuals(params)
         if self._vega_weighted:
-            r = r * self._vega_weights()
+            # C++ ``interpolationErrors`` scales each residual by sqrt(w).
+            r = r * np.sqrt(self._weights())
         return r
 
     def _free_bounds(self) -> tuple[list[float], list[float], list[float]]:
@@ -250,8 +505,11 @@ class NoArbSabrInterpolation:
     def _fit(self, *, max_nfev: int) -> None:
         free_initial, lower, upper = self._free_bounds()
         if not free_initial:
-            self._update_diagnostics(self._residuals(np.array([], dtype=np.float64)))
+            # C++ parity: "there is nothing to optimize" branch
+            # (xabrinterpolation.hpp:161-169) — error_/maxError_ are still
+            # evaluated, and XABREndCriteria_ stays EndCriteria::None.
             self._store_params(list(self._initial))
+            self._update_diagnostics()
             self._converged = True
             return
 
@@ -279,22 +537,25 @@ class NoArbSabrInterpolation:
         self._converged = bool(
             result.success  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         )
-        self._update_diagnostics(
-            np.asarray(
-                result.fun,  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-                dtype=np.float64,
-            )
-        )
+        self._update_diagnostics()
 
     def _store_params(self, params: list[float]) -> None:
         self._alpha, self._beta, self._nu, self._rho = params
 
-    def _update_diagnostics(self, residuals: np.ndarray) -> None:
+    def _update_diagnostics(self) -> None:
+        """Recompute ``error_`` / ``maxError_`` at the stored parameters.
+
+        # C++ parity: ``interpolationError`` / ``interpolationMaxError``
+        # (xabrinterpolation.hpp:246-262). Both start from the UNWEIGHTED
+        # residual; only ``error_`` applies the weights, and it divides by
+        # ``n - 1``. ``maxError_`` never sees the weights.
+        """
+        residuals = self._raw_residuals([self._alpha, self._beta, self._nu, self._rho])
         if residuals.size == 0:
             self._rms_error = 0.0
             self._max_error = 0.0
             return
-        self._rms_error = float(np.sqrt(np.mean(residuals * residuals)))
+        self._rms_error = xabr_interpolation_error(residuals, self._weights())
         self._max_error = float(np.max(np.abs(residuals)))
 
     def _fit_multi_start(  # noqa: PLR0915 — direct port of C++ guess+restart loop
@@ -302,9 +563,19 @@ class NoArbSabrInterpolation:
     ) -> None:
         """Halton multi-start over the (sigmaI, beta, nu, rho) box.
 
-        # C++ parity: ``NoArbSabrSpecs::guess`` samples sigmaI / beta /
-        # nu / rho uniformly from their admissible bands via the Halton
-        # generator; the outer loop keeps the best fit over maxGuesses.
+        # C++ parity: ``XABRInterpolationImpl::calculate``
+        # (xabrinterpolation.hpp:183-230) resamples from
+        # ``HaltonRsg(freeParameters, 42)`` fed through
+        # :meth:`NoArbSabrSpecs.guess`, which draws sigmaI / beta / nu / rho
+        # uniformly from their admissible bands; the outer loop keeps the
+        # best fit over ``maxGuesses``.
+        #
+        # C++ parity note — the restart SEQUENCE is NOT reproduced: see the
+        # same note on :meth:`SviInterpolation._fit_multi_start`. PQuantLib's
+        # ``HaltonRsg`` seeds its ``randomStart`` offsets from
+        # ``numpy.random.default_rng`` where C++ uses
+        # ``MersenneTwisterUniformRng``, so the draws differ from the first
+        # element on. The band *geometry* below is the C++ one.
         """
         from pquantlib.math.randomnumbers.halton import HaltonRsg  # noqa: PLC0415
 
@@ -394,9 +665,22 @@ class NoArbSabrInterpolation:
         return self._forward
 
     def rms_error(self) -> float:
+        """The weighted fit error.
+
+        # C++ parity: ``NoArbSabrInterpolation::rmsError`` ->
+        # ``coeffs().error_`` = ``interpolationError()``. Despite the name
+        # this is ``sqrt(n * sum_i w_i e_i^2 / (n - 1))``, not
+        # ``sqrt(mean(e^2))``.
+        """
         return self._rms_error
 
     def max_error(self) -> float:
+        """The largest UNWEIGHTED absolute residual.
+
+        # C++ parity: ``NoArbSabrInterpolation::maxError`` ->
+        # ``interpolationMaxError()``, which ignores the weights even when
+        # ``vegaWeighted`` is on.
+        """
         return self._max_error
 
     def converged(self) -> bool:
@@ -412,6 +696,108 @@ class NoArbSabrInterpolation:
         return self.value(strike)
 
 
+class NoArbSabr:
+    """No-arbitrage SABR interpolation factory and traits.
+
+    # C++ parity: ``class NoArbSabr`` (noarbsabrinterpolation.hpp:241-285).
+
+    Holds the fit configuration and stamps out a
+    :class:`NoArbSabrInterpolation` per strike/vol slice. ``global_`` is the
+    C++ ``static const bool global`` traits flag telling the
+    interpolated-curve machinery this interpolation is fitted over all points
+    at once rather than piecewise.
+
+    Not to be confused with :class:`NoArbSabrModel` (``noarbsabr.hpp``),
+    which is the Doust terminal-density model this interpolation calibrates;
+    the C++ names really are ``NoArbSabr`` (factory) and ``NoArbSabrModel``
+    (numerics).
+
+    Note the C++ default for ``vega_weighted`` differs between ``NoArbSabr``
+    (``false``) and ``NoArbSabrInterpolation`` (``true``); the factory
+    default is reproduced here.
+
+    Args:
+        t: option expiry in year fractions.
+        forward: ATM forward.
+        alpha, beta, nu, rho: initial values. Pass :data:`NULL_REAL` (or
+            ``None``) for "use the :meth:`NoArbSabrSpecs.default_values`
+            rule", which is what the C++ ``Null<Real>()`` sentinel means.
+        alpha_is_fixed .. rho_is_fixed: pin a parameter during the fit.
+        vega_weighted: vega-weight the residuals.
+        end_criteria / optimization_method / error_accept / use_max_error:
+            C++ pass-throughs; PQuantLib's fitter is fixed at the scipy TRF
+            arm, so they are accepted and unused (same treatment as
+            :class:`Svi` / ``SABR``).
+        max_guesses: multi-start restart count. C++ defaults to 50; each
+            no-arb evaluation prices + integrates the terminal density, so
+            that default is expensive by construction.
+    """
+
+    #: C++ ``static const bool global = true``.
+    global_: Final[bool] = True
+
+    def __init__(
+        self,
+        t: float,
+        forward: float,
+        alpha: float | None,
+        beta: float | None,
+        nu: float | None,
+        rho: float | None,
+        alpha_is_fixed: bool,
+        beta_is_fixed: bool,
+        nu_is_fixed: bool,
+        rho_is_fixed: bool,
+        vega_weighted: bool = False,
+        end_criteria: Any = None,
+        optimization_method: Any = None,
+        error_accept: float = 0.0020,
+        use_max_error: bool = False,
+        max_guesses: int = 50,
+    ) -> None:
+        self._t: float = t
+        self._forward: float = forward
+        self._alpha: float | None = alpha
+        self._beta: float | None = beta
+        self._nu: float | None = nu
+        self._rho: float | None = rho
+        self._alpha_is_fixed: bool = alpha_is_fixed
+        self._beta_is_fixed: bool = beta_is_fixed
+        self._nu_is_fixed: bool = nu_is_fixed
+        self._rho_is_fixed: bool = rho_is_fixed
+        self._vega_weighted: bool = vega_weighted
+        self._end_criteria: Any = end_criteria
+        self._optimization_method: Any = optimization_method
+        self._error_accept: float = error_accept
+        self._use_max_error: bool = use_max_error
+        self._max_guesses: int = max_guesses
+
+    def interpolate(
+        self, strikes: Sequence[float], volatilities: Sequence[float]
+    ) -> NoArbSabrInterpolation:
+        """Fit a :class:`NoArbSabrInterpolation` to one strike/vol slice.
+
+        # C++ parity: ``NoArbSabr::interpolate``
+        # (noarbsabrinterpolation.hpp:264-271).
+        """
+        return NoArbSabrInterpolation(
+            strikes,
+            volatilities,
+            self._t,
+            self._forward,
+            alpha=self._alpha,
+            beta=self._beta,
+            nu=self._nu,
+            rho=self._rho,
+            alpha_is_fixed=self._alpha_is_fixed,
+            beta_is_fixed=self._beta_is_fixed,
+            nu_is_fixed=self._nu_is_fixed,
+            rho_is_fixed=self._rho_is_fixed,
+            vega_weighted=self._vega_weighted,
+            max_guesses=self._max_guesses,
+        )
+
+
 def _free_index(is_fixed: list[bool], target: int) -> int:
     """Index of parameter ``target`` within the free-param subsequence."""
     j = 0
@@ -421,4 +807,4 @@ def _free_index(is_fixed: list[bool], target: int) -> int:
     return j
 
 
-__all__ = ["NoArbSabrInterpolation"]
+__all__ = ["NoArbSabr", "NoArbSabrInterpolation", "NoArbSabrSpecs"]
