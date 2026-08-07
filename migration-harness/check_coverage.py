@@ -96,6 +96,109 @@ def cpp_subsystem(hpp: pathlib.Path) -> str:
 #      a real gap, not an allowlist candidate.
 # ---------------------------------------------------------------------------
 ALLOWLIST: dict[str, str] = {
+    # =======================================================================
+    # termstructures — C++ template/tag/nested idioms with no Python form.
+    #
+    # Every entry below states all three parts the evidence standard requires:
+    # (1) the C++ declaration at file:line showing it is a tag type / policy
+    # template / namespace-scoped enum holder / detail:: functor / protected
+    # mixin; (2) the NAMED Python construct that subsumes it; (3) the NAMED
+    # test module that cross-validates the behaviour it carries against C++.
+    # =======================================================================
+
+    # --- ZABR evaluation tag types -----------------------------------------
+    # `struct ZabrShortMaturityLognormal {};` and its three siblings are EMPTY
+    # structs (zabrsmilesection.hpp:42-45) whose only role is to select a
+    # branch of `template <typename Evaluation> class ZabrSmileSection`
+    # (hpp:47). They carry no state and no members. Python selects the same
+    # branch with the ZabrEvaluation IntEnum
+    # (math/interpolations/zabr_formula.py:81).
+    "ZabrShortMaturityLognormal":
+        "empty evaluation tag struct (ql/termstructures/volatility/zabrsmilesection.hpp:42), "
+        "selecting a ZabrSmileSection<Evaluation> branch; Python uses "
+        "ZabrEvaluation.ShortMaturityLognormal (math/interpolations/zabr_formula.py:81) and the "
+        "branch's volatility/optionPrice are cross-validated against v1.43 in "
+        "tests/termstructures/volatility/test_zabr_fd_smile_section.py "
+        "(case 'short_maturity_lognormal')",
+    "ZabrShortMaturityNormal":
+        "empty evaluation tag struct (zabrsmilesection.hpp:43); Python uses "
+        "ZabrEvaluation.ShortMaturityNormal (zabr_formula.py:81), cross-validated in "
+        "tests/termstructures/volatility/test_zabr_fd_smile_section.py "
+        "(case 'short_maturity_normal')",
+    "ZabrLocalVolatility":
+        "empty evaluation tag struct (zabrsmilesection.hpp:44); Python uses "
+        "ZabrEvaluation.LocalVolatility (zabr_formula.py:81), cross-validated in "
+        "tests/termstructures/volatility/test_zabr_fd_smile_section.py "
+        "(cases 'local_volatility' and 'local_volatility_small_grid')",
+    "ZabrFullFd":
+        "empty evaluation tag struct (zabrsmilesection.hpp:45); Python uses "
+        "ZabrEvaluation.FullFd (zabr_formula.py:81), cross-validated in "
+        "tests/termstructures/volatility/test_zabr_fd_smile_section.py "
+        "(case 'full_fd_small_grid')",
+
+    # --- XABR cube model policy + typedef bundles --------------------------
+    "XabrModelTraits":
+        "`template <class Model> struct XabrModelTraits` "
+        "(ql/termstructures/volatility/swaption/sabrswaptionvolatilitycube.hpp:79) — a pure "
+        "static-policy template (nParams, createInterpolation, extractGamma, "
+        "createSmileSection) with no state and no instances, specialised at "
+        "zabrswaptionvolatilitycube.hpp:109 and noarbsabrswaptionvolatilitycube.hpp:46. Python "
+        "dispatches the same three choices on the XabrModelKind IntEnum "
+        "(termstructures/volatility/swaption/xabr_swaption_volatility_cube.py:68); nParams=4 vs 5, "
+        "the interpolation factory and the smile-section factory are all cross-validated against "
+        "v1.43 in tests/termstructures/volatility/swaption/test_xabr_cube_grid.py and "
+        "test_xabr_swaption_volatility_cube.py",
+    "SwaptionVolCubeSabrModel":
+        "`struct SwaptionVolCubeSabrModel { typedef SABRInterpolation Interpolation; typedef "
+        "SabrSmileSection SmileSection; }` (sabrswaptionvolatilitycube.hpp:1270) — a typedef "
+        "bundle with no members, used only as the template argument of "
+        "XabrSwaptionVolatilityCube. Python is XabrModelKind.SABR "
+        "(xabr_swaption_volatility_cube.py:80), whose interpolation and smile-section choices are "
+        "pinned by tests/termstructures/volatility/swaption/"
+        "test_xabr_swaption_volatility_cube.py::test_xabr_cube_sabr_mode_smile_section_is_sabr_"
+        "smile_section and ::test_xabr_cube_sabr_mode_matches_sabr_subclass_at_grid_pillar",
+    "SwaptionVolCubeZabrModel":
+        "`template <typename Kernel> struct SwaptionVolCubeZabrModel` "
+        "(zabrswaptionvolatilitycube.hpp:99) — the same typedef bundle for ZabrInterpolation / "
+        "ZabrSmileSection. Python is XabrModelKind.ZABR plus the zabr_evaluation argument "
+        "(xabr_swaption_volatility_cube.py:81), pinned by tests/termstructures/volatility/"
+        "swaption/test_xabr_swaption_volatility_cube.py::"
+        "test_zabr_swaption_vol_cube_smile_section_is_zabr_smile_section and "
+        "::test_zabr_swaption_vol_cube_xabr_parameters_returns_5tuple",
+
+    # --- namespace-scoped enum holder --------------------------------------
+    "Pillar":
+        "`struct Pillar { enum Choice { MaturityDate, LastRelevantDate, CustomDate }; }` "
+        "(ql/termstructures/bootstraphelper.hpp:40-47) — an enum holder with no members, "
+        "existing only to namespace the enum. Python flattens it to the PillarChoice IntEnum "
+        "(termstructures/bootstrap_helper.py:35), whose three values AND C++ ostream spellings "
+        "are pinned by tests/termstructures/test_bootstrap_helper.py::"
+        "test_pillar_choice_string_repr_matches_cpp",
+
+    # --- detail:: comparator ----------------------------------------------
+    "BootstrapHelperSorter":
+        "`class BootstrapHelperSorter` inside `namespace detail` "
+        "(ql/termstructures/bootstraphelper.hpp:248-258) — a comparator whose whole body is "
+        "`h1->pillarDate() < h2->pillarDate()`, used only as the third argument of the std::sort "
+        "in iterativebootstrap.hpp:163. Python is the sort key at "
+        "termstructures/bootstrap/iterative_bootstrap.py:200 and local_bootstrap.py:169; its "
+        "effect (a curve built from scrambled helpers equals the C++ curve node for node) is "
+        "cross-validated against v1.43 in tests/termstructures/test_bootstrap_helper_sorter.py",
+
+    # --- protected CRTP-style mixin ----------------------------------------
+    "InterpolatedCurve":
+        "`template <class Interpolator> class InterpolatedCurve` "
+        "(ql/termstructures/interpolatedcurve.hpp:42) — every member except the destructor is "
+        "PROTECTED (hpp:47 opens `protected:`); C++ says it exists so curves can 'use protected "
+        "or private inheritance from this class to obtain the relevant data members'. It is not "
+        "constructible on its own. Python holds times_/data_/dates_/interpolation directly on "
+        "each concrete curve (termstructures/yield_/interpolated_discount_curve.py, "
+        "interpolated_zero_curve.py, interpolated_forward_curve.py), and the mixin's whole "
+        "observable contribution — the node grid feeding the interpolation — is cross-validated "
+        "against v1.43 in tests/termstructures/yield_/test_interpolated_discount_curve.py"
+        "::test_discount_at_nodes / ::test_discount_intermediate / ::test_discount_extrap and "
+        "the matching zero/forward modules",
+
     # --- nested comparator / proxy structs with no standalone Python counterpart ---
     "CaseInsensitiveCompare":
         "nested comparator inside C++ IndexManager; Python normalises with name.lower() "

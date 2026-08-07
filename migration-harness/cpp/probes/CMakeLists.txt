@@ -1068,3 +1068,23 @@ add_executable(v143_pe_bondswap_probe v143_pe_bondswap/probe.cpp)
 target_link_libraries(v143_pe_bondswap_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_pe_swaption_probe v143_pe_swaption/probe.cpp)
 target_link_libraries(v143_pe_swaption_probe PRIVATE ${QUANTLIB_LIBRARY})
+
+# --- wave 9 (termstructures) ---
+foreach(area
+        fittedbond
+        andreasenhuge
+        blackvoldelta
+        globalbootstrap
+        ratehelpers
+        spreadcurve
+        optionletstripper
+        abcd
+        xabrerror
+        traits
+        datehelper
+        helpersort)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/v143_ts_${area}/probe.cpp)
+        add_executable(v143_ts_${area}_probe v143_ts_${area}/probe.cpp)
+        target_link_libraries(v143_ts_${area}_probe PRIVATE ${QUANTLIB_LIBRARY})
+    endif()
+endforeach()
