@@ -5,12 +5,20 @@ Probe:     migration-harness/cpp/probes/v143_eqfx_hestonblackvol/probe.cpp
 
 Tolerance — why this file derives a per-cell budget instead of naming a tier.
 
-The surface is an implied vol: a Heston price, inverted through Black. C++
-computes the price with ``AngledContour`` + 160-point Gauss-Laguerre;
-PQuantLib's ``AnalyticHestonEngine`` implements only the Gatheral branch and
-integrates with ``scipy.integrate.quad``, whose default absolute accuracy is
-1.49e-8. So the two prices differ by an absolute amount of order 1e-8, and the
-vol difference that produces is
+The surface is an implied vol: a Heston price, inverted through Black. Both
+sides now compute that price the same way — ``AngledContour`` + 160-point
+Gauss-Laguerre — since ``HestonBlackVolSurface`` gained C++'s two engine
+arguments and ``AnalyticHestonEngine`` gained the contour it names. The prices
+therefore agree to round-off rather than to a quadrature budget, and over the
+informative cells below the observed vol difference is 2.0e-10 (feller_ok) and
+1.1e-8 (feller_violated).
+
+The per-cell budget is kept anyway, and kept at its original size, because the
+*structure* of the problem it was built for has not changed: an implied vol is
+a price divided by a vega, and vega vanishes exponentially in the wings, so no
+single tolerance can cover the grid however well the prices agree. Read
+``_PRICE_ABS_TOL`` as a deliberately generous ceiling on the price difference,
+not as a claim about the integrator. The derivation:
 
     |d(vol)| = |d(price)| / vega
 
@@ -26,10 +34,6 @@ reference vol. Cells whose budget exceeds ``_UNINFORMATIVE`` (10% of the vol)
 are counted rather than asserted, and the test fails if too few cells remain
 informative — that is the guard against the budget quietly swallowing the
 whole grid.
-
-The divergence is real and worth reporting at merge: it is the missing
-``ComplexLogFormula`` / ``Integration`` support in the engine, not a defect in
-this class.
 """
 
 from __future__ import annotations
@@ -62,8 +66,11 @@ _R = 0.04
 _Q = 0.02
 _SPOT = 100.0
 
-# scipy.integrate.quad's default absolute accuracy, which is what bounds the
-# price difference between the two integration schemes.
+# Ceiling on the Heston price difference the per-cell vol budget is derived
+# from. Originally scipy.integrate.quad's default absolute accuracy, back when
+# the port integrated with quad; both sides now run the same 160-point
+# Gauss-Laguerre and agree far better than this. Kept as a generous constant
+# rather than retuned — see the module docstring.
 _PRICE_ABS_TOL = 1.49e-8
 # A cell whose derived vol budget is worse than 10% of the vol tests nothing.
 _UNINFORMATIVE = 0.10
