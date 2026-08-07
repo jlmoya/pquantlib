@@ -1,15 +1,19 @@
-"""HestonSLVFDMModel scaffold tests.
+"""HestonSLVFDMModel structural tests.
 
-C++ parity: ql/models/equity/hestonslvfdmmodel.{hpp,cpp}.
+C++ parity: ql/models/equity/hestonslvfdmmodel.{hpp,cpp} (v1.43).
 
-L11-W1-D ships a structural scaffold; the Fokker-Planck FDM solver is
-deferred to Phase 11 W5. These tests confirm that the public API
-(constructor + leverage_function + heston_process + local_vol) wires
-up correctly and that the unit-leverage fallback is well-defined.
+Cheap checks that need no calibration: the parameter pack's defaults and the
+two passthrough accessors. The model's actual behaviour — the Fokker-Planck
+calibration, the leverage function and the LogEntry snapshots — is
+cross-validated against C++ v1.43 in ``test_heston_slv_fdm_model_v143.py``,
+which is where anything that has to run a calibration belongs.
+
+This file used to assert ``leverage_function()`` returns L = 1 everywhere.
+That was true of the scaffold and is false of the model; the assertion is
+gone rather than relaxed.
 
 Tolerance choice:
 * Public-API round-trips: EXACT — passthrough getters.
-* Unit-leverage value: EXACT — L = 1 by construction in the scaffold.
 """
 
 from __future__ import annotations
@@ -74,12 +78,19 @@ def fdm_model() -> HestonSLVFDMModel:
 
 
 def test_default_params_match_cpp_test_defaults() -> None:
-    """Default HestonSLVFokkerPlanckFdmParams mirrors the C++ test defaults."""
+    """Default HestonSLVFokkerPlanckFdmParams mirrors the C++ test defaults.
+
+    Except ``prediction_correction_steps``. The C++ struct declares no
+    defaults, so these are the port's; 0 is the one value that cannot be a
+    sensible default, since it makes the calibration loop body never execute
+    and leaves the leverage matrix unwritten past column 1.
+    """
     p = HestonSLVFokkerPlanckFdmParams()
     assert p.x_grid == 201
     assert p.v_grid == 51
     assert p.t_max_steps_per_year == 200
     assert p.t_min_steps_per_year == 4
+    assert p.prediction_correction_steps == 2
 
 
 def test_heston_process_passthrough(fdm_model: HestonSLVFDMModel) -> None:
@@ -105,22 +116,19 @@ def test_local_vol_passthrough(fdm_model: HestonSLVFDMModel) -> None:
     tight(v, 0.20, reason="Dupire FD introduces ~1e-14 float64 noise")
 
 
-def test_leverage_function_unit_at_atm(fdm_model: HestonSLVFDMModel) -> None:
-    """Scaffold leverage function returns L=1 at ATM.
+def test_model_starts_uncalculated(fdm_model: HestonSLVFDMModel) -> None:
+    """``LazyObject``: nothing is computed until ``leverage_function()`` asks.
 
-    # Scaffold-only — see module docstring.
+    # C++ parity: ``HestonSLVFDMModel : public LazyObject``
+    # (hestonslvfdmmodel.hpp:73); ``leverageFunction()`` opens with
+    # ``calculate()`` (cpp:274-279).
+
+    The leverage function itself is cross-validated in
+    ``test_heston_slv_fdm_model_v143.py``, on a fixture whose configuration is
+    inside the calibration's working envelope; this fixture's is not, and
+    running one here would prove nothing the v143 file does not.
     """
-    leverage = fdm_model.leverage_function()
-    # L = 1.0 everywhere on the unit-leverage grid.
-    v = leverage.local_vol_at_time(0.5, 100.0, extrapolate=True)
-    exact(v, 1.0)
-
-
-def test_leverage_function_is_cached(fdm_model: HestonSLVFDMModel) -> None:
-    """Repeated calls return the same surface object (lazy cache)."""
-    lev1 = fdm_model.leverage_function()
-    lev2 = fdm_model.leverage_function()
-    assert lev1 is lev2
+    assert not fdm_model.is_calculated()
 
 
 def test_mixing_factor_default_is_one(fdm_model: HestonSLVFDMModel) -> None:

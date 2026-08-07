@@ -43,10 +43,11 @@ cross-validated; the carve-out was stale.
 Divergences from C++, all deliberate:
 
 * ``HestonSLVFokkerPlanckFdmParams`` is a frozen dataclass rather than a
-  POD struct, and spells C++'s ``predictionCorretionSteps`` correctly.
-  Its default is 0 — which makes the C++ inner loop body never run — so
-  callers who want a calibration must pass a positive value, as the C++
-  test-suite does.
+  POD struct, spells C++'s ``predictionCorretionSteps`` correctly, and
+  defaults it to 2. The C++ struct has no defaults at all; 0 would disable
+  the calibration outright.
+* the leverage matrix is NaN-filled where C++ leaves it uninitialised — see
+  the allocation site.
 * C++ ``FdmScheme`` / ``FdmSchemeWrapper<T>`` exist only to give the six
   schemes a common virtual base; Python's duck typing needs neither, so
   ``_fdm_scheme_factory`` returns the scheme itself.
@@ -144,11 +145,11 @@ class HestonSLVFokkerPlanckFdmParams:
     # C++ parity: ``struct HestonSLVFokkerPlanckFdmParams``
     # (hestonslvfdmmodel.hpp:43-71).
 
-    Field names and defaults mirror the C++ test-suite defaults; the C++
-    struct itself has no defaults. Note ``prediction_correction_steps``
-    defaults to 0, which makes the calibration inner loop never execute and
-    the leverage function stay at its seed value — that is faithful to what
-    C++ does with 0, not an omission. The C++ tests pass 2.
+    Field names mirror C++; the defaults are the port's, because the C++
+    struct declares none. They follow the C++ test-suite's values with one
+    exception called out at the field itself:
+    ``prediction_correction_steps`` defaults to 2 rather than 0, since 0
+    disables the calibration entirely.
     """
 
     x_grid: int = 201
@@ -157,7 +158,11 @@ class HestonSLVFokkerPlanckFdmParams:
     t_min_steps_per_year: int = 4
     t_step_number_decay: float = 0.0001
     n_rannacher_time_steps: int = 2
-    prediction_correction_steps: int = 0
+    #: 2, not 0. The C++ struct has NO defaults, so this is the port's choice,
+    #: and 0 is the one value that cannot be right: it makes the calibration
+    #: loop body never execute, so no leverage column past index 1 is written
+    #: and the surface reads NaN there. Every C++ call site passes 2.
+    prediction_correction_steps: int = 2
     x0_density: float = 0.1
     local_vol_eps_prob: float = 1e-6
     max_integration_iterations: int = 25_000
@@ -524,7 +529,23 @@ class HestonSLVFDMModel(LazyObject):
         lv0 = self._local_vol.local_vol_at_time(0.0, spot.value()) / math.sqrt(v0)
 
         # Leverage matrix: (x_grid rows) x (time_grid.size() columns).
-        leverage = np.empty((x_grid, time_grid.size()), dtype=np.float64)
+        #
+        # DELIBERATE DIVERGENCE. C++ writes `new Matrix(xGrid, timeGrid->size())`
+        # (hestonslvfdmmodel.cpp:386), and QuantLib's Matrix(rows, cols) does
+        # `new Real[n]` WITHOUT value-initialisation. Only columns 0 and 1 are
+        # then filled unconditionally; the rest are written inside the
+        # predictor-corrector loop, so with predictionCorretionSteps == 0 the
+        # surface is backed by uninitialised memory. A probe run pinned that
+        # case and consecutive runs of the same binary printed all zeros and
+        # then [0.5017167319402513, 0.46517054407727826, ...].
+        #
+        # Reading uninitialised memory is not a behaviour worth reproducing,
+        # and C++ evidently did not intend it either: line 508 tests
+        # `(*L)[j][i] == Null<Real>()` and QL_FAILs "internal error", a check
+        # that can only ever fire on a Null-initialised matrix. Filling with
+        # NaN is that intent, made real: a column nothing wrote reads NaN
+        # rather than plausible noise.
+        leverage = np.full((x_grid, time_grid.size()), math.nan, dtype=np.float64)
         leverage[:, 0] = lv0
         leverage[:, 1] = lv0
 
@@ -597,8 +618,9 @@ class HestonSLVFDMModel(LazyObject):
 
             # Predictor-corrector steps (cpp:454-517). With
             # prediction_correction_steps == 0 this body never runs, no
-            # leverage column is written for step i, and no forward step is
-            # taken — exactly what C++ does with 0.
+            # leverage column is written for step i and no forward step is
+            # taken; column i then stays NaN. See the matrix allocation above
+            # for why NaN and not whatever the allocator held.
             for _r in range(params.prediction_correction_steps):
                 # Rannacher smoothing: implicit Euler for the first few steps
                 # regardless of the requested scheme.
