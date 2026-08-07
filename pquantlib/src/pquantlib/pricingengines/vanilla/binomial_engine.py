@@ -144,7 +144,12 @@ class BinomialVanillaEngine(GenericEngine[OptionArguments, OneAssetOptionResults
         s0 = process.state_variable().value()
         qassert.require(s0 > 0.0, "negative or null underlying given")
         maturity_date = args.exercise.last_date()
-        v = process.black_volatility().black_vol(maturity_date, s0, extrapolate=True)
+        # C++ parity: ``blackVolatility()->blackVol(exercise->lastDate(), s0)``
+        # (binomialengine.hpp:84-85) — the `extrapolate` argument is left at its
+        # `false` default, so a maturity past the vol surface's max date raises
+        # rather than being silently extrapolated. An earlier revision passed
+        # `extrapolate=True`, which turned that C++ failure into a number.
+        v = process.black_volatility().black_vol(maturity_date, s0)
         r = process.risk_free_rate().zero_rate(
             maturity_date,
             compounding=Compounding.Continuous,
