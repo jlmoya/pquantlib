@@ -1076,3 +1076,5 @@ add_executable(v143_experimental_cdsntd_probe v143_experimental_cdsntd/probe.cpp
 target_link_libraries(v143_experimental_cdsntd_probe PRIVATE ${QUANTLIB_LIBRARY})
 add_executable(v143_experimental_extoufd_probe v143_experimental_extoufd/probe.cpp)
 target_link_libraries(v143_experimental_extoufd_probe PRIVATE ${QUANTLIB_LIBRARY})
+add_executable(v143_models_hestonslvfdm_probe v143_models_hestonslvfdm/probe.cpp)
+target_link_libraries(v143_models_hestonslvfdm_probe PRIVATE ${QUANTLIB_LIBRARY})

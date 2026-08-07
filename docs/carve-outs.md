@@ -90,7 +90,7 @@ Still deferred (covered elsewhere in Phase 11 plan):
 
 **Why deferred:** TreeLattice2D needs care + 2-D backward induction; the analytic G2SwaptionEngine covers the common case.
 
-### Multi-asset finite-difference — **partially CLOSED** by Phase 11 W5-C
+### Multi-asset finite-difference — **CLOSED** (partially by Phase 11 W5-C, remainder by the v1.43 wave-9 finish)
 
 - **`ql/methods/finitedifferences/*`** beyond the 1-D Black-Scholes subset ported in L5-D (~110 of 120 files).
   - 2-D Heston FD (`FdmHestonOp`, `FdmHestonVarianceMesher`, etc.).
@@ -113,22 +113,48 @@ Still deferred (covered elsewhere in Phase 11 plan):
   - `FdmExtOUJumpModelInnerValue` (inner-value calculator for Kluge-style payoffs).
   - `FdmLinearOpComposite` Protocol (the schemes + backward solver now accept any conforming op, not just `FdmBlackScholesOp`).
 
-**Remaining (W5-C deferred):**
-  - `FdmExtOUJumpOp` + `ExtOUWithJumpsProcess` + `ExponentialJump1dMesher`: 2-D op for OU+jumps. Needs the Kluge process family and the exponential-jump 1-D mesher.
-  - `FdmKlugeExtOUOp` + `KlugeExtOUProcess`: 3-D op composition for power+gas spread under Kluge+ExtOU.
-  - `FdExtOUJumpVanillaEngine` + `FdKlugeExtOUSpreadEngine`: process-specific FD vanilla / spread engines. Each requires its op + a 2-D / 3-D solver decomposition (Hundsdorfer / Craig-Sneyd / TR-BDF2 — none of which is ported yet).
-  - `FdmHestonFwdOp` + `FdmSquareRootFwdOp`: forward (Fokker-Planck) operators for the Heston SLV calibration.
-  - `Concentrating1dMesher`: mesh concentration around strike/spot — required by both the BSM mesher's `c_point` parameter and the SLV calibration.
-  - `LocalVolRNDCalculator` + `FdmHestonGreensFct`: Green's-function machinery underpinning the SLV's local-vol density target.
-  - **Heston SLV Fokker-Planck FDM calibration**: the `HestonSlvFdmModel.leverage_function()` real implementation. The W1-D scaffold returns unit leverage (model degenerates to pure Heston). Real calibration requires all four bullets above plus 6 different time-stepping schemes with Rannacher smoothing.
+**CLOSED by the v1.43 wave-9 finish (see the commits touching
+`migration-harness/cpp/probes/v143_experimental_extoufd` and
+`v143_models_hestonslvfdm`):** every bullet that used to sit here is now
+ported and cross-validated. For the record, the claims and what replaced them:
 
-**Why deferred:** The W5-C scope (per the cluster brief) was sized for 7 classes of straightforward 1-D / 2-D FD operators + 1 vanilla engine + 1 SLV calibration. The first 7 landed; the SLV FDM piece alone is 537 LOC of C++ depending on ~5 cross-cluster operators + meshers (~1500 LOC total). Lands as a dedicated Phase-12 cluster (or as an opt-in extension if a user surfaces the requirement).
+  - `FdmExtOUJumpOp` / `FdmKlugeExtOUOp` / `ExtOUWithJumpsProcess` /
+    `KlugeExtOUProcess` / `ExponentialJump1dMesher` — all present.
+  - `FdExtOUJumpVanillaEngine` + `FdKlugeExtOUSpreadEngine` — ported, pinned
+    by `tests/experimental/finitedifferences/test_ext_ou_fd_engines_v143.py`.
+    The claim that "a 2-D / 3-D solver decomposition (Hundsdorfer /
+    Craig-Sneyd / TR-BDF2 — none of which is ported yet)" was needed was
+    already false when written: `Fdm2DimSolver`, `FdmNdimSolver` and all six
+    schemes had shipped.
+  - `FdmHestonFwdOp` + `FdmSquareRootFwdOp`, `Concentrating1dMesher`,
+    `LocalVolRNDCalculator` + `FdmHestonGreensFct` — all present and
+    TIGHT-cross-validated well before this wave.
+  - **Heston SLV Fokker-Planck FDM calibration** — `HestonSLVFDMModel`
+    performs the real calibration; the unit-leverage scaffold is gone, and
+    `HestonSLVFDMModel.LogEntry` records the density per step. Pinned by
+    `tests/models/equity/test_heston_slv_fdm_model_v143.py` across all three
+    `TransformationType` values and two FD schemes.
+
+**Two C++ fragilities worth knowing about**, both found by probe-determinism
+checks during that port and neither of them a port defect:
+
+  - `HestonSLVFDMModel` only works when
+    `LocalVolRNDCalculator.rescale_time_steps()[0] == 1`. Otherwise
+    `v_mesher[1]` stays the degenerate `Predefined1dMesher([v0] * v_grid)`,
+    the first `reshapePDF` interpolates from a mesh whose `y_min == y_max`,
+    the density is zeroed and `rescalePDF` divides by zero. C++ then reports
+    "could not converge" out of BiCGstab. `local_vol_eps_prob` controls it.
+  - With `prediction_correction_steps == 0` the calibration loop body never
+    runs and the leverage matrix past column 1 is never written — and C++
+    allocates it with `new Matrix(...)`, which does not value-initialise.
+    Reading the surface there reads uninitialised memory.
 
 **Access:**
-  - For Heston/Bates *analytic* pricing, `AnalyticHestonEngine` / `BatesEngine` from L4-C / L6-B cover characteristic-function-based pricing.
-  - For Heston SLV, the `HestonSlvFdmModel` scaffold accepts the public API but `leverage_function()` returns the unit-leverage degenerate; round-trip tests vs pure `HestonModel` pricing pass.
-  - For ZABR via FD, `FdmZabrOp` provides the spatial operator. A `ZabrModel.fdmPrice()` wrapper still needs a 2-D solver loop (Craig-Sneyd-style) — separate follow-up.
-  - For energy/power-gas, port the missing process + mesher + op trio against the existing `FdmExtOUJumpModelInnerValue` Python inner-value calculator. The W5-C ports give you the inner-value piece for free.
+  - For Heston/Bates *analytic* pricing, `AnalyticHestonEngine` / `BatesEngine`
+    from L4-C / L6-B cover characteristic-function-based pricing.
+  - For ZABR via FD, `FdmZabrOp` provides the spatial operator. A
+    `ZabrModel.fdmPrice()` wrapper still needs a 2-D solver loop
+    (Craig-Sneyd-style) — separate follow-up.
 
 ### Monte Carlo engine carry-overs
 
