@@ -349,7 +349,7 @@ MarketModels (125 files of LMM machinery); specialty short-rate (Gaussian1d / GS
 
 #### Monte Carlo framework (`pquantlib.methods.montecarlo.*`)
 - **`Path`** + **`MultiPath`** + **`BrownianBridge`** + **`PathGenerator`** + **`MultiPathGenerator`** + **`PathPricer`** + **`McSimulation`** + **`MonteCarloModel`**.
-- **`MCVanillaEngine`** abstract + **`MCEuropeanEngine`** + **`MCDiscreteArithmeticAveragePriceEngine`**.
+- **`MCVanillaEngine`** abstract + **`MCEuropeanEngine`** + **`MCDiscreteArithmeticAPEngine`**.
 - **`DiscreteAveragingAsianOption`** + **`AnalyticDiscreteGeometricAveragePriceAsianEngine`** (Levy 1997).
 
 #### Finite-difference framework (`pquantlib.methods.finitedifferences.*`)

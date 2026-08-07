@@ -9,7 +9,7 @@ Asian option under BSM (constant vol).  Uses E. Levy's 1997 formula
 & Strickland, pp. 65-97).
 
 The engine is also used as the analytic *control-variate* anchor for
-the arithmetic MC engine (``MCDiscreteArithmeticAveragePriceEngine``)
+the arithmetic MC engine (``MCDiscreteArithmeticAPEngine``)
 — the geometric-average payoff is a tractable function of the same
 underlying paths, so subtracting its (deterministic) closed-form mean
 removes the bulk of the variance from the arithmetic MC payoff.

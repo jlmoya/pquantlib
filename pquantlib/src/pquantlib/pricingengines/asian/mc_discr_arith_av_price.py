@@ -1,45 +1,64 @@
-"""MCDiscreteArithmeticAveragePriceEngine — discrete-arithmetic-average Asian MC.
+"""MCDiscreteArithmeticAPEngine — discrete-arithmetic-average price Asian MC.
 
-# C++ parity: ql/pricingengines/asian/mc_discr_arith_av_price.{hpp,cpp}
-# (v1.42.1).
+# C++ parity: ql/pricingengines/asian/mc_discr_arith_av_price.{hpp,cpp} (v1.43) —
+# ``template <class RNG = PseudoRandom, class S = Statistics>
+#  class MCDiscreteArithmeticAPEngine
+#      : public MCDiscreteAveragingAsianEngineBase<SingleVariate,RNG,S>``,
+# ``class ArithmeticAPOPathPricer : public PathPricer<Path>`` and
+# ``template <class RNG, class S> class MakeMCDiscreteArithmeticAPEngine``.
 
-Monte Carlo pricing of discrete-arithmetic-average price Asian
-options.  Two variance-reduction techniques are supported:
+Monte Carlo pricing of discrete-arithmetic-average price Asian options. Two
+variance-reduction techniques are supported:
 
 * Antithetic — emit each path's negated-variate twin and average.
-* Control variate — use the analytic-discrete-geometric-average
-  price engine as the deterministic CV anchor.  The geometric
-  average is a tractable function of the same path values, so
-  subtracting its closed-form mean removes the bulk of the
-  arithmetic MC variance.
+* Control variate — the geometric average of the same fixings has a closed
+  form under Black-Scholes, so
+  :class:`~pquantlib.pricingengines.asian.analytic_discr_geom_av_price.AnalyticDiscreteGeometricAveragePriceAsianEngine`
+  supplies the deterministic anchor while
+  :class:`~pquantlib.pricingengines.asian.mc_discr_geom_av_price.GeometricAPOPathPricer`
+  supplies the pathwise control.
 
-The Python port keeps both ``ArithmeticAPOPathPricer`` and
-``GeometricAPOPathPricer`` here (same module that holds the engine,
-mirroring C++ ``mc_discr_arith_av_price.cpp`` placement) — the
-geometric pricer is reused as the CV path pricer.
+Two asymmetries in the control-variate wiring are C++'s, and are reproduced
+rather than tidied:
+
+* the control path pricer is built WITHOUT the seasoning
+  (``runningAccumulator`` / ``pastFixings``), even for a seasoned option
+  (mc_discr_arith_av_price.hpp:175-184), and the analytic control engine's
+  non-Geometric branch does the same;
+* the control path pricer discounts at ``timeGrid().back()`` while the pricing
+  path pricer discounts at ``exercise->lastDate()``. Those differ whenever the
+  exercise date is later than the last fixing.
 """
 
 from __future__ import annotations
 
-import math
-
 from pquantlib import qassert
+from pquantlib.exercise import EuropeanExercise
+from pquantlib.math.randomnumbers.rng_traits import PseudoRandom
 from pquantlib.methods.montecarlo.path import Path
 from pquantlib.methods.montecarlo.path_pricer import PathPricer
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.pricingengines.asian.analytic_discr_geom_av_price import (
     AnalyticDiscreteGeometricAveragePriceAsianEngine,
 )
+from pquantlib.pricingengines.asian.mc_discr_geom_av_price import (
+    GeometricAPOPathPricer,
+)
 from pquantlib.pricingengines.asian.mc_discrete_asian_engine_base import (
     MCDiscreteAveragingAsianEngineBase,
 )
 from pquantlib.pricingengines.pricing_engine import PricingEngine
+from pquantlib.pricingengines.vanilla.mc_vanilla_engine import RngTraits
+from pquantlib.processes.generalized_black_scholes_process import (
+    GeneralizedBlackScholesProcess,
+)
 
 
 class ArithmeticAPOPathPricer(PathPricer[Path]):
     """Path pricer for discrete-arithmetic-average price Asians.
 
-    # C++ parity: ``ArithmeticAPOPathPricer`` (mc_discr_arith_av_price.cpp:26-53).
+    # C++ parity: ``ArithmeticAPOPathPricer``
+    # (mc_discr_arith_av_price.hpp:84-98, mc_discr_arith_av_price.cpp:26-52).
     """
 
     __slots__ = ("_discount", "_past_fixings", "_payoff", "_running_sum")
@@ -52,6 +71,8 @@ class ArithmeticAPOPathPricer(PathPricer[Path]):
         running_sum: float = 0.0,
         past_fixings: int = 0,
     ) -> None:
+        # C++ parity: mc_discr_arith_av_price.cpp:32-33 — note the message
+        # differs from GeometricAPOPathPricer's for the same condition.
         qassert.require(strike >= 0.0, "strike less than zero not allowed")
         self._payoff: PlainVanillaPayoff = PlainVanillaPayoff(option_type, strike)
         self._discount: float = discount
@@ -59,82 +80,95 @@ class ArithmeticAPOPathPricer(PathPricer[Path]):
         self._past_fixings: int = past_fixings
 
     def __call__(self, path: Path) -> float:
+        """# C++ parity: ``ArithmeticAPOPathPricer::operator()``
+        # (mc_discr_arith_av_price.cpp:36-52).
+
+        NB ``n`` is ``path.length()`` here but ``path.length() - 1`` in
+        ``GeometricAPOPathPricer``; the two spell the same fixing count
+        differently.
+        """
         n = path.length()
         qassert.require(n > 1, "the path cannot be empty")
-        # C++ checks ``path.timeGrid().mandatoryTimes()[0] == 0.0``;
-        # if so include path[0] in the average (the initial fixing).
-        # Otherwise skip path[0] (the t=0 anchor).
+
+        # C++ reads ``path.timeGrid().mandatoryTimes()[0]``: a fixing on the
+        # evaluation date makes path[0] part of the average; otherwise path[0]
+        # is the t=0 anchor and is skipped.
         mandatory = path.time_grid.mandatory_times
-        sum_ = self._running_sum
-        if len(mandatory) > 0 and mandatory[0] == 0.0:
+        total = self._running_sum
+        if mandatory[0] == 0.0:
+            # include initial fixing
             for i in range(n):
-                sum_ += float(path[i])
+                total += path[i]
             fixings = self._past_fixings + n
         else:
             for i in range(1, n):
-                sum_ += float(path[i])
+                total += path[i]
             fixings = self._past_fixings + n - 1
-        average_price = sum_ / fixings
+        average_price = total / fixings
         return self._discount * self._payoff(average_price)
 
 
-class GeometricAPOPathPricer(PathPricer[Path]):
-    """Path pricer for discrete-geometric-average price Asians.
+class MCDiscreteArithmeticAPEngine(MCDiscreteAveragingAsianEngineBase[Path]):
+    """MC engine for discrete-arithmetic-average price Asians.
 
-    # C++ parity: ``GeometricAPOPathPricer`` (mc_discr_geom_av_price.cpp:25-58).
-
-    Used as the CV path pricer for the arithmetic engine. The
-    overflow guard from the C++ code (rescale when product > max/x)
-    is preserved (Python floats have effectively unlimited range, but
-    the C++ branch is mirrored faithfully — overflow on Python is
-    OverflowError, not silent inf).
+    # C++ parity: ``MCDiscreteArithmeticAPEngine<RNG,S>``
+    # (mc_discr_arith_av_price.hpp:48-81, 103-184).
     """
-
-    __slots__ = ("_discount", "_past_fixings", "_payoff", "_running_product")
 
     def __init__(
         self,
-        option_type: OptionType,
-        strike: float,
-        discount: float,
-        running_product: float = 1.0,
-        past_fixings: int = 0,
+        process: GeneralizedBlackScholesProcess,
+        *,
+        brownian_bridge: bool = False,
+        antithetic_variate: bool = False,
+        control_variate: bool = False,
+        required_samples: int | None = None,
+        required_tolerance: float | None = None,
+        max_samples: int | None = None,
+        seed: int = 0,
+        rng_traits: RngTraits = PseudoRandom,
     ) -> None:
-        qassert.require(strike >= 0.0, "negative strike given")
-        self._payoff: PlainVanillaPayoff = PlainVanillaPayoff(option_type, strike)
-        self._discount: float = discount
-        self._running_product: float = running_product
-        self._past_fixings: int = past_fixings
+        super().__init__(
+            process,
+            brownian_bridge=brownian_bridge,
+            antithetic_variate=antithetic_variate,
+            control_variate=control_variate,
+            required_samples=required_samples,
+            required_tolerance=required_tolerance,
+            max_samples=max_samples,
+            seed=seed,
+            rng_traits=rng_traits,
+            multi_variate=False,
+        )
 
-    def __call__(self, path: Path) -> float:
-        n = path.length() - 1
-        qassert.require(n > 0, "the path cannot be empty")
-        mandatory = path.time_grid.mandatory_times
-        product = self._running_product
-        fixings = n + self._past_fixings
-        if len(mandatory) > 0 and mandatory[0] == 0.0:
-            fixings += 1
-            product *= float(path.front())
-        # C++ uses log-space accumulation; this is the simplest stable
-        # equivalent. ``math.fsum`` on a list of logs to keep float drift
-        # tight, then exp at the end.
-        log_terms: list[float] = []
-        if product > 0.0:
-            log_terms.append(math.log(product))
-        for i in range(1, n + 1):
-            price = float(path[i])
-            qassert.require(price > 0.0, "non-positive underlying price in geometric average path")
-            log_terms.append(math.log(price))
-        average_price = math.exp(math.fsum(log_terms) / fixings)
-        return self._discount * self._payoff(average_price)
+    # --- helpers ----------------------------------------------------------
 
+    def _payoff_exercise_process(
+        self,
+    ) -> tuple[PlainVanillaPayoff, EuropeanExercise, GeneralizedBlackScholesProcess]:
+        """The three ``dynamic_pointer_cast`` guards both path pricers share.
 
-class MCDiscreteArithmeticAveragePriceEngine(MCDiscreteAveragingAsianEngineBase):
-    """MC engine for discrete-arithmetic-average price Asians.
+        # C++ parity: mc_discr_arith_av_price.hpp:129-142 (and the identical
+        # block at 160-173).
+        """
+        args = self._arguments
+        payoff = args.payoff
+        qassert.require(isinstance(payoff, PlainVanillaPayoff), "non-plain payoff given")
+        assert isinstance(payoff, PlainVanillaPayoff)
 
-    # C++ parity: ``MCDiscreteArithmeticAPEngine<RNG, S>``
-    # (mc_discr_arith_av_price.hpp).
-    """
+        exercise = args.exercise
+        qassert.require(isinstance(exercise, EuropeanExercise), "wrong exercise given")
+        assert isinstance(exercise, EuropeanExercise)
+
+        process = self._process
+        qassert.require(
+            isinstance(process, GeneralizedBlackScholesProcess),
+            "Black-Scholes process required",
+        )
+        assert isinstance(process, GeneralizedBlackScholesProcess)
+        return payoff, exercise, process
+
+    # --- McSimulation hooks -----------------------------------------------
 
     def path_pricer(self) -> PathPricer[Path]:
         """Build the arithmetic-average path pricer.
@@ -142,22 +176,16 @@ class MCDiscreteArithmeticAveragePriceEngine(MCDiscreteAveragingAsianEngineBase)
         # C++ parity: ``MCDiscreteArithmeticAPEngine::pathPricer``
         # (mc_discr_arith_av_price.hpp:123-152).
         """
+        payoff, exercise, process = self._payoff_exercise_process()
         args = self._arguments
-        payoff = args.payoff
-        qassert.require(isinstance(payoff, PlainVanillaPayoff), "non-plain payoff given")
-        assert isinstance(payoff, PlainVanillaPayoff)
-        assert args.exercise is not None
-
-        process = self._process
-        discount = process.risk_free_rate().discount(args.exercise.last_date())
         assert args.running_accumulator is not None
         assert args.past_fixings is not None
         return ArithmeticAPOPathPricer(
-            option_type=payoff.option_type(),
-            strike=payoff.strike(),
-            discount=discount,
-            running_sum=args.running_accumulator,
-            past_fixings=args.past_fixings,
+            payoff.option_type(),
+            payoff.strike(),
+            process.risk_free_rate().discount(exercise.last_date()),
+            args.running_accumulator,
+            args.past_fixings,
         )
 
     def control_path_pricer(self) -> PathPricer[Path] | None:
@@ -165,29 +193,140 @@ class MCDiscreteArithmeticAveragePriceEngine(MCDiscreteAveragingAsianEngineBase)
 
         # C++ parity: ``MCDiscreteArithmeticAPEngine::controlPathPricer``
         # (mc_discr_arith_av_price.hpp:154-184).
+
+        For a seasoned option the geometric strike would have to be rescaled to
+        obtain an equivalent arithmetic strike; C++ does not do that and passes
+        no seasoning at all here. Any change applied here MUST be applied to
+        the analytic engine too.
         """
-        if not self._control_variate:
-            return None
-        args = self._arguments
-        payoff = args.payoff
-        qassert.require(isinstance(payoff, PlainVanillaPayoff), "non-plain payoff given")
-        assert isinstance(payoff, PlainVanillaPayoff)
-        process = self._process
+        payoff, _exercise, process = self._payoff_exercise_process()
+        # C++ discounts at ``this->timeGrid().back()`` -- NOT at the exercise
+        # date, unlike ``pathPricer`` above.
         return GeometricAPOPathPricer(
-            option_type=payoff.option_type(),
-            strike=payoff.strike(),
-            discount=process.risk_free_rate().discount(self.time_grid().back()),
+            payoff.option_type(),
+            payoff.strike(),
+            process.risk_free_rate().discount(self.time_grid().back()),
         )
 
     def control_pricing_engine(self) -> PricingEngine | None:
-        """Build the analytic-geometric CV pricing engine."""
-        if not self._control_variate:
-            return None
-        return AnalyticDiscreteGeometricAveragePriceAsianEngine(self._process)
+        """Build the analytic-geometric CV pricing engine.
+
+        # C++ parity: ``MCDiscreteArithmeticAPEngine::controlPricingEngine``
+        # (mc_discr_arith_av_price.hpp:73-80).
+        """
+        process = self._process
+        qassert.require(
+            isinstance(process, GeneralizedBlackScholesProcess),
+            "Black-Scholes process required",
+        )
+        assert isinstance(process, GeneralizedBlackScholesProcess)
+        return AnalyticDiscreteGeometricAveragePriceAsianEngine(process)
+
+
+class MakeMCDiscreteArithmeticAPEngine:
+    """Fluent builder for :class:`MCDiscreteArithmeticAPEngine`.
+
+    # C++ parity: ``MakeMCDiscreteArithmeticAPEngine<RNG,S>``
+    # (mc_discr_arith_av_price.hpp:186-284).
+
+    ``brownianBridge`` defaults to **True** here (C++ member initialiser
+    ``bool brownianBridge_ = true``), unlike the engine constructor's default.
+    """
+
+    __slots__ = (
+        "_antithetic",
+        "_brownian_bridge",
+        "_control_variate",
+        "_max_samples",
+        "_process",
+        "_rng_traits",
+        "_samples",
+        "_seed",
+        "_tolerance",
+    )
+
+    def __init__(
+        self,
+        process: GeneralizedBlackScholesProcess,
+        rng_traits: RngTraits = PseudoRandom,
+    ) -> None:
+        self._process: GeneralizedBlackScholesProcess = process
+        self._rng_traits: RngTraits = rng_traits
+        self._antithetic: bool = False
+        self._control_variate: bool = False
+        self._samples: int | None = None
+        self._max_samples: int | None = None
+        self._tolerance: float | None = None
+        self._brownian_bridge: bool = True
+        self._seed: int = 0
+
+    def with_samples(self, samples: int) -> MakeMCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``withSamples`` (mc_discr_arith_av_price.hpp:216-223)."""
+        qassert.require(self._tolerance is None, "tolerance already set")
+        self._samples = samples
+        return self
+
+    def with_absolute_tolerance(
+        self, tolerance: float
+    ) -> MakeMCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``withAbsoluteTolerance``
+        # (mc_discr_arith_av_price.hpp:225-236)."""
+        qassert.require(self._samples is None, "number of samples already set")
+        qassert.require(
+            bool(self._rng_traits.allows_error_estimate),
+            "chosen random generator policy does not allow an error estimate",
+        )
+        self._tolerance = tolerance
+        return self
+
+    def with_max_samples(self, samples: int) -> MakeMCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``withMaxSamples`` (mc_discr_arith_av_price.hpp:238-243)."""
+        self._max_samples = samples
+        return self
+
+    def with_seed(self, seed: int) -> MakeMCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``withSeed`` (mc_discr_arith_av_price.hpp:245-250)."""
+        self._seed = seed
+        return self
+
+    def with_brownian_bridge(self, b: bool = True) -> MakeMCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``withBrownianBridge``
+        # (mc_discr_arith_av_price.hpp:252-257)."""
+        self._brownian_bridge = b
+        return self
+
+    def with_antithetic_variate(
+        self, b: bool = True
+    ) -> MakeMCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``withAntitheticVariate``
+        # (mc_discr_arith_av_price.hpp:259-264)."""
+        self._antithetic = b
+        return self
+
+    def with_control_variate(self, b: bool = True) -> MakeMCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``withControlVariate``
+        # (mc_discr_arith_av_price.hpp:266-271)."""
+        self._control_variate = b
+        return self
+
+    def engine(self) -> MCDiscreteArithmeticAPEngine:
+        """# C++ parity: ``operator ext::shared_ptr<PricingEngine>() const``
+        # (mc_discr_arith_av_price.hpp:273-284) — no validation happens here."""
+        return MCDiscreteArithmeticAPEngine(
+            self._process,
+            brownian_bridge=self._brownian_bridge,
+            antithetic_variate=self._antithetic,
+            control_variate=self._control_variate,
+            required_samples=self._samples,
+            required_tolerance=self._tolerance,
+            max_samples=self._max_samples,
+            seed=self._seed,
+            rng_traits=self._rng_traits,
+        )
 
 
 __all__ = [
     "ArithmeticAPOPathPricer",
-    "GeometricAPOPathPricer",
-    "MCDiscreteArithmeticAveragePriceEngine",
+    "MCDiscreteArithmeticAPEngine",
+    "MakeMCDiscreteArithmeticAPEngine",
 ]

@@ -1,7 +1,7 @@
-"""Tests for ``MCDiscreteArithmeticAveragePriceEngine``.
+"""Tests for ``MCDiscreteArithmeticAPEngine``.
 
 # C++ parity: ql/pricingengines/asian/mc_discr_arith_av_price.{hpp,cpp}
-# (v1.42.1).
+# (v1.43).
 
 Cross-validates against the C++ MC reference (LOOSE tier — sampling
 noise), plus checks that enabling the geometric-average control
@@ -18,7 +18,7 @@ from pquantlib.instruments.asian_option import DiscreteAveragingAsianOption
 from pquantlib.instruments.average_type import AverageType
 from pquantlib.payoffs import OptionType, PlainVanillaPayoff
 from pquantlib.pricingengines.asian.mc_discr_arith_av_price import (
-    MCDiscreteArithmeticAveragePriceEngine,
+    MCDiscreteArithmeticAPEngine,
 )
 from pquantlib.processes.generalized_black_scholes_process import (
     GeneralizedBlackScholesProcess,
@@ -60,7 +60,7 @@ def _build_textbook_arith_asian() -> tuple[
 def test_mc_arith_no_cv_runs_and_returns_reasonable_npv() -> None:
     """No CV, no antithetic — NPV in [3, 9] and 1-sigma error in [0.05, 0.5]."""
     process, opt = _build_textbook_arith_asian()
-    engine = MCDiscreteArithmeticAveragePriceEngine(
+    engine = MCDiscreteArithmeticAPEngine(
         process,
         antithetic_variate=False,
         control_variate=False,
@@ -79,7 +79,7 @@ def test_mc_arith_no_cv_runs_and_returns_reasonable_npv() -> None:
 def test_cv_reduces_error_by_an_order_of_magnitude() -> None:
     """Geometric control variate should reduce standard error >= 5x."""
     process, opt_nocv = _build_textbook_arith_asian()
-    nocv = MCDiscreteArithmeticAveragePriceEngine(
+    nocv = MCDiscreteArithmeticAPEngine(
         process,
         antithetic_variate=False,
         control_variate=False,
@@ -91,7 +91,7 @@ def test_cv_reduces_error_by_an_order_of_magnitude() -> None:
     err_nocv = opt_nocv.error_estimate()
 
     process2, opt_cv = _build_textbook_arith_asian()
-    cv = MCDiscreteArithmeticAveragePriceEngine(
+    cv = MCDiscreteArithmeticAPEngine(
         process2,
         antithetic_variate=False,
         control_variate=True,
@@ -110,7 +110,7 @@ def test_cv_reduces_error_by_an_order_of_magnitude() -> None:
 def test_cv_npv_close_to_nocv_npv_within_tolerance() -> None:
     """CV adjusts variance, not bias — the means should agree at LOOSE."""
     process, opt_nocv = _build_textbook_arith_asian()
-    nocv = MCDiscreteArithmeticAveragePriceEngine(
+    nocv = MCDiscreteArithmeticAPEngine(
         process,
         antithetic_variate=False,
         control_variate=False,
@@ -122,7 +122,7 @@ def test_cv_npv_close_to_nocv_npv_within_tolerance() -> None:
     err_nocv = opt_nocv.error_estimate()
 
     process2, opt_cv = _build_textbook_arith_asian()
-    cv = MCDiscreteArithmeticAveragePriceEngine(
+    cv = MCDiscreteArithmeticAPEngine(
         process2,
         antithetic_variate=False,
         control_variate=True,
@@ -138,7 +138,7 @@ def test_cv_npv_close_to_nocv_npv_within_tolerance() -> None:
 def test_required_tolerance_termination_with_cv() -> None:
     """CV + tolerance-driven termination converges quickly."""
     process, opt = _build_textbook_arith_asian()
-    engine = MCDiscreteArithmeticAveragePriceEngine(
+    engine = MCDiscreteArithmeticAPEngine(
         process,
         antithetic_variate=False,
         control_variate=True,
@@ -153,7 +153,7 @@ def test_required_tolerance_termination_with_cv() -> None:
 
 def test_neither_samples_nor_tolerance_raises() -> None:
     process, opt = _build_textbook_arith_asian()
-    engine = MCDiscreteArithmeticAveragePriceEngine(process, seed=42)
+    engine = MCDiscreteArithmeticAPEngine(process, seed=42)
     opt.set_pricing_engine(engine)
     with pytest.raises(Exception, match="neither tolerance nor number"):
         opt.npv()
