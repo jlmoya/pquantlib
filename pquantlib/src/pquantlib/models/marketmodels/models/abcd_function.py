@@ -171,3 +171,61 @@ class AbcdFunction:
                 )
             )
         ) / (4 * c * c * c * k2 * k3)
+
+
+class AbcdSquared:
+    """Product of two abcd evaluations, as an integrand in ``t``.
+
+    # C++ parity: ``class AbcdSquared`` (ql/termstructures/volatility/abcd.hpp:93,
+    # ql/termstructures/volatility/abcd.cpp:99-105).
+
+    C++ calls this "Helper class used by unit tests", and it is exactly
+
+    .. code-block:: cpp
+
+        Real AbcdSquared::operator()(Time t) const {
+            return abcd_->covariance(t, T_, S_);      // abcd.cpp:104
+        }
+
+    i.e. ``f(T - t) * f(S - t)`` — the *instantaneous* covariance
+    (``AbcdFunction::covariance(Time, Time, Time)``, abcd.cpp:43-45), which is
+    the same expression as ``AbcdFunction::instantaneousCovariance``
+    (abcd.cpp:68-70). The name is a mild misnomer: it is a square only when
+    ``T == S``.
+
+    Its purpose is to be handed to a numerical integrator so that the result
+    can be compared against the closed-form
+    :meth:`AbcdFunction.primitive` — which is why it is a callable object with
+    a single ``Time`` argument rather than a free function.
+    """
+
+    def __init__(
+        self,
+        a: float,
+        b: float,
+        c: float,
+        d: float,
+        t_fix: float,
+        s: float,
+    ) -> None:
+        """Bind the abcd parameters and the two fixing times.
+
+        Args:
+            a, b, c, d: Rebonato abcd parameters.
+            t_fix: the C++ ``T`` — first rate's fixing time.
+            s: the C++ ``S`` — second rate's fixing time.
+        """
+        # C++ parity: abcd.cpp:99-101 — builds an AbcdFunction and stores T, S.
+        self._abcd: AbcdFunction = AbcdFunction(a, b, c, d)
+        self._t_fix: float = t_fix
+        self._s: float = s
+
+    def __call__(self, t: float) -> float:
+        """``f(T - t) * f(S - t)``.
+
+        # C++ parity: abcd.cpp:103-105 — ``abcd_->covariance(t, T_, S_)``,
+        # which dispatches to the three-argument overload at abcd.cpp:43-45.
+        # PQuantLib splits that overload out under the name
+        # ``instantaneous_covariance`` (see this module's header note).
+        """
+        return self._abcd.instantaneous_covariance(t, self._t_fix, self._s)
