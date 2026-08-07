@@ -48,17 +48,20 @@ import numpy.typing as npt
 
 from pquantlib import qassert
 from pquantlib.math.constants import QL_EPSILON
+from pquantlib.methods.lattices.trinomial_tree import TrinomialTree
 from pquantlib.models.model import TermStructureConsistentModel
 from pquantlib.models.parameter import (
     NullParameter,
     Parameter,
     ParameterImpl,
     TermStructureFittingParameter,
+    TermStructureFittingParameterImpl,
 )
 from pquantlib.models.shortrate.onefactor.one_factor_model import (
     ShortRateDynamics,
 )
 from pquantlib.models.shortrate.onefactor.vasicek import Vasicek
+from pquantlib.models.shortrate.short_rate_tree import ShortRateTree
 from pquantlib.payoffs import OptionType
 from pquantlib.pricingengines.black_formula import black_formula
 from pquantlib.processes.ornstein_uhlenbeck_process import OrnsteinUhlenbeckProcess
@@ -67,6 +70,7 @@ from pquantlib.time.frequency import Frequency
 
 if TYPE_CHECKING:
     from pquantlib.termstructures.yield_term_structure import YieldTermStructure
+    from pquantlib.time.time_grid import TimeGrid
 
 
 class _HullWhiteFittingImpl(ParameterImpl):
@@ -229,6 +233,58 @@ class HullWhite(Vasicek, TermStructureConsistentModel):
     def dynamics(self) -> ShortRateDynamics:
         # C++ parity: hullwhite.hpp:162-166 inline.
         return _HullWhiteDynamics(self._phi, self.a(), self.sigma())
+
+    def tree(self, grid: TimeGrid) -> ShortRateTree:
+        """Trinomial lattice whose ``phi`` is fitted to the curve on ``grid``.
+
+        # C++ parity: ``HullWhite::tree`` (hullwhite.cpp:53-77).
+
+        Hull-White **overrides** ``OneFactorModel::tree`` rather than
+        inheriting it, and the override is load-bearing: the inherited
+        version builds the lattice on the *analytic* fitting parameter
+        ``phi(t) = f(t) + 0.5 (sigma B(t))^2``, which is exact for the
+        continuous-time model but leaves an O(dt) arbitrage in the
+        discretised trinomial tree. The override instead fits a
+        ``TermStructureFittingParameter`` slice by slice in closed form,
+
+            phi(t_i) = log( sum_j Q_ij exp(-x_ij dt_i) / P(0, t_{i+1}) ) / dt_i,
+
+        so the tree reprices every grid discount bond to machine precision.
+        Without it, a lattice-priced swap converges to the analytic value
+        only as O(1/N) — measurably wrong at the 40-step grids the C++ test
+        suite uses (cross-validated by ``tree_swap_*`` in
+        ``migration-harness/references/v143/pe/bondswap.json``).
+
+        Note the fit loop reads ``state_prices(i)``, which discounts with
+        ``phi`` at ``grid[0..i-1]`` — already set by the previous iterations —
+        so the sequencing here is not incidental.
+        """
+        phi = TermStructureFittingParameter(self.term_structure)
+        impl = phi.impl
+        qassert.require(
+            isinstance(impl, TermStructureFittingParameterImpl),
+            "HullWhite.tree needs a numerical fitting parameter",
+        )
+        assert isinstance(impl, TermStructureFittingParameterImpl)
+
+        numeric_dynamics = _HullWhiteDynamics(phi, self.a(), self.sigma())
+        trinomial = TrinomialTree(numeric_dynamics.process, grid)
+        numeric_tree = ShortRateTree(trinomial, numeric_dynamics, grid)
+
+        impl.reset()
+        for i in range(grid.size() - 1):
+            discount_bond = self.term_structure.discount(grid[i + 1])
+            state_prices = numeric_tree.state_prices(i)
+            size = numeric_tree.size(i)
+            dt = grid.dt(i)
+            dx = trinomial.dx(i)
+            x = trinomial.underlying(i, 0)
+            value = 0.0
+            for j in range(size):
+                value += float(state_prices[j]) * math.exp(-x * dt)
+                x += dx
+            impl.set(grid[i], math.log(value / discount_bond) / dt)
+        return numeric_tree
 
     # --- A(t, T) override ----------------------------------------------
 
