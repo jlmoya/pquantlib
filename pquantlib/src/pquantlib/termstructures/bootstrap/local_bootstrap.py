@@ -212,9 +212,12 @@ class LocalBootstrap[TS, Traits]:
             for j in range(window_size - 1):
                 start[j] = float(live_data[initial_data_pt + j])
             if i_inst >= self._localisation:
-                start[-1] = float(
-                    traits.guess(i_inst, live_data, valid_data=False)
-                )
+                # C++ parity: localbootstrap.hpp:228-229 —
+                # ``Traits::guess(iInst, ts_, false, 0)``. The trait reads the
+                # CURVE (times/data/dates and the rate accessors), and the
+                # firstAliveHelper argument is hard-coded to 0 here because
+                # LocalBootstrap does not skip expired helpers.
+                start[-1] = float(traits.guess(i_inst, curve, False, 0))
             else:
                 start[-1] = float(live_data[0])
 

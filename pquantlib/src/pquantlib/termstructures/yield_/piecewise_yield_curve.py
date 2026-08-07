@@ -1,14 +1,14 @@
 """PiecewiseYieldCurve — bootstrap-from-helpers yield curve.
 
-# C++ parity: ql/termstructures/yield/piecewiseyieldcurve.hpp (v1.42.1)
+# C++ parity: ql/termstructures/yield/piecewiseyieldcurve.hpp (v1.43)
 
 C++ ``PiecewiseYieldCurve<Traits, Interpolator, Bootstrap>`` is the
 production-grade piecewise-bootstrap yield curve. It chains
-``InterpolatedDiscount/Zero/ForwardCurve<Interpolator>`` with
-``IterativeBootstrap<Curve>``. The traits class
-(``Discount`` / ``ZeroYield`` / ``ForwardRate``) selects which curve
-quantity is the bootstrap state — and therefore which
-``InterpolatedXxxCurve`` is the underlying interpolation engine.
+``Traits::curve<Interpolator>::type`` with ``IterativeBootstrap<Curve>``.
+The traits class (``Discount`` / ``ZeroYield`` / ``ForwardRate`` /
+``SimpleZeroYield``) selects which curve quantity is the bootstrap state —
+and therefore which ``InterpolatedXxxCurve`` is the underlying
+interpolation engine.
 
 In Python we take ``traits`` as either a class (auto-instantiated) or
 an instance, and pick the matching ``InterpolatedXxxCurve`` at
@@ -55,12 +55,16 @@ from pquantlib.termstructures.yield_.interpolated_discount_curve import (
 from pquantlib.termstructures.yield_.interpolated_forward_curve import (
     InterpolatedForwardCurve,
 )
+from pquantlib.termstructures.yield_.interpolated_simple_zero_curve import (
+    InterpolatedSimpleZeroCurve,
+)
 from pquantlib.termstructures.yield_.interpolated_zero_curve import (
     InterpolatedZeroCurve,
 )
 from pquantlib.termstructures.yield_.yield_traits import (
     Discount,
     ForwardRate,
+    SimpleZeroYield,
     ZeroYield,
 )
 from pquantlib.termstructures.yield_term_structure import YieldTermStructure
@@ -243,12 +247,16 @@ class PiecewiseYieldCurve(YieldTermStructure):
     # ---- traits → underlying class plumbing -------------------------------
 
     def _underlying_class(self) -> type:
+        # C++ parity: ``Traits::template curve<Interpolator>::type``
+        # (bootstraptraits.hpp:46-49, 130-133, 223-226, 316-319).
         if self._traits_class is Discount:
             return InterpolatedDiscountCurve
         if self._traits_class is ZeroYield:
             return InterpolatedZeroCurve
         if self._traits_class is ForwardRate:
             return InterpolatedForwardCurve
+        if self._traits_class is SimpleZeroYield:
+            return InterpolatedSimpleZeroCurve
         qassert.fail(
             f"PiecewiseYieldCurve: unsupported traits {self._traits_class}",
         )
@@ -257,7 +265,7 @@ class PiecewiseYieldCurve(YieldTermStructure):
     def _underlying_data_kwarg(self) -> str:
         if self._traits_class is Discount:
             return "dfs"
-        if self._traits_class is ZeroYield:
+        if self._traits_class in (ZeroYield, SimpleZeroYield):
             return "yields"
         if self._traits_class is ForwardRate:
             return "forwards"

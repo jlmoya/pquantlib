@@ -1,7 +1,7 @@
 """PiecewiseYoYOptionletVolatilityCurve — bootstrapped YoY vol curve.
 
 # C++ parity: ql/experimental/inflation/piecewiseyoyoptionletvolatility.hpp
-   (v1.42.1) — ``YoYInflationVolatilityTraits`` +
+   (v1.43) — ``YoYInflationVolatilityTraits`` +
    ``PiecewiseYoYOptionletVolatilityCurve<Interpolator, Bootstrap, Traits>``.
 
 A flat-smile YoY optionlet vol curve bootstrapped from
@@ -9,6 +9,11 @@ A flat-smile YoY optionlet vol curve bootstrapped from
 machinery is shared with :class:`InterpolatedYoYOptionletVolatilityCurve`;
 this adds the bootstrap (the early pillars are usually pure assumption,
 seeded by the base vol level).
+
+The traits take the CURVE (``const C* c`` in C++) plus the trailing
+``firstAliveHelper`` index, matching the protocol
+:class:`~pquantlib.termstructures.bootstrap.iterative_bootstrap.IterativeBootstrap`
+calls through.
 """
 
 from __future__ import annotations
@@ -51,20 +56,34 @@ class YoYInflationVolatilityTraits:
         # (unquoted) options.
         return curve.base_level()
 
-    def guess(self, i: int, data: Sequence[float], valid_data: bool) -> float:
+    def guess(
+        self, i: int, c: InterpolatedYoYOptionletVolatilityCurve, valid_data: bool,
+        first_alive_helper: int,
+    ) -> float:
+        # # C++ parity: piecewiseyoyoptionletvolatility.hpp:54-69.
+        del first_alive_helper
         if valid_data:
-            return data[i]
+            return c.data()[i]
         if i == 1:
             return 0.005
         return 0.002
 
-    def min_value_after(self, i: int, data: Sequence[float], valid_data: bool) -> float:
-        del valid_data
-        return max(0.0, data[i - 1] - 0.02)  # vol cannot be negative
+    def min_value_after(
+        self, i: int, c: InterpolatedYoYOptionletVolatilityCurve, valid_data: bool,
+        first_alive_helper: int,
+    ) -> float:
+        # # C++ parity: piecewiseyoyoptionletvolatility.hpp:71-79 — the
+        # validData flag is unnamed in C++ too; the bound is unconditional.
+        del valid_data, first_alive_helper
+        return max(0.0, c.data()[i - 1] - 0.02)  # vol cannot be negative
 
-    def max_value_after(self, i: int, data: Sequence[float], valid_data: bool) -> float:
-        del valid_data
-        return data[i - 1] + 0.02
+    def max_value_after(
+        self, i: int, c: InterpolatedYoYOptionletVolatilityCurve, valid_data: bool,
+        first_alive_helper: int,
+    ) -> float:
+        # # C++ parity: piecewiseyoyoptionletvolatility.hpp:79-87.
+        del valid_data, first_alive_helper
+        return c.data()[i - 1] + 0.02
 
     def update_guess(self, data: list[float], level: float, i: int) -> None:
         data[i] = level

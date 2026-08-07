@@ -51,6 +51,12 @@ class _FakeCurve:
     def times(self) -> list[float]:
         return list(self._times)
 
+    def dates(self) -> list[Date]:
+        return list(self._dates)
+
+    def data(self) -> list[float]:
+        return list(self._data)
+
     def data_live(self) -> list[float]:
         return self._data
 
@@ -108,7 +114,11 @@ class _FakeHelper(BootstrapHelper[_FakeCurve]):
 
 
 class _FakeTraits:
-    """Minimal traits — initial_value 0, no propagation, ±0.5 bracket."""
+    """Minimal traits — initial_value 0, no propagation, ±0.5 bracket.
+
+    Signatures follow the C++ trait protocol restored in the v1.43
+    alignment: ``(i, curve, valid_data, first_alive_helper)``.
+    """
 
     def initial_date(self, ts: _FakeCurve) -> Date:
         return ts.reference_date()
@@ -117,20 +127,22 @@ class _FakeTraits:
         del ts
         return 0.0
 
-    def guess(self, i: int, data: list[float], valid_data: bool) -> float:
-        del i, valid_data
-        return 0.05 if len(data) > 0 else 0.0
+    def guess(
+        self, i: int, c: _FakeCurve, valid_data: bool, first_alive_helper: int
+    ) -> float:
+        del i, valid_data, first_alive_helper
+        return 0.05 if len(c.data()) > 0 else 0.0
 
     def min_value_after(
-        self, i: int, data: list[float], valid_data: bool
+        self, i: int, c: _FakeCurve, valid_data: bool, first_alive_helper: int
     ) -> float:
-        del i, data, valid_data
+        del i, c, valid_data, first_alive_helper
         return -0.5
 
     def max_value_after(
-        self, i: int, data: list[float], valid_data: bool
+        self, i: int, c: _FakeCurve, valid_data: bool, first_alive_helper: int
     ) -> float:
-        del i, data, valid_data
+        del i, c, valid_data, first_alive_helper
         return 0.5
 
     def update_guess(self, data: list[float], level: float, i: int) -> None:
@@ -178,6 +190,44 @@ def test_iterative_bootstrap_rejects_duplicate_pillars() -> None:
         traits=traits,
     )
     with pytest.raises(Exception, match="more than one instrument with pillar"):
+        bootstrapper.calculate()
+
+
+def test_iterative_bootstrap_skips_expired_helpers() -> None:
+    """Helpers pillared at or before the curve's first date are dropped.
+
+    # C++ parity: iterativebootstrap.hpp:163-167 — ``firstAliveHelper_`` is
+    # advanced past every helper whose pillar is ``<= firstDate``, and the
+    # grid is sized ``alive_ + 1`` rather than ``n + 1``. Without the skip
+    # the expired helper would instead trip the duplicate-pillar check
+    # against the curve's own base date.
+    """
+    today = Date(43000)
+    curve = _FakeCurve(today)
+    helpers = [
+        _FakeHelper(0.01, today),  # expired: pillar == first date
+        _FakeHelper(0.02, Date(43365)),
+        _FakeHelper(0.025, Date(43730)),
+    ]
+    bootstrapper: IterativeBootstrap[_FakeCurve, _FakeTraits] = IterativeBootstrap(
+        curve=curve, instruments=helpers, traits=_FakeTraits()
+    )
+    bootstrapper.calculate()
+    # 2 alive helpers ⇒ 3 grid nodes, not 4.
+    assert len(curve.data_live()) == 3
+    assert math.isclose(curve.data_live()[1], 0.02, abs_tol=1e-10)
+    assert math.isclose(curve.data_live()[2], 0.025, abs_tol=1e-10)
+
+
+def test_iterative_bootstrap_rejects_all_expired_helpers() -> None:
+    """# C++ parity: iterativebootstrap.hpp:160-161 — ``all instruments expired``."""
+    today = Date(43000)
+    curve = _FakeCurve(today)
+    helpers = [_FakeHelper(0.01, Date(42999)), _FakeHelper(0.02, today)]
+    bootstrapper: IterativeBootstrap[_FakeCurve, _FakeTraits] = IterativeBootstrap(
+        curve=curve, instruments=helpers, traits=_FakeTraits()
+    )
+    with pytest.raises(Exception, match="all instruments expired"):
         bootstrapper.calculate()
 
 
