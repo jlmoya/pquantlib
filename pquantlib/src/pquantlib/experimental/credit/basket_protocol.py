@@ -82,8 +82,8 @@ class BasketProtocol(Protocol):
         """
         ...
 
-    def recovery_rate(self, d: Date, i: int) -> float:
-        """Recovery rate for name ``i`` at date ``d``.
+    def recovery_rate(self, d: Date, i_name: int) -> float:
+        """Recovery rate for name ``i_name`` at date ``d``.
 
         # C++ parity: ``Basket::recoveryRate(Date, Size)``.
         """

@@ -82,8 +82,8 @@ class _ConstantProbBasket:
     def remaining_notional(self) -> float:
         return self.size() * self._notional_per_name
 
-    def recovery_rate(self, d: Date, i: int) -> float:
-        del d, i
+    def recovery_rate(self, d: Date, i_name: int) -> float:
+        del d, i_name
         return self._recovery
 
     def prob_at_least_n_events(self, n: int, d: Date) -> float:
