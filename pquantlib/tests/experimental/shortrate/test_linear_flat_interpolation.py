@@ -1,10 +1,14 @@
 """Tests for LinearFlatInterpolation (linear w/ flat extrapolation).
 
-C++ parity: ql/experimental/shortrate/generalizedhullwhite.hpp:310-382
-(``LinearFlatInterpolation`` + ``LinearFlat``) @ v1.42.1.
+C++ parity: ql/experimental/shortrate/generalizedhullwhite.hpp
+(``LinearFlatInterpolation`` line 313 + ``LinearFlat`` line 328 +
+``detail::LinearFlatInterpolationImpl`` line 341) @ v1.43.
 
-No probe needed — the behaviour is a small closed form verified against
-hand-computed values + the analytic linear/flat properties.
+Every expected value below is HAND-COMPUTED, not C++-derived. That is a
+redundant algebraic check on the closed form, kept deliberately — it is
+NOT the cross-validation. The C++-derived cross-validation lives in
+``test_linear_flat_interpolation_v143.py``, driven by
+``migration-harness/references/v143/experimental/interp.json``.
 """
 
 from __future__ import annotations

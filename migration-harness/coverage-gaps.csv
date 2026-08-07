@@ -8,6 +8,8 @@ subsystem,class,status,rationale
 (root),Position,ALLOWLISTED,"`struct Position { enum Type { Long, Short }; }` (ql/position.hpp:32) — a pure enum holder, C++'s way of namespacing an enum before enum class. Flattened to pquantlib/position.py:19 PositionType, with the C++ integer values"
 (root),Protection,ALLOWLISTED,"`struct Protection { enum Side { Buyer, Seller }; }` (ql/default.hpp:32) — pure enum holder; flattened to instruments/credit_default_swap.py:58 ProtectionSide (re-exported by experimental/credit/synthetic_cdo.py:47)"
 (root),RelinkableHandle,ALLOWLISTED,"`template <class T> class RelinkableHandle : public Handle<T>` (ql/handle.hpp:117) — adds linkTo() to Handle; see the Handle entry. Relinking is modelled by re-assigning the object and re-registering, e.g. termstructures/yield_/overnight_index_future_rate_helper.py:111"
+experimental,LinearFlatInterpolationImpl,ALLOWLISTED,"nested detail:: Impl (experimental/shortrate/generalizedhullwhite.hpp:341), reachable only through the LinearFlatInterpolation facade at line 313 and the LinearFlat factory at line 328; Python LinearFlatInterpolation IS that impl - it subclasses Interpolation directly (experimental/shortrate/linear_flat_interpolation.py:30) - and its value/primitive/derivative/secondDerivative are pinned against C++ v1.43 in tests/experimental/shortrate/test_linear_flat_interpolation_v143.py, driven by migration-harness/references/v143/experimental/interp.json"
+experimental,VannaVolgaInterpolationImpl,ALLOWLISTED,"nested detail:: Impl (experimental/barrieroption/vannavolgainterpolation.hpp:82), reachable only through the VannaVolgaInterpolation facade at line 39 and the VannaVolga factory at line 58; Python VannaVolgaInterpolation IS that impl (experimental/barrieroption/vanna_volga_interpolation.py:38), and its update() intermediates plus value() are pinned against C++ v1.43 in tests/experimental/barrieroption/test_vanna_volga_interpolation_v143.py, driven by migration-harness/references/v143/experimental/interp.json"
 indexes,CaseInsensitiveCompare,ALLOWLISTED,"nested comparator inside C++ IndexManager; Python normalises with name.lower() (pinned by the IndexManager tests)"
 instruments,Average,ALLOWLISTED,"`struct Average { enum Type { Arithmetic, Geometric }; }` (ql/instruments/averagetype.hpp:34) — a pure enum holder, C++'s way of namespacing an enum before enum class. Flattened to instruments/average_type.py:17 AverageType"
 instruments,Barrier,ALLOWLISTED,"`struct Barrier { enum Type { DownIn, UpIn, DownOut, UpOut }; }` (ql/instruments/barriertype.hpp:35) — pure enum holder; flattened to instruments/barrier_option.py:29 BarrierType"
@@ -50,6 +52,16 @@ models,NumericalImpl,ALLOWLISTED,"nested `TermStructureFittingParameter::Numeric
 patterns,AcyclicVisitor,ALLOWLISTED,"`class AcyclicVisitor` (ql/patterns/visitor.hpp:33) is a DEGENERATE empty base — its only member is a virtual destructor — existing so C++ can dynamic_cast a visitor to Visitor<T>*; pquantlib.patterns.visitor.Visitor is a runtime_checkable Protocol and Event.accept isinstance-checks it (pquantlib/event.py), which is the same check without the tag base"
 patterns,CuriouslyRecurringTemplate,ALLOWLISTED,"`template <class Impl> class CuriouslyRecurringTemplate` (ql/patterns/curiouslyrecurring.hpp:39) — a CRTP static-dispatch helper whose entire body is `static_cast<Impl&>(*this)`; Python resolves self.method() on the runtime class, so the idiom has no expression"
 patterns,Proxy,ALLOWLISTED,"private nested `Observer::Proxy` (ql/patterns/observable.hpp:330) holding a mutex plus an `active_` flag so a dying Observer can be detached mid-notification; pquantlib.patterns.observer.Observable stores observers in a weakref.WeakSet (observer.py:27), which gives the same lifetime guarantee without the proxy"
+termstructures,BootstrapHelperSorter,ALLOWLISTED,"`class BootstrapHelperSorter` inside `namespace detail` (ql/termstructures/bootstraphelper.hpp:248-258) — a comparator whose whole body is `h1->pillarDate() < h2->pillarDate()`, used only as the third argument of the std::sort in iterativebootstrap.hpp:163. Python is the sort key at termstructures/bootstrap/iterative_bootstrap.py:200 and local_bootstrap.py:169; its effect (a curve built from scrambled helpers equals the C++ curve node for node) is cross-validated against v1.43 in tests/termstructures/test_bootstrap_helper_sorter.py"
+termstructures,InterpolatedCurve,ALLOWLISTED,"`template <class Interpolator> class InterpolatedCurve` (ql/termstructures/interpolatedcurve.hpp:42) — every member except the destructor is PROTECTED (hpp:47 opens `protected:`); C++ says it exists so curves can 'use protected or private inheritance from this class to obtain the relevant data members'. It is not constructible on its own. Python holds times_/data_/dates_/interpolation directly on each concrete curve (termstructures/yield_/interpolated_discount_curve.py, interpolated_zero_curve.py, interpolated_forward_curve.py), and the mixin's whole observable contribution — the node grid feeding the interpolation — is cross-validated against v1.43 in tests/termstructures/yield_/test_interpolated_discount_curve.py::test_discount_at_nodes / ::test_discount_intermediate / ::test_discount_extrap and the matching zero/forward modules"
+termstructures,Pillar,ALLOWLISTED,"`struct Pillar { enum Choice { MaturityDate, LastRelevantDate, CustomDate }; }` (ql/termstructures/bootstraphelper.hpp:40-47) — an enum holder with no members, existing only to namespace the enum. Python flattens it to the PillarChoice IntEnum (termstructures/bootstrap_helper.py:35), whose three values AND C++ ostream spellings are pinned by tests/termstructures/test_bootstrap_helper.py::test_pillar_choice_string_repr_matches_cpp"
+termstructures,SwaptionVolCubeSabrModel,ALLOWLISTED,"`struct SwaptionVolCubeSabrModel { typedef SABRInterpolation Interpolation; typedef SabrSmileSection SmileSection; }` (sabrswaptionvolatilitycube.hpp:1270) — a typedef bundle with no members, used only as the template argument of XabrSwaptionVolatilityCube. Python is XabrModelKind.SABR (xabr_swaption_volatility_cube.py:80), whose interpolation and smile-section choices are pinned by tests/termstructures/volatility/swaption/test_xabr_swaption_volatility_cube.py::test_xabr_cube_sabr_mode_smile_section_is_sabr_smile_section and ::test_xabr_cube_sabr_mode_matches_sabr_subclass_at_grid_pillar"
+termstructures,SwaptionVolCubeZabrModel,ALLOWLISTED,"`template <typename Kernel> struct SwaptionVolCubeZabrModel` (zabrswaptionvolatilitycube.hpp:99) — the same typedef bundle for ZabrInterpolation / ZabrSmileSection. Python is XabrModelKind.ZABR plus the zabr_evaluation argument (xabr_swaption_volatility_cube.py:81), pinned by tests/termstructures/volatility/swaption/test_xabr_swaption_volatility_cube.py::test_zabr_swaption_vol_cube_smile_section_is_zabr_smile_section and ::test_zabr_swaption_vol_cube_xabr_parameters_returns_5tuple"
+termstructures,XabrModelTraits,ALLOWLISTED,"`template <class Model> struct XabrModelTraits` (ql/termstructures/volatility/swaption/sabrswaptionvolatilitycube.hpp:79) — a pure static-policy template (nParams, createInterpolation, extractGamma, createSmileSection) with no state and no instances, specialised at zabrswaptionvolatilitycube.hpp:109 and noarbsabrswaptionvolatilitycube.hpp:46. Python dispatches the same three choices on the XabrModelKind IntEnum (termstructures/volatility/swaption/xabr_swaption_volatility_cube.py:68); nParams=4 vs 5, the interpolation factory and the smile-section factory are all cross-validated against v1.43 in tests/termstructures/volatility/swaption/test_xabr_cube_grid.py and test_xabr_swaption_volatility_cube.py"
+termstructures,ZabrFullFd,ALLOWLISTED,"empty evaluation tag struct (zabrsmilesection.hpp:45); Python uses ZabrEvaluation.FullFd (zabr_formula.py:81), cross-validated in tests/termstructures/volatility/test_zabr_fd_smile_section.py (case 'full_fd_small_grid')"
+termstructures,ZabrLocalVolatility,ALLOWLISTED,"empty evaluation tag struct (zabrsmilesection.hpp:44); Python uses ZabrEvaluation.LocalVolatility (zabr_formula.py:81), cross-validated in tests/termstructures/volatility/test_zabr_fd_smile_section.py (cases 'local_volatility' and 'local_volatility_small_grid')"
+termstructures,ZabrShortMaturityLognormal,ALLOWLISTED,"empty evaluation tag struct (ql/termstructures/volatility/zabrsmilesection.hpp:42), selecting a ZabrSmileSection<Evaluation> branch; Python uses ZabrEvaluation.ShortMaturityLognormal (math/interpolations/zabr_formula.py:81) and the branch's volatility/optionPrice are cross-validated against v1.43 in tests/termstructures/volatility/test_zabr_fd_smile_section.py (case 'short_maturity_lognormal')"
+termstructures,ZabrShortMaturityNormal,ALLOWLISTED,"empty evaluation tag struct (zabrsmilesection.hpp:43); Python uses ZabrEvaluation.ShortMaturityNormal (zabr_formula.py:81), cross-validated in tests/termstructures/volatility/test_zabr_fd_smile_section.py (case 'short_maturity_normal')"
 time,AFB_Impl,ALLOWLISTED,"private nested Impl for ActualActual AFB/Euro (actualactual.hpp:84); ActualActual(Convention.AFB/.Euro), pinned in tests/daycounters/test_actualactual.py::test_afb_family_matches_cpp"
 time,AsxImpl,ALLOWLISTED,"nested Impl (australia.hpp:59); Python Australia(Market.ASX), pinned in test_v143_calendar_markets.py"
 time,AucklandImpl,ALLOWLISTED,"nested Impl (newzealand.hpp:77); Python NewZealand(Market.Auckland), pinned in test_v143_calendar_markets.py"
@@ -111,53 +123,3 @@ utilities,Null,ALLOWLISTED,"`template <class Type> class Null` (ql/utilities/nul
 utilities,ObservableValue,ALLOWLISTED,"`template <class T> class ObservableValue` (ql/utilities/observablevalue.hpp:42) — a value wrapper whose operator= notifies. QuantLib instantiates it in exactly ONE place, Settings::DateProxy (settings.hpp:41); the Python counterpart is the ObservableSettings.evaluation_date property setter, which notifies on change (patterns/observable_settings.py)"
 utilities,PeriodParser,ALLOWLISTED,"`class PeriodParser` (ql/utilities/dataparsers.hpp:36) has no state and no instances — its single member is a `static Period parse`. The Python module IS that namespace: pquantlib.time.period_parser.parse (period_parser.py:55)"
 utilities,Tracing,ALLOWLISTED,"`QuantLib::detail::Tracing` (ql/utilities/tracing.hpp:35) — a detail::-namespace singleton that exists ONLY to back the QL_TRACE* preprocessor macros, and whose enable() QL_FAILs unless the library was compiled with QL_ENABLE_TRACING. Python has no preprocessor; the stdlib `logging` module is the counterpart"
-experimental,BlackCdsOptionEngine,UNFLAGGED,
-experimental,CdsOption,UNFLAGGED,
-experimental,FdExtOUJumpVanillaEngine,UNFLAGGED,
-experimental,FdKlugeExtOUSpreadEngine,UNFLAGGED,
-experimental,IntegralNtdEngine,UNFLAGGED,
-experimental,LinearFlatInterpolationImpl,UNFLAGGED,
-experimental,VannaVolgaInterpolationImpl,UNFLAGGED,
-models,LogEntry,UNFLAGGED,
-termstructures,AbcdError,UNFLAGGED,
-termstructures,AbcdParametersTransformation,UNFLAGGED,
-termstructures,AbcdSquared,UNFLAGGED,
-termstructures,AdditionalBootstrapVariables,UNFLAGGED,
-termstructures,AndreasenHugeLocalVolAdapter,UNFLAGGED,
-termstructures,AndreasenHugeVolatilityAdapter,UNFLAGGED,
-termstructures,AndreasenHugeVolatilityInterpl,UNFLAGGED,
-termstructures,BMASwapRateHelper,UNFLAGGED,
-termstructures,BlackVolatilitySurfaceDelta,UNFLAGGED,
-termstructures,BootstrapHelperSorter,UNFLAGGED,
-termstructures,CPIBondHelper,UNFLAGGED,
-termstructures,Cube,UNFLAGGED,
-termstructures,CubicBSplinesFitting,UNFLAGGED,
-termstructures,DateHelper,UNFLAGGED,
-termstructures,ExponentialSplinesFitting,UNFLAGGED,
-termstructures,FittedBondDiscountCurve,UNFLAGGED,
-termstructures,GlobalBootstrap,UNFLAGGED,
-termstructures,InterpolatedCurve,UNFLAGGED,
-termstructures,MultiCurve,UNFLAGGED,
-termstructures,MultiCurveBootstrap,UNFLAGGED,
-termstructures,MultiCurveBootstrapContributor,UNFLAGGED,
-termstructures,MultiCurveBootstrapProvider,UNFLAGGED,
-termstructures,MultipleResetsSwapRateHelper,UNFLAGGED,
-termstructures,NaturalCubicFitting,UNFLAGGED,
-termstructures,NelsonSiegelFitting,UNFLAGGED,
-termstructures,OptionletStripper,UNFLAGGED,
-termstructures,PiecewiseSpreadYieldCurve,UNFLAGGED,
-termstructures,Pillar,UNFLAGGED,
-termstructures,PrivateObserver,UNFLAGGED,
-termstructures,SimplePolynomialFitting,UNFLAGGED,
-termstructures,SimpleQuoteVariables,UNFLAGGED,
-termstructures,SimpleZeroYield,UNFLAGGED,
-termstructures,SingleStepCalibrationResult,UNFLAGGED,
-termstructures,SpreadFittingMethod,UNFLAGGED,
-termstructures,SvenssonFitting,UNFLAGGED,
-termstructures,SwaptionVolCubeSabrModel,UNFLAGGED,
-termstructures,SwaptionVolCubeZabrModel,UNFLAGGED,
-termstructures,XabrModelTraits,UNFLAGGED,
-termstructures,ZabrFullFd,UNFLAGGED,
-termstructures,ZabrLocalVolatility,UNFLAGGED,
-termstructures,ZabrShortMaturityLognormal,UNFLAGGED,
-termstructures,ZabrShortMaturityNormal,UNFLAGGED,

@@ -4,12 +4,12 @@
 
 The C++ ``Basket`` class is heavyweight (LazyObject + DefaultLossModel
 hooks + tranche math + cached eval-date snapshots). Phase 11 W3-C will
-land the full port; W3-D needs only the slice that ``IntegralNTDEngine``
+land the full port; W3-D needs only the slice that ``IntegralNtdEngine``
 and ``NthToDefault`` actually call.
 
 This Protocol defines that slice so:
 
-* ``IntegralNTDEngine`` can be implemented and unit-tested against a
+* ``IntegralNtdEngine`` can be implemented and unit-tested against a
   lightweight in-memory stub.
 
 * The full Basket (when it lands in W3-C) satisfies the Protocol
@@ -33,7 +33,7 @@ from pquantlib.time.date import Date
 
 @runtime_checkable
 class BasketProtocol(Protocol):
-    """Minimal basket surface used by ``IntegralNTDEngine``.
+    """Minimal basket surface used by ``IntegralNtdEngine``.
 
     Implementations must provide deterministic, cacheable answers to
     the methods below. The C++ ``Basket`` overrides ``LazyObject`` to
@@ -82,8 +82,8 @@ class BasketProtocol(Protocol):
         """
         ...
 
-    def recovery_rate(self, d: Date, i: int) -> float:
-        """Recovery rate for name ``i`` at date ``d``.
+    def recovery_rate(self, d: Date, i_name: int) -> float:
+        """Recovery rate for name ``i_name`` at date ``d``.
 
         # C++ parity: ``Basket::recoveryRate(Date, Size)``.
         """

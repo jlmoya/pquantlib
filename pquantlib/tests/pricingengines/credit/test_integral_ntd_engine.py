@@ -1,4 +1,4 @@
-"""Validate IntegralNTDEngine math against analytic boundary cases.
+"""Validate IntegralNtdEngine math against analytic boundary cases.
 
 The C++ reference probe at ``cluster_w3d.probe.cpp`` is bound to the
 full ``Basket`` + ``DefaultLossModel`` machinery, which is in scope for
@@ -31,7 +31,7 @@ from pquantlib.experimental.credit.nth_to_default import NthToDefault
 from pquantlib.instruments.claim import Claim, FaceValueClaim
 from pquantlib.instruments.credit_default_swap import ProtectionSide
 from pquantlib.patterns.observable_settings import ObservableSettings
-from pquantlib.pricingengines.credit.integral_ntd_engine import IntegralNTDEngine
+from pquantlib.pricingengines.credit.integral_ntd_engine import IntegralNtdEngine
 from pquantlib.quotes.simple_quote import SimpleQuote
 from pquantlib.termstructures.yield_.flat_forward import FlatForward
 from pquantlib.testing import tolerance
@@ -82,8 +82,8 @@ class _ConstantProbBasket:
     def remaining_notional(self) -> float:
         return self.size() * self._notional_per_name
 
-    def recovery_rate(self, d: Date, i: int) -> float:
-        del d, i
+    def recovery_rate(self, d: Date, i_name: int) -> float:
+        del d, i_name
         return self._recovery
 
     def prob_at_least_n_events(self, n: int, d: Date) -> float:
@@ -150,7 +150,7 @@ def test_integral_ntd_engine_zero_default_prob_seller() -> None:
     basket = _ConstantProbBasket(today, n_names=3, const_prob=0.0)
     curve = _make_curve()
     ntd = _make_ntd(basket, ProtectionSide.Seller)
-    engine = IntegralNTDEngine(Period(1, TimeUnit.Months), curve)
+    engine = IntegralNtdEngine(Period(1, TimeUnit.Months), curve)
     ntd.set_pricing_engine(engine)
 
     tolerance.tight(ntd.protection_leg_npv(), 0.0)
@@ -167,8 +167,8 @@ def test_integral_ntd_engine_buyer_side_flips_sign() -> None:
     curve = _make_curve()
     ntd_seller = _make_ntd(basket, ProtectionSide.Seller)
     ntd_buyer = _make_ntd(basket, ProtectionSide.Buyer)
-    e1 = IntegralNTDEngine(Period(1, TimeUnit.Months), curve)
-    e2 = IntegralNTDEngine(Period(1, TimeUnit.Months), curve)
+    e1 = IntegralNtdEngine(Period(1, TimeUnit.Months), curve)
+    e2 = IntegralNtdEngine(Period(1, TimeUnit.Months), curve)
     ntd_seller.set_pricing_engine(e1)
     ntd_buyer.set_pricing_engine(e2)
 
@@ -186,8 +186,8 @@ def test_integral_ntd_engine_with_upfront_seller() -> None:
     ntd_no_upf = _make_ntd(basket, ProtectionSide.Seller, upfront_rate=0.0)
     ntd_upf = _make_ntd(basket, ProtectionSide.Seller, upfront_rate=0.02)
 
-    e1 = IntegralNTDEngine(Period(1, TimeUnit.Months), curve)
-    e2 = IntegralNTDEngine(Period(1, TimeUnit.Months), curve)
+    e1 = IntegralNtdEngine(Period(1, TimeUnit.Months), curve)
+    e2 = IntegralNtdEngine(Period(1, TimeUnit.Months), curve)
     ntd_no_upf.set_pricing_engine(e1)
     ntd_upf.set_pricing_engine(e2)
 
@@ -212,7 +212,7 @@ def test_integral_ntd_engine_fair_premium_zero_at_zero_protection() -> None:
     basket = _ConstantProbBasket(today, n_names=3, const_prob=0.0)
     curve = _make_curve()
     ntd = _make_ntd(basket, ProtectionSide.Seller, premium_rate=0.01)
-    engine = IntegralNTDEngine(Period(1, TimeUnit.Months), curve)
+    engine = IntegralNtdEngine(Period(1, TimeUnit.Months), curve)
     ntd.set_pricing_engine(engine)
 
     fair = ntd.fair_premium()

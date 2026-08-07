@@ -1,6 +1,6 @@
-"""IntegralNTDEngine — Riemann-integral N-th-to-default engine.
+"""IntegralNtdEngine — Riemann-integral N-th-to-default engine.
 
-# C++ parity: ql/experimental/credit/integralntdengine.{hpp,cpp} (v1.42.1).
+# C++ parity: ql/experimental/credit/integralntdengine.{hpp,cpp} (v1.43).
 
 Prices an ``NthToDefault`` instrument by Riemann-integrating the
 default-loss probability ``prob_at_least_n_events(n, t)`` of the
@@ -24,26 +24,19 @@ For each coupon period [start, end]:
 * Side correction: ``Protection.Buyer`` flips premium / accrual /
   claim / upfront signs.
 
-This implements the *homogeneous-basket* branch of the C++ engine
-(``basketIsHomogeneous = true``) — equal recoveries, equal notionals
-across names. The heterogeneous branch using
-``probsBeingNthEvent`` is left as a deferred follow-up; the
-``NthToDefault`` test fixture builds homogeneous baskets only.
-
-# C++ parity divergence: the dual-branch (homogeneous /
-# heterogeneous) code path in the C++ engine is collapsed to the
-# homogeneous branch only — the heterogeneous branch needs
-# ``Basket.probsBeingNthEvent`` (per-name triggering probabilities),
-# which the W3-D ``BasketProtocol`` slice does not expose. The
-# heterogeneous path is a deferred follow-up tracked in the cluster
-# completion doc.
+Only the homogeneous branch exists, and that is not a carve-out: C++
+opens ``calculate()`` with ``bool basketIsHomogeneous = true;// hardcoded
+by now`` (integralntdengine.cpp:46) and never assigns it again, so the
+``probsBeingNthEvent`` branch guarded by ``else`` at line 105 is dead
+code in v1.43. Porting it would add an untestable path that C++ cannot
+be made to execute.
 """
 
 from __future__ import annotations
 
-from typing import cast
+import math
+from typing import Final, cast
 
-from pquantlib import qassert
 from pquantlib.cashflows.fixed_rate_coupon import FixedRateCoupon
 from pquantlib.experimental.credit.nth_to_default import (
     NthToDefaultArguments,
@@ -53,16 +46,16 @@ from pquantlib.instruments.credit_default_swap import ProtectionSide
 from pquantlib.patterns.observable_settings import ObservableSettings
 from pquantlib.pricingengines.generic_engine import GenericEngine
 from pquantlib.termstructures.yield_term_structure import YieldTermStructure
-from pquantlib.time.date import Date
 from pquantlib.time.period import Period
 from pquantlib.time.time_unit import TimeUnit
 
+#: C++ compares the running step against the literal ``1*Days``
+#: (integralntdengine.cpp:147). Hoisted so the comparison does not
+#: allocate a Period per iteration.
+_ONE_DAY: Final[Period] = Period(1, TimeUnit.Days)
 
-def _min_date(a: Date, b: Date) -> Date:
-    return a if a <= b else b
 
-
-class IntegralNTDEngine(
+class IntegralNtdEngine(
     GenericEngine[NthToDefaultArguments, NthToDefaultResults],
 ):
     """Riemann-integral N-th-to-default engine.
@@ -132,43 +125,52 @@ class IntegralNTDEngine(
                 if coupon.accrual_start_date() >= ref_date
                 else ref_date
             )
-            d0 = d_start
+            # C++ integralntdengine.cpp:78-152, transcribed statement for
+            # statement. Two things about this loop are easy to "improve"
+            # and must not be:
+            #
+            #  * it is a do-while, so the FIRST evaluation is at d == d0,
+            #    contributing dcfdd == 0. Skipping it is harmless; what is
+            #    NOT harmless is the corollary that the step is taken from
+            #    d0 AFTER the body, never before.
+            #  * the grid is never clamped to accrual_end. The step shrinks
+            #    to one day exactly once, the first time d0 + step would
+            #    overshoot, and the walk then lands on accrual_end exactly.
+            #    Clamping instead (``d = min(d0 + step, accrual_end)``)
+            #    collapses the whole tail of a short accrual period into a
+            #    single lump at accrual_end, with one discount factor and
+            #    one accrued amount instead of the daily sequence.
+            d = d_start
+            d0 = d
             step = self._integration_step
             def_prob0 = args.basket.prob_at_least_n_events(args.ntd_order, d0)
 
-            d = _min_date(d0 + step, coupon.accrual_end_date())
-            adaptive_step = step
             while True:
                 disc = self._discount_curve.discount(d)
                 def_prob1 = args.basket.prob_at_least_n_events(args.ntd_order, d)
-                dcfdd = def_prob1 - def_prob0
 
-                # Claim amount uses recovery of name 0 (homogeneous-basket
-                # branch in C++).
+                # Claim amount uses recovery of name 0: C++ hardcodes
+                # ``bool basketIsHomogeneous = true`` (integralntdengine.cpp:46,
+                # comment "hardcoded by now"), so the per-name
+                # probsBeingNthEvent branch below it is unreachable in v1.43.
                 claim_amt = args.basket.claim().amount(
                     d, args.notional, args.basket.recovery_rate(d, 0)
                 )
-                claim_value -= dcfdd * claim_amt * disc
+                claim_value -= (def_prob1 - def_prob0) * claim_amt * disc
+
+                dcfdd = def_prob1 - def_prob0
+                def_prob0 = def_prob1
 
                 if args.settle_premium_accrual:
                     accrual_value += coupon.accrued_amount(d) * disc * dcfdd
 
-                def_prob0 = def_prob1
                 d0 = d
-                if d0 >= coupon.accrual_end_date():
+                d = d0 + step
+                if step != _ONE_DAY and d > coupon.accrual_end_date():
+                    step = _ONE_DAY
+                    d = d0 + step
+                if d > coupon.accrual_end_date():
                     break
-
-                # Step adaptation (matches C++ — once the proposed next
-                # step exceeds accrual_end, fall back to 1 day until end).
-                next_d = d0 + adaptive_step
-                one_day = Period(1, TimeUnit.Days)
-                if (
-                    adaptive_step != one_day
-                    and next_d > coupon.accrual_end_date()
-                ):
-                    adaptive_step = one_day
-                    next_d = d0 + adaptive_step
-                d = _min_date(next_d, coupon.accrual_end_date())
 
         # Upfront premium: paid up-front against the basket's remaining
         # notional, discounted to the first coupon's accrual-start date.
@@ -195,28 +197,29 @@ class IntegralNTDEngine(
         )
 
         # Fair premium = -spread * claim_value / (premium + accrual_value),
-        # matches C++ integralntdengine.cpp:174-175.
+        # C++ integralntdengine.cpp:174-175. C++ divides unconditionally, so
+        # a zero denominator gives an IEEE-754 infinity (or NaN for 0/0), not
+        # an exception and not a fabricated 0.0. Reproduced explicitly because
+        # Python raises ZeroDivisionError where C++ does not.
         denom = results.premium_value + accrual_value
-        if denom != 0.0:
-            results.fair_premium = -args.premium_rate * claim_value / denom
+        numer = -args.premium_rate * claim_value
+        if denom == 0.0:
+            results.fair_premium = (
+                math.nan
+                if numer == 0.0
+                else math.copysign(1.0, numer) * math.copysign(1.0, denom) * math.inf
+            )
         else:
-            results.fair_premium = None
+            results.fair_premium = numer / denom
         results.protection_value = claim_value
 
-        if results.fair_premium is not None:
-            results.additional_results["fair_premium"] = results.fair_premium
-        results.additional_results["premium_leg_npv"] = (
+        # Keys are the C++ additionalResults keys verbatim
+        # (integralntdengine.cpp:179-183).
+        results.additional_results["fairPremium"] = results.fair_premium
+        results.additional_results["premiumLegNPV"] = (
             results.premium_value + results.upfront_premium_value
         )
-        results.additional_results["protection_leg_npv"] = results.protection_value
-
-        # Sanity-check on missing fair_premium.
-        if results.fair_premium is None:
-            qassert.require(
-                claim_value == 0.0,
-                "fair premium undefined: zero premium + accrual NPV with non-zero claim",
-            )
-            results.fair_premium = 0.0
+        results.additional_results["protectionLegNPV"] = results.protection_value
 
 
-__all__ = ["IntegralNTDEngine"]
+__all__ = ["IntegralNtdEngine"]

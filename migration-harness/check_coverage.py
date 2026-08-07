@@ -489,6 +489,22 @@ ALLOWLIST: dict[str, str] = {
         "nested detail:: Impl (linearinterpolation.hpp:72); Python LinearInterpolation "
         "(math/interpolations/linear.py), pinned in "
         "tests/math/interpolations/test_interpolation_factories.py and test_interpolations.py",
+    "LinearFlatInterpolationImpl":
+        "nested detail:: Impl (experimental/shortrate/generalizedhullwhite.hpp:341), reachable "
+        "only through the LinearFlatInterpolation facade at line 313 and the LinearFlat "
+        "factory at line 328; Python LinearFlatInterpolation IS that impl - it subclasses "
+        "Interpolation directly (experimental/shortrate/linear_flat_interpolation.py:30) - "
+        "and its value/primitive/derivative/secondDerivative are pinned against C++ v1.43 in "
+        "tests/experimental/shortrate/test_linear_flat_interpolation_v143.py, driven by "
+        "migration-harness/references/v143/experimental/interp.json",
+    "VannaVolgaInterpolationImpl":
+        "nested detail:: Impl (experimental/barrieroption/vannavolgainterpolation.hpp:82), "
+        "reachable only through the VannaVolgaInterpolation facade at line 39 and the "
+        "VannaVolga factory at line 58; Python VannaVolgaInterpolation IS that impl "
+        "(experimental/barrieroption/vanna_volga_interpolation.py:38), and its update() "
+        "intermediates plus value() are pinned against C++ v1.43 in "
+        "tests/experimental/barrieroption/test_vanna_volga_interpolation_v143.py, driven by "
+        "migration-harness/references/v143/experimental/interp.json",
     "LogInterpolationImpl":
         "nested detail:: Impl (loginterpolation.hpp:366); Python LogInterpolation "
         "(math/interpolations/log_interpolation.py:70, which cites it as its parity target), "

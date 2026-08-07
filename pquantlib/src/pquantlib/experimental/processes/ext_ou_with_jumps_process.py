@@ -1,7 +1,7 @@
 """ExtOUWithJumpsProcess — extended OU plus exponential jumps (Kluge).
 
 # C++ parity: ql/experimental/processes/extouwithjumpsprocess.{hpp,cpp}
-# (v1.42.1).
+# (v1.43).
 
 Two-factor model: log-spot ``S = exp(X_t + Y_t)`` with
 
@@ -18,19 +18,23 @@ This W5-A port exposes only the accessors needed by
 * ``jumpIntensity`` (Poisson rate ``lambda``).
 * ``getExtendedOrnsteinUhlenbeckProcess()`` — the embedded ExtOU.
 
-The full multi-D ``initialValues`` / ``drift`` / ``diffusion`` /
-``evolve`` surface — used by Monte-Carlo sampling — is deferred to a
-future port.
+``size`` / ``factors`` / ``initialValues`` are ported too — the FD
+engines read the initial state to know where to interpolate the rolled-back
+grid. The ``drift`` / ``diffusion`` / ``evolve`` surface, used only by
+Monte-Carlo path generation, is still absent.
 """
 
 from __future__ import annotations
 
 from typing import final
 
+import numpy as np
+
 from pquantlib import qassert
 from pquantlib.experimental.processes.extended_ornstein_uhlenbeck_process import (
     ExtendedOrnsteinUhlenbeckProcess,
 )
+from pquantlib.math.array import Array
 
 
 @final
@@ -94,6 +98,31 @@ class ExtOUWithJumpsProcess:
     def y0(self) -> float:
         """Initial value of ``Y``."""
         return self._y0
+
+    def size(self) -> int:
+        """Number of state variables.
+
+        # C++ parity: ``ExtOUWithJumpsProcess::size`` -> 2
+        # (extouwithjumpsprocess.cpp:41-43).
+        """
+        return 2
+
+    def factors(self) -> int:
+        """Number of driving factors.
+
+        # C++ parity: ``ExtOUWithJumpsProcess::factors`` -> 3
+        # (extouwithjumpsprocess.cpp:44-46). Three, not two: the jump leg
+        # needs a Poisson draw and a jump size on top of the OU Brownian.
+        """
+        return 3
+
+    def initial_values(self) -> Array:
+        """``[x0, y0]``.
+
+        # C++ parity: ``ExtOUWithJumpsProcess::initialValues``
+        # (extouwithjumpsprocess.cpp:61-66).
+        """
+        return np.array([self._ou_process.x0(), self._y0], dtype=np.float64)
 
 
 __all__ = ["ExtOUWithJumpsProcess"]

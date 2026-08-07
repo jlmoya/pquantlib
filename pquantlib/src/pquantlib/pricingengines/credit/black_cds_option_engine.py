@@ -1,4 +1,4 @@
-"""BlackCDSOptionEngine — Black 1976 engine for ``CDSOption``.
+"""BlackCdsOptionEngine — Black 1976 engine for ``CdsOption``.
 
 # C++ parity: ql/experimental/credit/blackcdsoptionengine.{hpp,cpp} (v1.42.1).
 
@@ -25,8 +25,8 @@ import math
 
 from pquantlib import qassert
 from pquantlib.instruments.cds_option import (
-    CDSOptionArguments,
-    CDSOptionResults,
+    CdsOptionArguments,
+    CdsOptionResults,
 )
 from pquantlib.instruments.credit_default_swap import ProtectionSide
 from pquantlib.payoffs import OptionType
@@ -39,10 +39,10 @@ from pquantlib.termstructures.credit.default_probability_term_structure import (
 from pquantlib.termstructures.yield_term_structure import YieldTermStructure
 
 
-class BlackCDSOptionEngine(
-    GenericEngine[CDSOptionArguments, CDSOptionResults],
+class BlackCdsOptionEngine(
+    GenericEngine[CdsOptionArguments, CdsOptionResults],
 ):
-    """Black-76 engine for ``CDSOption``."""
+    """Black-76 engine for ``CdsOption``."""
 
     def __init__(
         self,
@@ -51,7 +51,7 @@ class BlackCDSOptionEngine(
         discount_curve: YieldTermStructure,
         volatility: Quote,
     ) -> None:
-        super().__init__(CDSOptionArguments(), CDSOptionResults())
+        super().__init__(CdsOptionArguments(), CdsOptionResults())
         self._probability: DefaultProbabilityTermStructure = probability
         self._recovery_rate: float = recovery_rate
         self._discount_curve: YieldTermStructure = discount_curve
@@ -121,4 +121,4 @@ class BlackCDSOptionEngine(
         results.error_estimate = None
 
 
-__all__ = ["BlackCDSOptionEngine"]
+__all__ = ["BlackCdsOptionEngine"]

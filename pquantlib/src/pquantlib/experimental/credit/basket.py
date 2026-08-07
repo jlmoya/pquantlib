@@ -252,5 +252,68 @@ class Basket(Observable):
         assert self._loss_model is not None
         return self._loss_model.expected_tranche_loss(d)
 
+    # ---- default-event queries --------------------------------------------
+    #
+    # The three delegations below are what let a real Basket satisfy
+    # BasketProtocol, i.e. what lets IntegralNtdEngine price a real basket
+    # rather than only a test stub. In C++ they are three-line forwards to
+    # the loss model (basket.cpp:346-375).
+
+    def _require_loss_model(self) -> DefaultLossModel:
+        qassert.require(
+            self._loss_model is not None,
+            "Basket has no default loss model assigned.",
+        )
+        assert self._loss_model is not None
+        return self._loss_model
+
+    def prob_at_least_n_events(self, n: int, d: Date) -> float:
+        """Probability of ``n`` or more defaults in the basket by ``d``.
+
+        # C++ parity: ``Basket::probAtLeastNEvents`` (basket.cpp:365-369) —
+        # ``calculate(); return lossModel_->probAtLeastNEvents(n, d);``.
+        """
+        model = self._require_loss_model()
+        prob_at_least = getattr(model, "prob_at_least_n_events", None)
+        qassert.require(
+            callable(prob_at_least),
+            "loss model does not provide prob_at_least_n_events",
+        )
+        assert prob_at_least is not None
+        return float(prob_at_least(n, d))
+
+    def probs_being_nth_event(self, n: int, d: Date) -> list[float]:
+        """Per-name probability of being the ``n``-th default by ``d``.
+
+        # C++ parity: ``Basket::probsBeingNthEvent`` (basket.cpp:346-354).
+        # C++ first discounts names that have already defaulted and returns a
+        # vector of zeros when at least ``n`` of them have; this port carries
+        # no defaulted-name accounting (see :meth:`remaining_notional`), so
+        # ``alreadyDefaulted`` is always 0 and the guard never fires.
+        """
+        model = self._require_loss_model()
+        probs = getattr(model, "probs_being_nth_event", None)
+        qassert.require(
+            callable(probs),
+            "loss model does not provide probs_being_nth_event",
+        )
+        assert probs is not None
+        return [float(p) for p in probs(n, d)]
+
+    def recovery_rate(self, d: Date, i_name: int) -> float:
+        """Expected recovery of name ``i_name`` given it defaults on ``d``.
+
+        # C++ parity: ``Basket::recoveryRate`` (basket.cpp:371-375) —
+        # ``lossModel_->expectedRecovery(d, iName, pool_->defaultKeys()[iName])``.
+        """
+        model = self._require_loss_model()
+        expected_recovery = getattr(model, "expected_recovery", None)
+        qassert.require(
+            callable(expected_recovery),
+            "loss model does not provide expected_recovery",
+        )
+        assert expected_recovery is not None
+        return float(expected_recovery(d, i_name, self._pool.default_keys()[i_name]))
+
 
 __all__ = ["Basket"]
