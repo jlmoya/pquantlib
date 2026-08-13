@@ -33,7 +33,49 @@ cmake "$HARNESS_DIR/cpp/probes" \
   -DCMAKE_BUILD_TYPE=Release \
   -DQUANTLIB_BUILD_DIR="$QL_BUILD" \
   -DQUANTLIB_SRC_DIR="$QL_SRC"
-cmake --build . --parallel "$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
+
+# Keep going past a failure rather than dying on the first one.
+#
+# WHY THIS EXISTS. This script runs under `set -e`, so a single probe that
+# failed to compile used to abort the entire build. Every probe later in the
+# build order was then silently absent -- for reasons having nothing to do
+# with its own health -- and generate-references.sh would happily run the
+# partial set and emit a reference tree that looked complete.
+#
+# Measured on 2026-08-11: 107 binaries existed, 2 probes were actually
+# broken, and 118 perfectly good probes had simply never been reached.
+# Rebuilding with -k took the count to 225.
+#
+# Failures are collected and reported together at the end instead.
+set +e
+cmake --build . --parallel "$(sysctl -n hw.ncpu 2>/dev/null || nproc)" -- -k
+build_status=$?
+set -e
+
+# Every registered target must have produced a binary. This catches both a
+# genuine compile failure and a target whose link step never ran.
+missing=()
+while IFS= read -r target; do
+  [ -x "$PROBES_BUILD/$target" ] || missing+=("$target")
+done < <(make help 2>/dev/null | sed -n 's/^\.\.\. \([A-Za-z0-9_]*_probe\)$/\1/p' | sort -u)
+
+if [ "${#missing[@]}" -gt 0 ]; then
+  echo ""
+  echo "ERROR: ${#missing[@]} probe target(s) registered in CMake produced no binary:"
+  printf '  %s\n' "${missing[@]}"
+  echo ""
+  echo "References generated now would silently cover only the probes that built."
+  echo "Fix these, or remove their add_executable() with a stated reason."
+  exit 1
+fi
+
+if [ "$build_status" -ne 0 ]; then
+  echo ""
+  echo "ERROR: the probe build reported failures (exit $build_status) even though"
+  echo "every registered target has a binary. Investigate before generating"
+  echo "references -- a stale binary can mask a source that no longer compiles."
+  exit 1
+fi
 
 echo ""
 echo "=== Build complete ==="
