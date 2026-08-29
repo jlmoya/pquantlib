@@ -1037,7 +1037,6 @@ foreach(area
         creditlm
         creditloss
         creditts
-        crediteng
         misc)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/v143_experimental_${area}/probe.cpp)
         add_executable(v143_experimental_${area}_probe v143_experimental_${area}/probe.cpp)
@@ -1097,7 +1096,6 @@ foreach(area
         blackvoldelta
         globalbootstrap
         ratehelpers
-        spreadcurve
         optionletstripper
         abcd
         xabrerror

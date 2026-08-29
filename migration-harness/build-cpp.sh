@@ -27,6 +27,14 @@ cmake "$QL_SRC" \
 cmake --build . --parallel "$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
 
 echo ""
+echo "=== Checking probe registration ==="
+# Every declared probe must have a source and vice versa. The if(EXISTS) guard
+# on the foreach blocks means a declared area whose source was never written
+# produces no CMake target at all -- invisible to the target-vs-binary check
+# below, and invisible to the orphan guard in generate-references.sh.
+"$HARNESS_DIR/check_probe_registration.py" || exit 1
+
+echo ""
 echo "=== Building probes ==="
 cd "$PROBES_BUILD"
 cmake "$HARNESS_DIR/cpp/probes" \
